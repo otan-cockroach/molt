@@ -30,20 +30,17 @@ func (tm TableMetadata) Less(o TableMetadata) bool {
 }
 
 // Verify verifies the given connections have matching tables and contents.
-func Verify(ctx context.Context, conns []Conn, reporters ...Reporter) error {
-	reportAll := CombinedReporter{Reporters: reporters}
-	defer reportAll.Close()
-
+func Verify(ctx context.Context, conns []Conn, reporter Reporter) error {
 	ret, err := verifyDatabaseTables(ctx, conns)
 	if err != nil {
 		return errors.Wrap(err, "error comparing conns")
 	}
 
 	for _, missingTable := range ret.missingTables {
-		reportAll.Report(missingTable)
+		reporter.Report(missingTable)
 	}
 	for _, extraneousTable := range ret.extraneousTables {
-		reportAll.Report(extraneousTable)
+		reporter.Report(extraneousTable)
 	}
 
 	// Grab columns for each table on both sides.
@@ -57,7 +54,7 @@ func Verify(ctx context.Context, conns []Conn, reporters ...Reporter) error {
 		tbl := tbl
 
 		for _, d := range tbl.MismatchingTableDefinitions {
-			reportAll.Report(d)
+			reporter.Report(d)
 		}
 		// TODO: limit tables to compare at a time.
 		g.GoCtx(func(ctx context.Context) error {
@@ -73,7 +70,7 @@ func Verify(ctx context.Context, conns []Conn, reporters ...Reporter) error {
 					_ = connsCopy[i].Conn.Close(ctx)
 				}()
 			}
-			return compareRows(ctx, connsCopy, tbl)
+			return compareRows(ctx, connsCopy, tbl, reporter)
 		})
 	}
 	return g.Wait()

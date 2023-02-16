@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"log"
 	"reflect"
 	"time"
 
@@ -14,7 +13,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func compareRows(ctx context.Context, conns []Conn, table verifyTableResult) error {
+func compareRows(
+	ctx context.Context, conns []Conn, table verifyTableResult, reporter Reporter,
+) error {
 	if !table.RowVerifiable {
 		return nil
 	}
@@ -57,23 +58,28 @@ func compareRows(ctx context.Context, conns []Conn, table verifyTableResult) err
 
 	truth := iterators[0]
 	for truth.hasNext() {
-		truthVal := truth.next()
+		truthVals := truth.next()
 		for i := 1; i < len(iterators); i++ {
 			it := iterators[i]
 
 		itLoop:
 			for {
 				if !it.hasNext() {
-					log.Printf("[%s] missing row with pk %v", it.conn.ID, truthVal[:len(table.PrimaryKeyColumns)])
-					// Missing a row.
+					reporter.Report(MissingRow{
+						ConnID:            it.conn.ID,
+						Schema:            table.Schema,
+						Table:             table.Table,
+						PrimaryKeyColumns: table.PrimaryKeyColumns,
+						PrimaryKeyValues:  truthVals[:len(table.PrimaryKeyColumns)],
+					})
 					break
 				}
 
 				// Check the primary key.
-				rowVals := it.peek()
+				targetVals := it.peek()
 				var compareVal int
 				for i := range table.PrimaryKeyColumns {
-					if compareVal = compareVals(truthVal[i], rowVals[i]); compareVal != 0 {
+					if compareVal = compareVals(truthVals[i], targetVals[i]); compareVal != 0 {
 						break
 					}
 				}
@@ -81,18 +87,42 @@ func compareRows(ctx context.Context, conns []Conn, table verifyTableResult) err
 				case 1:
 					// Extraneous row. Log and continue.
 					it.next()
-					log.Printf("[%s] extraneous with pk %v", it.conn.ID, rowVals[:len(table.PrimaryKeyColumns)])
+					reporter.Report(ExtraneousRow{
+						ConnID:            it.conn.ID,
+						Schema:            table.Schema,
+						Table:             table.Table,
+						PrimaryKeyColumns: table.PrimaryKeyColumns,
+						PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
+					})
 				case 0:
-					rowVals = it.next()
-					for valIdx := len(table.PrimaryKeyColumns); valIdx < len(rowVals); valIdx++ {
-						if compareVals(rowVals[valIdx], truthVal[valIdx]) != 0 {
-							log.Printf("[%s] pk %v has different value on column %s: %v", it.conn.ID, truthVal[:len(table.PrimaryKeyColumns)], table.MatchingColumns[valIdx], truthVal[valIdx])
+					targetVals = it.next()
+					mismatches := MismatchingRow{
+						ConnID:            it.conn.ID,
+						Schema:            table.Schema,
+						Table:             table.Table,
+						PrimaryKeyColumns: table.PrimaryKeyColumns,
+						PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
+					}
+					for valIdx := len(table.PrimaryKeyColumns); valIdx < len(targetVals); valIdx++ {
+						if compareVals(targetVals[valIdx], truthVals[valIdx]) != 0 {
+							mismatches.MismatchingColumns = append(mismatches.MismatchingColumns, table.MatchingColumns[valIdx])
+							mismatches.TargetVals = append(mismatches.TargetVals, targetVals[valIdx])
+							mismatches.TruthVals = append(mismatches.TruthVals, truthVals[valIdx])
 						}
+					}
+					if len(mismatches.MismatchingColumns) > 0 {
+						reporter.Report(mismatches)
 					}
 					break itLoop
 				case -1:
 					// Missing a row.
-					log.Printf("[%s] missing row with pk %v", it.conn.ID, truthVal[:len(table.PrimaryKeyColumns)])
+					reporter.Report(MissingRow{
+						ConnID:            it.conn.ID,
+						Schema:            table.Schema,
+						Table:             table.Table,
+						PrimaryKeyColumns: table.PrimaryKeyColumns,
+						PrimaryKeyValues:  truthVals[:len(table.PrimaryKeyColumns)],
+					})
 					break itLoop
 				}
 			}

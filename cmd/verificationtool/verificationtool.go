@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 
 	"github.com/cockroachdb/errors"
@@ -24,6 +25,9 @@ var flagCRDBURL = flag.String(
 func main() {
 	flag.Parse()
 
+	reporter := &verification.LogReporter{Printf: log.Printf}
+	defer reporter.Close()
+
 	ctx := context.Background()
 	var conns []verification.Conn
 	for _, c := range []struct {
@@ -38,15 +42,16 @@ func main() {
 			log.Fatal(errors.Wrapf(err, "error connecting to %s", c.pgurl))
 		}
 		conns = append(conns, verification.Conn{ID: c.id, Conn: conn})
+		reporter.Report(verification.StatusReport{Info: fmt.Sprintf("connected to %s", c.id)})
 	}
 
-	log.Printf("beginning verification\n")
+	reporter.Report(verification.StatusReport{Info: "verification in progress"})
 	if err := verification.Verify(
 		ctx,
 		conns,
-		&verification.LogReporter{Printf: log.Printf},
+		reporter,
 	); err != nil {
 		log.Fatal(errors.Wrapf(err, "error verifying"))
 	}
-	log.Printf("verification complete\n")
+	reporter.Report(verification.StatusReport{Info: "verification complete"})
 }

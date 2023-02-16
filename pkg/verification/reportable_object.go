@@ -18,14 +18,37 @@ type MismatchingTableDefinition struct {
 	Info string
 }
 
+type MissingRow struct {
+	ConnID ConnID
+	Schema string
+	Table  string
+
+	PrimaryKeyColumns []columnName
+	PrimaryKeyValues  []any
+}
+
+type ExtraneousRow struct {
+	ConnID ConnID
+	Schema string
+	Table  string
+
+	PrimaryKeyColumns []columnName
+	PrimaryKeyValues  []any
+}
+
 type MismatchingRow struct {
-	TableName  string
-	TargetName string
+	ConnID ConnID
+	Schema string
+	Table  string
 
-	PrimaryKey       []string
-	PrimaryKeyValues []any
+	PrimaryKeyColumns []columnName
+	PrimaryKeyValues  []any
 
-	Columns   []string
-	TruthVals []any
-	RowVals   []any
+	MismatchingColumns []columnName
+	TruthVals          []any
+	TargetVals         []any
+}
+
+type StatusReport struct {
+	Info string
 }
