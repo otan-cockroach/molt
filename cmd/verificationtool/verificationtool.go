@@ -41,7 +41,11 @@ func main() {
 	}
 
 	log.Printf("beginning verification\n")
-	if err := verification.Verify(ctx, conns); err != nil {
+	if err := verification.Verify(
+		ctx,
+		conns,
+		&verification.LogReporter{Printf: log.Printf},
+	); err != nil {
 		log.Fatal(errors.Wrapf(err, "error verifying"))
 	}
 	log.Printf("verification complete\n")

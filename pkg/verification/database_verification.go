@@ -7,7 +7,7 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-type tableMetadata struct {
+type TableMetadata struct {
 	OID    OID
 	Schema string
 	Table  string
@@ -15,24 +15,14 @@ type tableMetadata struct {
 
 type connWithTables struct {
 	Conn
-	tableMetadata []tableMetadata
-}
-
-type missingTable struct {
-	connID ConnID
-	tableMetadata
-}
-
-type extraneousTable struct {
-	connID ConnID
-	tableMetadata
+	tableMetadata []TableMetadata
 }
 
 type databaseTableVerificationResult struct {
-	verified map[ConnID][]tableMetadata
+	verified map[ConnID][]TableMetadata
 
-	missingTables    []missingTable
-	extraneousTables []extraneousTable
+	missingTables    []MissingTable
+	extraneousTables []ExtraneousTable
 }
 
 type tableVerificationIterator struct {
@@ -48,7 +38,7 @@ func (c *tableVerificationIterator) next() {
 	c.currIdx++
 }
 
-func (c *tableVerificationIterator) curr() tableMetadata {
+func (c *tableVerificationIterator) curr() TableMetadata {
 	return c.table.tableMetadata[c.currIdx]
 }
 
@@ -57,7 +47,7 @@ func verifyDatabaseTables(
 	ctx context.Context, conns []Conn,
 ) (databaseTableVerificationResult, error) {
 	ret := databaseTableVerificationResult{
-		verified: make(map[ConnID][]tableMetadata),
+		verified: make(map[ConnID][]TableMetadata),
 	}
 
 	// Grab all tables and verify them.
@@ -74,9 +64,9 @@ WHERE relkind = 'r' AND pg_namespace.nspname NOT IN ('pg_catalog', 'information_
 			return ret, err
 		}
 
-		var tms []tableMetadata
+		var tms []TableMetadata
 		for rows.Next() {
-			var tm tableMetadata
+			var tm TableMetadata
 			if err := rows.Scan(&tm.OID, &tm.Table, &tm.Schema); err != nil {
 				return ret, errors.Wrap(err, "error decoding table metadata")
 			}
@@ -126,7 +116,7 @@ WHERE relkind = 'r' AND pg_namespace.nspname NOT IN ('pg_catalog', 'information_
 				// Extraneous row compared to source of truthIterator.
 				ret.extraneousTables = append(
 					ret.extraneousTables,
-					extraneousTable{connID: it.table.ID, tableMetadata: it.curr()},
+					ExtraneousTable{ConnID: it.table.ID, TableMetadata: it.curr()},
 				)
 				// Move the curr table over.
 				commonOnAll = false
@@ -139,7 +129,7 @@ WHERE relkind = 'r' AND pg_namespace.nspname NOT IN ('pg_catalog', 'information_
 				// Missing a row from source of truthIterator.
 				ret.missingTables = append(
 					ret.missingTables,
-					missingTable{connID: it.table.ID, tableMetadata: truthIterator.curr()},
+					MissingTable{ConnID: it.table.ID, TableMetadata: truthIterator.curr()},
 				)
 				commonOnAll = false
 			}
@@ -171,7 +161,7 @@ WHERE relkind = 'r' AND pg_namespace.nspname NOT IN ('pg_catalog', 'information_
 		for !it.done() {
 			ret.extraneousTables = append(
 				ret.extraneousTables,
-				extraneousTable{connID: it.table.ID, tableMetadata: it.curr()},
+				ExtraneousTable{ConnID: it.table.ID, TableMetadata: it.curr()},
 			)
 			it.next()
 		}

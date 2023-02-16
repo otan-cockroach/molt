@@ -2,9 +2,10 @@ package verification
 
 import (
 	"context"
-	"log"
+	"fmt"
 
 	"github.com/cockroachdb/errors"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type columnName string
@@ -15,13 +16,6 @@ type columnMetadata struct {
 	// TODO: compare typMod, which CRDB does not really support.
 	typeOID OID
 	notNull bool
-}
-
-type comparableTable struct {
-	schema string
-	name   string
-	cols   []columnName
-	pk     []columnName
 }
 
 func getColumns(ctx context.Context, conn Conn, tableOID OID) ([]columnMetadata, error) {
@@ -92,11 +86,24 @@ func mapColumns(cols []columnMetadata) map[columnName]columnMetadata {
 	return ret
 }
 
+type verifyTableResult struct {
+	Schema                      string
+	Table                       string
+	RowVerifiable               bool
+	MatchingColumns             []columnName
+	PrimaryKeyColumns           []columnName
+	MismatchingTableDefinitions []MismatchingTableDefinition
+}
+
 func verifyCommonTables(
-	ctx context.Context, conns []Conn, tables map[ConnID][]tableMetadata,
-) ([]comparableTable, error) {
-	var ret []comparableTable
+	ctx context.Context, conns []Conn, tables map[ConnID][]TableMetadata,
+) ([]verifyTableResult, error) {
+	var ret []verifyTableResult
 	for tblIdx, truthTbl := range tables[conns[0].ID] {
+		res := verifyTableResult{
+			Schema: truthTbl.Schema,
+			Table:  truthTbl.Table,
+		}
 		truthCols, err := getColumns(ctx, conns[0], truthTbl.OID)
 		if err != nil {
 			return nil, errors.Wrap(err, "error getting columns for table")
@@ -108,8 +115,14 @@ func verifyCommonTables(
 			return nil, errors.Wrap(err, "error getting primary key")
 		}
 		if len(truthPKCols) == 0 {
-			log.Printf("[%s] table %s.%s has no primary key", conns[0].ID, truthTbl.Schema, truthTbl.Table)
-			pkSame = false
+			res.MismatchingTableDefinitions = append(
+				res.MismatchingTableDefinitions,
+				MismatchingTableDefinition{
+					ConnID:        conns[0].ID,
+					TableMetadata: truthTbl,
+					Info:          "missing a PRIMARY KEY - results cannot be compared",
+				},
+			)
 		}
 		comparableColumns := mapColumns(truthCols)
 
@@ -124,20 +137,69 @@ func verifyCommonTables(
 			for _, targetCol := range compareColumns {
 				sourceCol, ok := truthMappedCols[targetCol.columnName]
 				if !ok {
-					log.Printf("[%s] table %s.%s has extra column %s", conn.ID, truthTbl.Schema, truthTbl.Table, targetCol.columnName)
+					res.MismatchingTableDefinitions = append(
+						res.MismatchingTableDefinitions,
+						MismatchingTableDefinition{
+							ConnID:        conn.ID,
+							TableMetadata: targetTbl,
+							Info:          fmt.Sprintf("extraneous column %s found", targetCol.columnName),
+						},
+					)
 					continue
 				}
 				if sourceCol.notNull != targetCol.notNull {
-					log.Printf("[%s] warning! table %s.%s column %s nullability does not match", conn.ID, truthTbl.Schema, truthTbl.Table, sourceCol.columnName)
+					res.MismatchingTableDefinitions = append(
+						res.MismatchingTableDefinitions,
+						MismatchingTableDefinition{
+							ConnID:        conn.ID,
+							TableMetadata: targetTbl,
+							Info: fmt.Sprintf(
+								"column %s NOT NULL mismatch: %s:%t vs %s:%t",
+								targetCol.columnName,
+								conns[0].ID,
+								sourceCol.notNull,
+								conn.ID,
+								targetCol.notNull,
+							),
+						},
+					)
+					continue
 				}
 				if sourceCol.typeOID != targetCol.typeOID {
-					log.Printf("[%s] warning! table %s.%s column %s types do not match; cannot compare", conn.ID, truthTbl.Schema, truthTbl.Table, sourceCol.columnName)
+					// TODO(otan): re-use type map.
+					aTyp, _ := pgtype.NewMap().TypeForOID(uint32(sourceCol.typeOID))
+					bTyp, _ := pgtype.NewMap().TypeForOID(uint32(targetCol.typeOID))
+					res.MismatchingTableDefinitions = append(
+						res.MismatchingTableDefinitions,
+						MismatchingTableDefinition{
+							ConnID:        conn.ID,
+							TableMetadata: targetTbl,
+							Info: fmt.Sprintf(
+								"column type mismatch on %s: %s on %s vs %s on %s",
+								targetCol.columnName,
+								aTyp,
+								conns[0].ID,
+								bTyp,
+								conn.ID,
+							),
+						},
+					)
 					delete(comparableColumns, sourceCol.columnName)
 				}
 				delete(truthMappedCols, targetCol.columnName)
 			}
 			for colName := range truthMappedCols {
-				log.Printf("[%s] table %s.%s has missing column %s", conn.ID, truthTbl.Schema, truthTbl.Table, colName)
+				res.MismatchingTableDefinitions = append(
+					res.MismatchingTableDefinitions,
+					MismatchingTableDefinition{
+						ConnID:        conn.ID,
+						TableMetadata: targetTbl,
+						Info: fmt.Sprintf(
+							"missing column %s",
+							colName,
+						),
+					},
+				)
 				delete(comparableColumns, colName)
 			}
 
@@ -157,31 +219,32 @@ func verifyCommonTables(
 			}
 			if !currPKSame {
 				pkSame = false
-				log.Printf("[%s] table %s.%s has a mismatching PK", conn.ID, truthTbl.Schema, truthTbl.Table)
+				res.MismatchingTableDefinitions = append(
+					res.MismatchingTableDefinitions,
+					MismatchingTableDefinition{
+						ConnID:        conn.ID,
+						TableMetadata: targetTbl,
+						Info:          "PRIMARY KEY does not match source of truth",
+					},
+				)
 			}
 		}
 
-		if pkSame {
-			ct := comparableTable{
-				schema: truthTbl.Schema,
-				name:   truthTbl.Table,
-				pk:     truthPKCols,
-			}
-			for _, col := range truthPKCols {
-				if _, ok := comparableColumns[col]; !ok {
-					ct.cols = append(ct.cols, col)
-					delete(comparableColumns, col)
-				}
-			}
-			for _, col := range truthCols {
-				if _, ok := comparableColumns[col.columnName]; ok {
-					ct.cols = append(ct.cols, col.columnName)
-				}
-			}
-			if len(ct.cols) > 0 {
-				ret = append(ret, ct)
+		res.PrimaryKeyColumns = truthPKCols
+		// Place PK columns first.
+		for _, col := range truthPKCols {
+			if _, ok := comparableColumns[col]; !ok {
+				res.MatchingColumns = append(res.MatchingColumns, col)
+				delete(comparableColumns, col)
 			}
 		}
+		for _, col := range truthCols {
+			if _, ok := comparableColumns[col.columnName]; ok {
+				res.MatchingColumns = append(res.MatchingColumns, col.columnName)
+			}
+		}
+		res.RowVerifiable = pkSame && len(truthPKCols) > 0
+		ret = append(ret, res)
 	}
 	return ret, nil
 }

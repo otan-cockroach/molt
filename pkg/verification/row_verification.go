@@ -11,25 +11,23 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/json"
 	"github.com/cockroachdb/errors"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func compareRows(ctx context.Context, conns []Conn, table comparableTable) error {
-	if len(conns) != 2 {
-		return errors.AssertionFailedf("expected 2 connections, got %d", len(conns))
+func compareRows(ctx context.Context, conns []Conn, table verifyTableResult) error {
+	if !table.RowVerifiable {
+		return nil
 	}
-
 	tn := tree.MakeTableNameFromPrefix(
-		tree.ObjectNamePrefix{SchemaName: tree.Name(table.schema), ExplicitSchema: true},
-		tree.Name(table.name),
+		tree.ObjectNamePrefix{SchemaName: tree.Name(table.Schema), ExplicitSchema: true},
+		tree.Name(table.Table),
 	)
 	selectClause := &tree.SelectClause{
 		From: tree.From{
 			Tables: tree.TableExprs{&tn},
 		},
 	}
-	for _, col := range table.cols {
+	for _, col := range table.MatchingColumns {
 		selectClause.Exprs = append(
 			selectClause.Exprs,
 			tree.SelectExpr{
@@ -40,7 +38,7 @@ func compareRows(ctx context.Context, conns []Conn, table comparableTable) error
 	baseSelectExpr := tree.Select{
 		Select: selectClause,
 	}
-	for _, pkCol := range table.pk {
+	for _, pkCol := range table.PrimaryKeyColumns {
 		baseSelectExpr.OrderBy = append(
 			baseSelectExpr.OrderBy,
 			&tree.Order{Expr: tree.NewUnresolvedName(string(pkCol))},
@@ -66,7 +64,7 @@ func compareRows(ctx context.Context, conns []Conn, table comparableTable) error
 		itLoop:
 			for {
 				if !it.hasNext() {
-					log.Printf("[%s] missing row with pk %v", it.conn.ID, truthVal[:len(table.pk)])
+					log.Printf("[%s] missing row with pk %v", it.conn.ID, truthVal[:len(table.PrimaryKeyColumns)])
 					// Missing a row.
 					break
 				}
@@ -74,7 +72,7 @@ func compareRows(ctx context.Context, conns []Conn, table comparableTable) error
 				// Check the primary key.
 				rowVals := it.peek()
 				var compareVal int
-				for i := range table.pk {
+				for i := range table.PrimaryKeyColumns {
 					if compareVal = compareVals(truthVal[i], rowVals[i]); compareVal != 0 {
 						break
 					}
@@ -83,18 +81,18 @@ func compareRows(ctx context.Context, conns []Conn, table comparableTable) error
 				case 1:
 					// Extraneous row. Log and continue.
 					it.next()
-					log.Printf("[%s] extraneous with pk %v", it.conn.ID, rowVals[:len(table.pk)])
+					log.Printf("[%s] extraneous with pk %v", it.conn.ID, rowVals[:len(table.PrimaryKeyColumns)])
 				case 0:
 					rowVals = it.next()
-					for valIdx := len(table.pk); valIdx < len(rowVals); valIdx++ {
+					for valIdx := len(table.PrimaryKeyColumns); valIdx < len(rowVals); valIdx++ {
 						if compareVals(rowVals[valIdx], truthVal[valIdx]) != 0 {
-							log.Printf("[%s] pk %v has different value on column %s: %v", it.conn.ID, truthVal[:len(table.pk)], table.cols[valIdx], truthVal[valIdx])
+							log.Printf("[%s] pk %v has different value on column %s: %v", it.conn.ID, truthVal[:len(table.PrimaryKeyColumns)], table.MatchingColumns[valIdx], truthVal[valIdx])
 						}
 					}
 					break itLoop
 				case -1:
 					// Missing a row.
-					log.Printf("[%s] missing row with pk %v", it.conn.ID, truthVal[:len(table.pk)])
+					log.Printf("[%s] missing row with pk %v", it.conn.ID, truthVal[:len(table.PrimaryKeyColumns)])
 					break itLoop
 				}
 			}
@@ -293,46 +291,4 @@ func compareVals(a any, b any) int {
 	default:
 		panic(fmt.Sprintf("unhandled comparison: %T", a))
 	}
-}
-
-type rowIterator struct {
-	conn      Conn
-	rows      pgx.Rows
-	peekCache []any
-	err       error
-}
-
-func (it *rowIterator) hasNext() bool {
-	if it.err != nil || it.rows.Err() != nil {
-		return false
-	}
-	if it.peekCache != nil {
-		return true
-	}
-	if it.rows.Next() {
-		it.peekCache, it.err = it.rows.Values()
-		return it.err == nil
-	}
-	return false
-}
-
-func (it *rowIterator) peek() []any {
-	for {
-		if it.peekCache != nil {
-			return it.peekCache
-		}
-		if !it.hasNext() {
-			return nil
-		}
-	}
-}
-
-func (it *rowIterator) next() []any {
-	ret := it.peek()
-	it.peekCache = nil
-	return ret
-}
-
-func (it *rowIterator) error() error {
-	return errors.CombineErrors(it.err, it.rows.Err())
 }
