@@ -13,6 +13,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type rowStats struct {
+	numVerified   int
+	numSuccess    int
+	numMissing    int
+	numMismatch   int
+	numExtraneous int
+}
+
+func (s *rowStats) String() string {
+	return fmt.Sprintf(
+		"truth rows seen: %d, success: %d, missing: %d, mismatch: %d, extraneous: %d",
+		s.numVerified,
+		s.numSuccess,
+		s.numMissing,
+		s.numMismatch,
+		s.numExtraneous,
+	)
+}
+
 func compareRows(
 	ctx context.Context, conns []Conn, table verifyTableResult, reporter Reporter,
 ) error {
@@ -56,8 +75,16 @@ func compareRows(
 		iterators[i] = &rowIterator{conn: conn, rows: rows}
 	}
 
+	var stats rowStats
 	truth := iterators[0]
 	for truth.hasNext() {
+		stats.numVerified++
+		if stats.numVerified%10000 == 0 {
+			reporter.Report(StatusReport{
+				Info: fmt.Sprintf("progres on %s.%s: %s", table.Schema, table.Table, stats.String()),
+			})
+		}
+
 		truthVals := truth.next()
 		for i := 1; i < len(iterators); i++ {
 			it := iterators[i]
@@ -94,6 +121,7 @@ func compareRows(
 						PrimaryKeyColumns: table.PrimaryKeyColumns,
 						PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
 					})
+					stats.numExtraneous++
 				case 0:
 					targetVals = it.next()
 					mismatches := MismatchingRow{
@@ -112,6 +140,9 @@ func compareRows(
 					}
 					if len(mismatches.MismatchingColumns) > 0 {
 						reporter.Report(mismatches)
+						stats.numMismatch++
+					} else {
+						stats.numSuccess++
 					}
 					break itLoop
 				case -1:
@@ -123,11 +154,16 @@ func compareRows(
 						PrimaryKeyColumns: table.PrimaryKeyColumns,
 						PrimaryKeyValues:  truthVals[:len(table.PrimaryKeyColumns)],
 					})
+					stats.numMissing++
 					break itLoop
 				}
 			}
 		}
 	}
+
+	reporter.Report(StatusReport{
+		Info: fmt.Sprintf("finished row verification on %s.%s: %s", table.Schema, table.Table, stats.String()),
+	})
 
 	return nil
 }
