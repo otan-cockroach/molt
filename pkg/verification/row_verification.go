@@ -81,7 +81,7 @@ func compareRows(
 		stats.numVerified++
 		if stats.numVerified%10000 == 0 {
 			reporter.Report(StatusReport{
-				Info: fmt.Sprintf("progres on %s.%s: %s", table.Schema, table.Table, stats.String()),
+				Info: fmt.Sprintf("progress on %s.%s: %s", table.Schema, table.Table, stats.String()),
 			})
 		}
 
@@ -92,6 +92,7 @@ func compareRows(
 		itLoop:
 			for {
 				if !it.hasNext() {
+					stats.numMissing++
 					reporter.Report(MissingRow{
 						ConnID:            it.conn.ID,
 						Schema:            table.Schema,

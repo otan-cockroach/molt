@@ -47,7 +47,7 @@ func (l LogReporter) Report(obj ReportableObject) {
 			if i > 0 {
 				f += ", "
 			}
-			f += fmt.Sprintf("column %s=%v (truth %v)", col, obj.TargetVals[i], obj.TruthVals[i])
+			f += fmt.Sprintf("column %s: %v vs %v", col, obj.TargetVals[i], obj.TruthVals[i])
 		}
 		l.Printf(f)
 	case MissingRow:

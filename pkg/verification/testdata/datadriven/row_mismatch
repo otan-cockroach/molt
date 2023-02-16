@@ -1,0 +1,35 @@
+exec all
+CREATE TABLE common_table (
+    id INT8 PRIMARY KEY,
+    str TEXT
+)
+----
+[conn 0] CREATE TABLE
+[conn 1] CREATE TABLE
+
+exec source_of_truth
+INSERT INTO common_table VALUES
+    (100, 'same value'),
+    (125, 'i am missing'),
+    (150, 'different value'),
+    (200, 'also same value'),
+    (250, 'missing on lie')
+----
+[conn 0] INSERT 0 5
+
+exec non_source_of_truth
+INSERT INTO common_table VALUES
+    (50, 'extraneous row'),
+    (100, 'same value'),
+    (150, 'bad value'),
+    (200, 'also same value')
+----
+[conn 1] INSERT 0 4
+
+verify
+----
+[ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=50)
+[ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=125)
+[ROW MISMATCH] table public.common_table on lie has a mismatching row on (id=150): column str: bad value vs different value
+[ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=250)
+[STATUS] finished row verification on public.common_table: truth rows seen: 5, success: 2, missing: 2, mismatch: 1, extraneous: 1
