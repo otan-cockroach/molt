@@ -29,7 +29,6 @@ func getColumns(ctx context.Context, conn Conn, tableOID OID) ([]columnMetadata,
 
 	rows, err := conn.Conn.Query(
 		ctx,
-		// ignore xid.
 		`SELECT attname, atttypid, attnotnull FROM pg_attribute WHERE attrelid = $1 AND attnum > 0`,
 		tableOID,
 	)
@@ -55,7 +54,6 @@ func getPrimaryKey(ctx context.Context, conn Conn, tableOID OID) ([]columnName, 
 
 	rows, err := conn.Conn.Query(
 		ctx,
-		// ignore xid.
 		`
 select
     a.attname as column_name
@@ -133,7 +131,8 @@ func verifyCommonTables(
 					log.Printf("[%s] warning! table %s.%s column %s nullability does not match", conn.ID, truthTbl.Schema, truthTbl.Table, sourceCol.columnName)
 				}
 				if sourceCol.typeOID != targetCol.typeOID {
-					log.Printf("[%s] warning! table %s.%s column %s types do not match", conn.ID, truthTbl.Schema, truthTbl.Table, sourceCol.columnName)
+					log.Printf("[%s] warning! table %s.%s column %s types do not match; cannot compare", conn.ID, truthTbl.Schema, truthTbl.Table, sourceCol.columnName)
+					delete(comparableColumns, sourceCol.columnName)
 				}
 				delete(truthMappedCols, targetCol.columnName)
 			}
@@ -148,10 +147,12 @@ func verifyCommonTables(
 			}
 
 			currPKSame := len(targetPKCols) == len(truthPKCols)
-			for i := range targetPKCols {
-				if targetPKCols[i] != truthPKCols[i] {
-					currPKSame = false
-					break
+			if currPKSame {
+				for i := range targetPKCols {
+					if targetPKCols[i] != truthPKCols[i] {
+						currPKSame = false
+						break
+					}
 				}
 			}
 			if !currPKSame {
