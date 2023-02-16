@@ -147,6 +147,9 @@ func verifyCommonTables(
 					)
 					continue
 				}
+
+				delete(truthMappedCols, targetCol.columnName)
+
 				if sourceCol.notNull != targetCol.notNull {
 					res.MismatchingTableDefinitions = append(
 						res.MismatchingTableDefinitions,
@@ -154,7 +157,7 @@ func verifyCommonTables(
 							ConnID:        conn.ID,
 							TableMetadata: targetTbl,
 							Info: fmt.Sprintf(
-								"column %s NOT NULL mismatch: %s:%t vs %s:%t",
+								"column %s NOT NULL mismatch: %s=%t vs %s=%t",
 								targetCol.columnName,
 								conns[0].ID,
 								sourceCol.notNull,
@@ -163,7 +166,6 @@ func verifyCommonTables(
 							),
 						},
 					)
-					continue
 				}
 				if sourceCol.typeOID != targetCol.typeOID {
 					// TODO(otan): re-use type map.
@@ -175,18 +177,17 @@ func verifyCommonTables(
 							ConnID:        conn.ID,
 							TableMetadata: targetTbl,
 							Info: fmt.Sprintf(
-								"column type mismatch on %s: %s on %s vs %s on %s",
+								"column type mismatch on %s: %s=%s vs %s=%s",
 								targetCol.columnName,
-								aTyp,
 								conns[0].ID,
-								bTyp,
+								aTyp.Name,
 								conn.ID,
+								bTyp.Name,
 							),
 						},
 					)
 					delete(comparableColumns, sourceCol.columnName)
 				}
-				delete(truthMappedCols, targetCol.columnName)
 			}
 			for colName := range truthMappedCols {
 				res.MismatchingTableDefinitions = append(
@@ -217,7 +218,7 @@ func verifyCommonTables(
 					}
 				}
 			}
-			if !currPKSame {
+			if !currPKSame && len(truthPKCols) > 0 {
 				pkSame = false
 				res.MismatchingTableDefinitions = append(
 					res.MismatchingTableDefinitions,

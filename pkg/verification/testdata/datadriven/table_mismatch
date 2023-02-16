@@ -1,0 +1,52 @@
+# No PRIMARY KEY.
+
+exec source_of_truth
+CREATE TABLE t (id INT4 NOT NULL)
+----
+[conn 0] CREATE TABLE
+
+exec non_source_of_truth
+CREATE TABLE t (id INT4 PRIMARY KEY)
+----
+[conn 1] CREATE TABLE
+
+verify
+----
+[TABLE MISMATCH] table public.t on truth has an issue: missing a PRIMARY KEY - results cannot be compared
+
+exec all
+DROP TABLE t
+----
+[conn 0] DROP TABLE
+[conn 1] DROP TABLE
+
+# Table mismatches on multiple axis.
+
+exec source_of_truth
+CREATE TABLE t (
+    id INT8 PRIMARY KEY,
+    t TEXT NULL,
+    missing_in_lie_col JSONB,
+    mismatching_type INT4
+)
+----
+[conn 0] CREATE TABLE
+
+exec non_source_of_truth
+CREATE TABLE t (
+    id INT8 NOT NULL,
+    mismatching_pk INT8 PRIMARY KEY,
+    t TEXT NULL NULL,
+    extra_col JSONB,
+    mismatching_type TEXT
+)
+----
+[conn 1] CREATE TABLE
+
+verify
+----
+[TABLE MISMATCH] table public.t on lie has an issue: extraneous column mismatching_pk found
+[TABLE MISMATCH] table public.t on lie has an issue: extraneous column extra_col found
+[TABLE MISMATCH] table public.t on lie has an issue: column type mismatch on mismatching_type: truth=int4 vs lie=text
+[TABLE MISMATCH] table public.t on lie has an issue: missing column missing_in_lie_col
+[TABLE MISMATCH] table public.t on lie has an issue: PRIMARY KEY does not match source of truth
