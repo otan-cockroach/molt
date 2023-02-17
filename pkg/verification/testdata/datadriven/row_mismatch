@@ -33,3 +33,46 @@ verify
 [ROW MISMATCH] table public.common_table on lie has a mismatching row on (id=150): column str: bad value vs different value
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=250)
 [STATUS] finished row verification on public.common_table: truth rows seen: 5, success: 2, missing: 2, mismatch: 1, extraneous: 1
+
+# Test two tables, but mismatching columns.
+exec source_of_truth
+CREATE TABLE table_misaligned_columns (
+    id INT8 PRIMARY KEY,
+    a INT8,
+    not_common_a INT
+);
+INSERT INTO table_misaligned_columns VALUES
+    (1, 2, 1),
+    (2, 3, 2)
+----
+[conn 0] INSERT 0 2
+
+exec non_source_of_truth
+CREATE TABLE table_misaligned_columns (
+    id INT8 PRIMARY KEY,
+    a INT8,
+    not_common_b INT
+);
+INSERT INTO table_misaligned_columns VALUES
+    (1, 2, 1),
+    (2, 4, 2)
+----
+[conn 1] INSERT 0 2
+
+verify
+----
+[TABLE MISMATCH] table public.table_misaligned_columns on lie has an issue: extraneous column not_common_b found
+[TABLE MISMATCH] table public.table_misaligned_columns on lie has an issue: missing column not_common_a
+[ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=50)
+[ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=125)
+[ROW MISMATCH] table public.common_table on lie has a mismatching row on (id=150): column str: bad value vs different value
+[ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=250)
+[STATUS] finished row verification on public.common_table: truth rows seen: 5, success: 2, missing: 2, mismatch: 1, extraneous: 1
+[ROW MISMATCH] table public.table_misaligned_columns on lie has a mismatching row on (id=2): column a: 4 vs 3
+[STATUS] finished row verification on public.table_misaligned_columns: truth rows seen: 2, success: 1, missing: 0, mismatch: 1, extraneous: 0
+
+exec all
+DROP TABLE table_misaligned_columns
+----
+[conn 0] DROP TABLE
+[conn 1] DROP TABLE

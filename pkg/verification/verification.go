@@ -2,6 +2,7 @@ package verification
 
 import (
 	"context"
+	"log"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -29,8 +30,29 @@ func (tm TableMetadata) Less(o TableMetadata) bool {
 	return tm.Compare(o) < 0
 }
 
+const DefaultConcurrency = 8
+
+type VerifyOpt func(*verifyOpts)
+
+type verifyOpts struct {
+	concurrency int
+}
+
+func WithConcurrency(c int) VerifyOpt {
+	return func(o *verifyOpts) {
+		o.concurrency = c
+	}
+}
+
 // Verify verifies the given connections have matching tables and contents.
-func Verify(ctx context.Context, conns []Conn, reporter Reporter) error {
+func Verify(ctx context.Context, conns []Conn, reporter Reporter, inOpts ...VerifyOpt) error {
+	opts := verifyOpts{
+		concurrency: DefaultConcurrency,
+	}
+	for _, applyOpt := range inOpts {
+		applyOpt(&opts)
+	}
+
 	ret, err := verifyDatabaseTables(ctx, conns)
 	if err != nil {
 		return errors.Wrap(err, "error comparing conns")
@@ -49,29 +71,51 @@ func Verify(ctx context.Context, conns []Conn, reporter Reporter) error {
 		return err
 	}
 
-	g := ctxgroup.WithContext(ctx)
+	// Report mismatching table definitions.
 	for _, tbl := range tbls {
-		tbl := tbl
-
 		for _, d := range tbl.MismatchingTableDefinitions {
 			reporter.Report(d)
 		}
-		// TODO: limit tables to compare at a time.
+	}
+
+	// Compare rows up to the concurrency specified.
+	g := ctxgroup.WithContext(ctx)
+	workQueue := make(chan verifyTableResult)
+	for it := 0; it < opts.concurrency; it++ {
 		g.GoCtx(func(ctx context.Context) error {
-			connsCopy := make([]Conn, len(conns))
-			copy(connsCopy, conns)
-			for i := range connsCopy {
-				i := i
-				connsCopy[i].Conn, err = pgx.ConnectConfig(ctx, conns[i].Conn.Config())
-				if err != nil {
-					return errors.Wrap(err, "error establishing connection to compare")
+			for {
+				work, ok := <-workQueue
+				if !ok {
+					return nil
 				}
-				defer func() {
-					_ = connsCopy[i].Conn.Close(ctx)
-				}()
+				if err := verifyDataWorker(ctx, conns, reporter, work); err != nil {
+					log.Printf("[ERROR] error comparing rows on %s.%s: %v", work.Schema, work.Table, err)
+				}
 			}
-			return compareRows(ctx, connsCopy, tbl, reporter)
 		})
 	}
+	for _, tbl := range tbls {
+		workQueue <- tbl
+	}
+	close(workQueue)
 	return g.Wait()
+}
+
+func verifyDataWorker(
+	ctx context.Context, conns []Conn, reporter Reporter, tbl verifyTableResult,
+) error {
+	connsCopy := make([]Conn, len(conns))
+	copy(connsCopy, conns)
+	for i := range connsCopy {
+		i := i
+		var err error
+		connsCopy[i].Conn, err = pgx.ConnectConfig(ctx, conns[i].Conn.Config())
+		if err != nil {
+			return errors.Wrap(err, "error establishing connection to compare")
+		}
+		defer func() {
+			_ = connsCopy[i].Conn.Close(ctx)
+		}()
+	}
+	return compareRows(ctx, connsCopy, tbl, reporter)
 }
