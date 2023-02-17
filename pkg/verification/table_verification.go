@@ -91,6 +91,7 @@ type verifyTableResult struct {
 	Table                       string
 	RowVerifiable               bool
 	MatchingColumns             []columnName
+	MatchingColumnOIDs          []OID
 	PrimaryKeyColumns           []columnName
 	MismatchingTableDefinitions []MismatchingTableDefinition
 }

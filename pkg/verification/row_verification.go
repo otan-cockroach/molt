@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/json"
 	"github.com/cockroachdb/errors"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -38,46 +37,15 @@ func compareRows(
 	if !table.RowVerifiable {
 		return nil
 	}
-	tn := tree.MakeTableNameFromPrefix(
-		tree.ObjectNamePrefix{SchemaName: tree.Name(table.Schema), ExplicitSchema: true},
-		tree.Name(table.Table),
-	)
-	selectClause := &tree.SelectClause{
-		From: tree.From{
-			Tables: tree.TableExprs{&tn},
-		},
-	}
-	for _, col := range table.MatchingColumns {
-		selectClause.Exprs = append(
-			selectClause.Exprs,
-			tree.SelectExpr{
-				Expr: tree.NewUnresolvedName(string(col)),
-			},
-		)
-	}
-	baseSelectExpr := tree.Select{
-		Select: selectClause,
-	}
-	for _, pkCol := range table.PrimaryKeyColumns {
-		baseSelectExpr.OrderBy = append(
-			baseSelectExpr.OrderBy,
-			&tree.Order{Expr: tree.NewUnresolvedName(string(pkCol))},
-		)
-	}
 
-	// TODO: pagination!
 	iterators := make([]*rowIterator, len(conns))
 	for i, conn := range conns {
-		rows, err := conn.Conn.Query(ctx, baseSelectExpr.String())
-		if err != nil {
-			return errors.Wrapf(err, "error getting rows from %s", conn.ID)
-		}
-		iterators[i] = &rowIterator{conn: conn, rows: rows}
+		iterators[i] = &rowIterator{conn: conn, table: table}
 	}
 
 	var stats rowStats
 	truth := iterators[0]
-	for truth.hasNext() {
+	for truth.hasNext(ctx) {
 		stats.numVerified++
 		if stats.numVerified%10000 == 0 {
 			reporter.Report(StatusReport{
@@ -85,13 +53,13 @@ func compareRows(
 			})
 		}
 
-		truthVals := truth.next()
+		truthVals := truth.next(ctx)
 		for i := 1; i < len(iterators); i++ {
 			it := iterators[i]
 
 		itLoop:
 			for {
-				if !it.hasNext() {
+				if !it.hasNext(ctx) {
 					stats.numMissing++
 					reporter.Report(MissingRow{
 						ConnID:            it.conn.ID,
@@ -104,7 +72,7 @@ func compareRows(
 				}
 
 				// Check the primary key.
-				targetVals := it.peek()
+				targetVals := it.peek(ctx)
 				var compareVal int
 				for i := range table.PrimaryKeyColumns {
 					if compareVal = compareVals(truthVals[i], targetVals[i]); compareVal != 0 {
@@ -114,7 +82,7 @@ func compareRows(
 				switch compareVal {
 				case 1:
 					// Extraneous row. Log and continue.
-					it.next()
+					it.next(ctx)
 					reporter.Report(ExtraneousRow{
 						ConnID:            it.conn.ID,
 						Schema:            table.Schema,
@@ -124,7 +92,7 @@ func compareRows(
 					})
 					stats.numExtraneous++
 				case 0:
-					targetVals = it.next()
+					targetVals = it.next(ctx)
 					mismatches := MismatchingRow{
 						ConnID:            it.conn.ID,
 						Schema:            table.Schema,
