@@ -31,11 +31,13 @@ func (tm TableMetadata) Less(o TableMetadata) bool {
 }
 
 const DefaultConcurrency = 8
+const DefaultRowBatchSize = 1000
 
 type VerifyOpt func(*verifyOpts)
 
 type verifyOpts struct {
-	concurrency int
+	concurrency  int
+	rowBatchSize int
 }
 
 func WithConcurrency(c int) VerifyOpt {
@@ -44,10 +46,17 @@ func WithConcurrency(c int) VerifyOpt {
 	}
 }
 
+func WithRowBatchSize(c int) VerifyOpt {
+	return func(o *verifyOpts) {
+		o.rowBatchSize = c
+	}
+}
+
 // Verify verifies the given connections have matching tables and contents.
 func Verify(ctx context.Context, conns []Conn, reporter Reporter, inOpts ...VerifyOpt) error {
 	opts := verifyOpts{
-		concurrency: DefaultConcurrency,
+		concurrency:  DefaultConcurrency,
+		rowBatchSize: DefaultRowBatchSize,
 	}
 	for _, applyOpt := range inOpts {
 		applyOpt(&opts)
@@ -88,7 +97,7 @@ func Verify(ctx context.Context, conns []Conn, reporter Reporter, inOpts ...Veri
 				if !ok {
 					return nil
 				}
-				if err := verifyDataWorker(ctx, conns, reporter, work); err != nil {
+				if err := verifyDataWorker(ctx, conns, reporter, opts.rowBatchSize, work); err != nil {
 					log.Printf("[ERROR] error comparing rows on %s.%s: %v", work.Schema, work.Table, err)
 				}
 			}
@@ -102,7 +111,7 @@ func Verify(ctx context.Context, conns []Conn, reporter Reporter, inOpts ...Veri
 }
 
 func verifyDataWorker(
-	ctx context.Context, conns []Conn, reporter Reporter, tbl verifyTableResult,
+	ctx context.Context, conns []Conn, reporter Reporter, rowBatchSize int, tbl verifyTableResult,
 ) error {
 	connsCopy := make([]Conn, len(conns))
 	copy(connsCopy, conns)
@@ -117,5 +126,5 @@ func verifyDataWorker(
 			_ = connsCopy[i].Conn.Close(ctx)
 		}()
 	}
-	return compareRows(ctx, connsCopy, tbl, reporter)
+	return compareRows(ctx, connsCopy, tbl, rowBatchSize, reporter)
 }

@@ -47,7 +47,7 @@ func (c *compareContext) MustGetPlaceholderValue(p *tree.Placeholder) tree.Datum
 }
 
 func compareRows(
-	ctx context.Context, conns []Conn, table verifyTableResult, reporter Reporter,
+	ctx context.Context, conns []Conn, table verifyTableResult, rowBatchSize int, reporter Reporter,
 ) error {
 	if !table.RowVerifiable {
 		return nil
@@ -55,7 +55,7 @@ func compareRows(
 
 	iterators := make([]*rowIterator, len(conns))
 	for i, conn := range conns {
-		iterators[i] = &rowIterator{conn: conn, table: table}
+		iterators[i] = &rowIterator{conn: conn, table: table, rowBatchSize: rowBatchSize}
 	}
 
 	cmpCtx := &compareContext{}

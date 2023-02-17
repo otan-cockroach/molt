@@ -9,14 +9,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-var rowReadBatchSize = 2
-
 type rowIterator struct {
-	conn  Conn
-	table verifyTableResult
+	conn         Conn
+	table        verifyTableResult
+	rowBatchSize int
 
-	isComplete bool
-
+	isComplete   bool
 	pkCursor     tree.Datums
 	peekCache    tree.Datums
 	err          error
@@ -49,7 +47,7 @@ func (it *rowIterator) hasNext(ctx context.Context) bool {
 		}
 
 		// If we have read rows less than the limit, we are done.
-		if it.currRows != nil && it.currRowsRead < rowReadBatchSize {
+		if it.currRows != nil && it.currRowsRead < it.rowBatchSize {
 			it.isComplete = true
 			return false
 		}
@@ -107,6 +105,7 @@ func (it *rowIterator) nextPage(ctx context.Context) error {
 	}
 	baseSelectExpr := tree.Select{
 		Select: selectClause,
+		Limit:  &tree.Limit{Count: tree.NewDInt(tree.DInt(it.rowBatchSize))},
 	}
 	for _, pkCol := range table.PrimaryKeyColumns {
 		baseSelectExpr.OrderBy = append(

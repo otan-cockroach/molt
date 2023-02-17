@@ -86,7 +86,7 @@ func testDataDriven(t *testing.T, path string) {
 				},
 			}
 			// Use 1 concurrency to ensure deterministic results.
-			err := Verify(ctx, conns, reporter, WithConcurrency(1))
+			err := Verify(ctx, conns, reporter, WithConcurrency(1), WithRowBatchSize(2))
 			if err != nil {
 				sb.WriteString(fmt.Sprintf("error: %s\n", err.Error()))
 			}
