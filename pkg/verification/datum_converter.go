@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
+	"github.com/cockroachdb/cockroachdb-parser/pkg/util/duration"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/json"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/timeofday"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/timeutil/pgdate"
@@ -12,6 +13,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
 )
+
+type parseTimeContext struct{}
+
+var _ tree.ParseTimeContext = (*parseTimeContext)(nil)
+
+func (p parseTimeContext) GetRelativeParseTime() time.Time {
+	return time.Now().UTC()
+}
+
+func (p parseTimeContext) GetIntervalStyle() duration.IntervalStyle {
+	return duration.IntervalStyle_POSTGRES
+}
+
+func (p parseTimeContext) GetDateStyle() pgdate.DateStyle {
+	return pgdate.DefaultDateStyle()
+}
+
+var timeCtx = &parseTimeContext{}
 
 func convertRowValue(val any, typOID OID) (tree.Datum, error) {
 	switch typOID {
@@ -48,7 +67,7 @@ func convertRowValue(val any, typOID OID) (tree.Datum, error) {
 	case pgtype.TimestampOID:
 		return tree.MakeDTimestamp(val.(time.Time), time.Microsecond)
 	case pgtype.TimestamptzOID:
-		return tree.MakeDTimestampTZ(val.(time.Time), time.Microsecond)
+		return tree.MakeDTimestampTZ(val.(time.Time).UTC(), time.Microsecond)
 	case pgtype.TimeOID:
 		return tree.MakeDTime(timeofday.FromInt(val.(pgtype.Time).Microseconds)), nil
 	case pgtype.DateOID:
@@ -59,8 +78,11 @@ func convertRowValue(val any, typOID OID) (tree.Datum, error) {
 		return tree.NewDDate(d), nil
 	case pgtype.ByteaOID:
 		return tree.NewDBytes(tree.DBytes(val.([]byte))), nil
+	case OID(oid.T_timetz): // does not exist in pgtype.
+		d, _, err := tree.ParseDTimeTZ(timeCtx, val.(string), time.Microsecond)
+		return d, err
 	}
-	return nil, errors.AssertionFailedf("value %v (%T) of typOID %d not yet translatable", val, val, typOID)
+	return nil, errors.AssertionFailedf("value %v (%T) of type OID %d not yet translatable", val, val, typOID)
 }
 
 func convertRowValues(vals []any, typOIDs []OID) (tree.Datums, error) {
