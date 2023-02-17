@@ -1,5 +1,7 @@
 package verification
 
+import "github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
+
 type ReportableObject interface{}
 
 type MissingTable struct {
@@ -24,7 +26,7 @@ type MissingRow struct {
 	Table  string
 
 	PrimaryKeyColumns []columnName
-	PrimaryKeyValues  []any
+	PrimaryKeyValues  tree.Datums
 }
 
 type ExtraneousRow struct {
@@ -33,7 +35,7 @@ type ExtraneousRow struct {
 	Table  string
 
 	PrimaryKeyColumns []columnName
-	PrimaryKeyValues  []any
+	PrimaryKeyValues  tree.Datums
 }
 
 type MismatchingRow struct {
@@ -42,11 +44,11 @@ type MismatchingRow struct {
 	Table  string
 
 	PrimaryKeyColumns []columnName
-	PrimaryKeyValues  []any
+	PrimaryKeyValues  tree.Datums
 
 	MismatchingColumns []columnName
-	TruthVals          []any
-	TargetVals         []any
+	TruthVals          tree.Datums
+	TargetVals         tree.Datums
 }
 
 type StatusReport struct {

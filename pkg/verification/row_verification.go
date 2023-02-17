@@ -1,15 +1,11 @@
 package verification
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"reflect"
 	"time"
 
-	"github.com/cockroachdb/cockroachdb-parser/pkg/util/json"
-	"github.com/cockroachdb/errors"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 )
 
 type rowStats struct {
@@ -31,6 +27,25 @@ func (s *rowStats) String() string {
 	)
 }
 
+// compareContext implements tree.CompareContext
+type compareContext struct{}
+
+func (c *compareContext) UnwrapDatum(d tree.Datum) tree.Datum {
+	return d
+}
+
+func (c *compareContext) GetLocation() *time.Location {
+	return time.UTC
+}
+
+func (c *compareContext) GetRelativeParseTime() time.Time {
+	return time.Now().UTC()
+}
+
+func (c *compareContext) MustGetPlaceholderValue(p *tree.Placeholder) tree.Datum {
+	return p
+}
+
 func compareRows(
 	ctx context.Context, conns []Conn, table verifyTableResult, reporter Reporter,
 ) error {
@@ -43,6 +58,8 @@ func compareRows(
 		iterators[i] = &rowIterator{conn: conn, table: table}
 	}
 
+	cmpCtx := &compareContext{}
+
 	var stats rowStats
 	truth := iterators[0]
 	for truth.hasNext(ctx) {
@@ -54,8 +71,8 @@ func compareRows(
 		}
 
 		truthVals := truth.next(ctx)
-		for i := 1; i < len(iterators); i++ {
-			it := iterators[i]
+		for itIdx := 1; itIdx < len(iterators); itIdx++ {
+			it := iterators[itIdx]
 
 		itLoop:
 			for {
@@ -75,7 +92,7 @@ func compareRows(
 				targetVals := it.peek(ctx)
 				var compareVal int
 				for i := range table.PrimaryKeyColumns {
-					if compareVal = compareVals(truthVals[i], targetVals[i]); compareVal != 0 {
+					if compareVal = truthVals[i].Compare(cmpCtx, targetVals[i]); compareVal != 0 {
 						break
 					}
 				}
@@ -101,7 +118,7 @@ func compareRows(
 						PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
 					}
 					for valIdx := len(table.PrimaryKeyColumns); valIdx < len(targetVals); valIdx++ {
-						if compareVals(targetVals[valIdx], truthVals[valIdx]) != 0 {
+						if targetVals[valIdx].Compare(cmpCtx, truthVals[valIdx]) != 0 {
 							mismatches.MismatchingColumns = append(mismatches.MismatchingColumns, table.MatchingColumns[valIdx])
 							mismatches.TargetVals = append(mismatches.TargetVals, targetVals[valIdx])
 							mismatches.TruthVals = append(mismatches.TruthVals, truthVals[valIdx])
@@ -135,195 +152,4 @@ func compareRows(
 	})
 
 	return nil
-}
-
-func compareVals(a any, b any) int {
-	// Handle nils.
-	if a == nil || b == nil {
-		if a == b {
-			return 0
-		}
-		if a != nil {
-			return 1
-		}
-		return -1
-	}
-	if reflect.TypeOf(a) != reflect.TypeOf(b) {
-		panic(fmt.Sprintf("type %T does not match type %T", a, b))
-	}
-	switch a := a.(type) {
-	case int8:
-		b := b.(int8)
-		if a > b {
-			return 1
-		}
-		if a < b {
-			return -1
-		}
-		return 0
-	case int16:
-		b := b.(int16)
-		if a > b {
-			return 1
-		}
-		if a < b {
-			return -1
-		}
-		return 0
-	case int32:
-		b := b.(int32)
-		if a > b {
-			return 1
-		}
-		if a < b {
-			return -1
-		}
-		return 0
-	case int64:
-		b := b.(int64)
-		if a > b {
-			return 1
-		}
-		if a < b {
-			return -1
-		}
-		return 0
-	case uint8:
-		b := b.(uint8)
-		if a > b {
-			return 1
-		}
-		if a < b {
-			return -1
-		}
-		return 0
-	case uint16:
-		b := b.(uint16)
-		if a > b {
-			return 1
-		}
-		if a < b {
-			return -1
-		}
-		return 0
-	case uint32:
-		b := b.(uint32)
-		if a > b {
-			return 1
-		}
-		if a < b {
-			return -1
-		}
-		return 0
-	case uint64:
-		b := b.(uint64)
-		if a > b {
-			return 1
-		}
-		if a < b {
-			return -1
-		}
-		return 0
-	case string:
-		b := b.(string)
-		if a > b {
-			return 1
-		}
-		if a < b {
-			return -1
-		}
-		return 0
-	case float32:
-		b := b.(float32)
-		if a > b {
-			return 1
-		}
-		if a < b {
-			return -1
-		}
-		return 0
-	case float64:
-		b := b.(float64)
-		if a > b {
-			return 1
-		}
-		if a < b {
-			return -1
-		}
-		return 0
-	case pgtype.Numeric:
-		// TODO: convert to apd.
-		panic("numeric types not yet supported")
-	case pgtype.Time:
-		b := b.(pgtype.Time)
-		if a.Microseconds > b.Microseconds {
-			return 1
-		}
-		if a.Microseconds < b.Microseconds {
-			return -1
-		}
-		return 0
-	case pgtype.UUID:
-		b := b.(pgtype.UUID)
-		return bytes.Compare(a.Bytes[:], b.Bytes[:])
-	case pgtype.Date:
-		b := b.(pgtype.Date)
-		if a.Time.Equal(b.Time) {
-			return 0
-		}
-		if a.Time.After(b.Time) {
-			return 1
-		}
-		return -1
-	case time.Time:
-		b := b.(time.Time)
-		if a.Equal(b) {
-			return 0
-		}
-		if a.After(b) {
-			return 1
-		}
-		return -1
-	case []byte:
-		return bytes.Compare(a, b.([]byte))
-	case bool:
-		if a == b {
-			return 0
-		}
-		if a {
-			return 1
-		}
-		return -1
-	// JSONB comparison.
-	case map[string]interface{}:
-		aJSON, err := json.MakeJSON(a)
-		if err != nil {
-			panic(fmt.Sprintf("unknown json value: %T", a))
-		}
-		bJSON, err := json.MakeJSON(b.(map[string]interface{}))
-		if err != nil {
-			panic(fmt.Sprintf("unknown json value: %T", b))
-		}
-		ret, err := aJSON.Compare(bJSON)
-		if err != nil {
-			panic(errors.Wrap(err, "error mismatching json comparison"))
-		}
-		return ret
-	case []interface{}:
-		aJSON, err := json.MakeJSON(a)
-		if err != nil {
-			panic(fmt.Sprintf("unknown json value: %T", a))
-		}
-		bJSON, err := json.MakeJSON(b.([]interface{}))
-		if err != nil {
-			panic(fmt.Sprintf("unknown json value: %T", b))
-		}
-		ret, err := aJSON.Compare(bJSON)
-		if err != nil {
-			panic(errors.Wrap(err, "error mismatching json comparison"))
-		}
-		return ret
-	default:
-		panic(fmt.Sprintf("unhandled comparison: %T", a))
-	}
 }

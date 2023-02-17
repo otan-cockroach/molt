@@ -3,6 +3,8 @@ package verification
 import (
 	"fmt"
 	"strings"
+
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 )
 
 type Reporter interface {
@@ -42,30 +44,30 @@ func (l LogReporter) Report(obj ReportableObject) {
 	case StatusReport:
 		l.Printf("[STATUS] %s", obj.Info)
 	case MismatchingRow:
-		f := fmt.Sprintf("[ROW MISMATCH] table %s.%s on %s has a mismatching row on (%s): ", obj.Schema, obj.Table, obj.ConnID, zipPrimaryKeys(obj.PrimaryKeyColumns, obj.PrimaryKeyValues))
+		f := fmt.Sprintf("[ROW MISMATCH] table %s.%s on %s has a mismatching row on (%s): ", obj.Schema, obj.Table, obj.ConnID, zipPrimaryKeysForReporting(obj.PrimaryKeyColumns, obj.PrimaryKeyValues))
 		for i, col := range obj.MismatchingColumns {
 			if i > 0 {
 				f += ", "
 			}
-			f += fmt.Sprintf("column %s: %v vs %v", col, obj.TargetVals[i], obj.TruthVals[i])
+			f += fmt.Sprintf("column %s: %s vs %s", col, obj.TargetVals[i].String(), obj.TruthVals[i].String())
 		}
 		l.Printf(f)
 	case MissingRow:
-		l.Printf("[ROW MISMATCH] table %s.%s on %s is missing a row with PK (%s)", obj.Schema, obj.Table, obj.ConnID, zipPrimaryKeys(obj.PrimaryKeyColumns, obj.PrimaryKeyValues))
+		l.Printf("[ROW MISMATCH] table %s.%s on %s is missing a row with PK (%s)", obj.Schema, obj.Table, obj.ConnID, zipPrimaryKeysForReporting(obj.PrimaryKeyColumns, obj.PrimaryKeyValues))
 	case ExtraneousRow:
-		l.Printf("[ROW MISMATCH] table %s.%s on %s has an extraneous row with PK (%s)", obj.Schema, obj.Table, obj.ConnID, zipPrimaryKeys(obj.PrimaryKeyColumns, obj.PrimaryKeyValues))
+		l.Printf("[ROW MISMATCH] table %s.%s on %s has an extraneous row with PK (%s)", obj.Schema, obj.Table, obj.ConnID, zipPrimaryKeysForReporting(obj.PrimaryKeyColumns, obj.PrimaryKeyValues))
 	default:
 		l.Printf("[ERROR] unable to process %#v", obj)
 	}
 }
 
-func zipPrimaryKeys(columnNames []columnName, columnVals []any) string {
+func zipPrimaryKeysForReporting(columnNames []columnName, columnVals tree.Datums) string {
 	var sb strings.Builder
 	for i := range columnNames {
 		if i > 0 {
 			sb.WriteString(",")
 		}
-		sb.WriteString(fmt.Sprintf("%s=%v", columnNames[i], columnVals[i]))
+		sb.WriteString(fmt.Sprintf("%s=%s", columnNames[i], columnVals[i].String()))
 	}
 	return sb.String()
 }

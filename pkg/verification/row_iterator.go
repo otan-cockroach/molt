@@ -17,8 +17,8 @@ type rowIterator struct {
 
 	isComplete bool
 
-	pkCursor     []any
-	peekCache    []any
+	pkCursor     tree.Datums
+	peekCache    tree.Datums
 	err          error
 	currRows     pgx.Rows
 	currRowsRead int
@@ -34,8 +34,14 @@ func (it *rowIterator) hasNext(ctx context.Context) bool {
 	for {
 		if it.currRows != nil && it.currRows.Next() {
 			it.currRowsRead++
-			it.peekCache, it.err = it.currRows.Values()
-			if it.err != nil {
+			rows, err := it.currRows.Values()
+			if err != nil {
+				it.err = err
+				return false
+			}
+			it.peekCache, err = convertRowValues(rows, it.table.MatchingColumnOIDs)
+			if err != nil {
+				it.err = err
 				return false
 			}
 			it.pkCursor = it.peekCache[:len(it.table.PrimaryKeyColumns)]
@@ -91,16 +97,7 @@ func (it *rowIterator) nextPage(ctx context.Context) error {
 		colVals := &tree.Tuple{}
 		for i := range table.PrimaryKeyColumns {
 			colNames.Exprs = append(colNames.Exprs, tree.NewUnresolvedName(string(table.PrimaryKeyColumns[i])))
-			switch v := it.pkCursor[i].(type) {
-			case int:
-				colVals.Exprs = append(colVals.Exprs, tree.NewDInt(tree.DInt(v)))
-			case int64:
-				colVals.Exprs = append(colVals.Exprs, tree.NewDInt(tree.DInt(v)))
-			case int32:
-				colVals.Exprs = append(colVals.Exprs, tree.NewDInt(tree.DInt(v)))
-			default:
-				return errors.Newf("cursoring not yet implemented on %T", v)
-			}
+			colVals.Exprs = append(colVals.Exprs, it.pkCursor[i])
 		}
 		cmpExpr := &tree.ComparisonExpr{
 			Operator: treecmp.MakeComparisonOperator(treecmp.GT),
@@ -122,7 +119,7 @@ func (it *rowIterator) nextPage(ctx context.Context) error {
 	return nil
 }
 
-func (it *rowIterator) peek(ctx context.Context) []any {
+func (it *rowIterator) peek(ctx context.Context) tree.Datums {
 	for {
 		if it.peekCache != nil {
 			return it.peekCache
@@ -133,7 +130,7 @@ func (it *rowIterator) peek(ctx context.Context) []any {
 	}
 }
 
-func (it *rowIterator) next(ctx context.Context) []any {
+func (it *rowIterator) next(ctx context.Context) tree.Datums {
 	ret := it.peek(ctx)
 	it.peekCache = nil
 	return ret

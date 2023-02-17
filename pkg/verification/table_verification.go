@@ -109,6 +109,10 @@ func verifyCommonTables(
 		if err != nil {
 			return nil, errors.Wrap(err, "error getting columns for table")
 		}
+		columnOIDs := make(map[columnName]OID)
+		for _, truthCol := range truthCols {
+			columnOIDs[truthCol.columnName] = truthCol.typeOID
+		}
 
 		pkSame := true
 		truthPKCols, err := getPrimaryKey(ctx, conns[0], truthTbl.OID)
@@ -237,12 +241,14 @@ func verifyCommonTables(
 		for _, col := range truthPKCols {
 			if _, ok := comparableColumns[col]; !ok {
 				res.MatchingColumns = append(res.MatchingColumns, col)
+				res.MatchingColumnOIDs = append(res.MatchingColumnOIDs, columnOIDs[col])
 				delete(comparableColumns, col)
 			}
 		}
 		for _, col := range truthCols {
 			if _, ok := comparableColumns[col.columnName]; ok {
 				res.MatchingColumns = append(res.MatchingColumns, col.columnName)
+				res.MatchingColumnOIDs = append(res.MatchingColumnOIDs, columnOIDs[col.columnName])
 			}
 		}
 		res.RowVerifiable = pkSame && len(truthPKCols) > 0
