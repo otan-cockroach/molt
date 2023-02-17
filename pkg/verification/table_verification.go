@@ -174,6 +174,7 @@ func verifyCommonTables(
 				}
 				if sourceCol.typeOID != targetCol.typeOID {
 					// TODO(otan): re-use type map.
+					// TODO(otan): allow similar types to be compared anyway, e.g. int/int, float/float, json/jsonb.
 					aTyp, _ := pgtype.NewMap().TypeForOID(uint32(sourceCol.typeOID))
 					bTyp, _ := pgtype.NewMap().TypeForOID(uint32(targetCol.typeOID))
 					res.MismatchingTableDefinitions = append(

@@ -113,18 +113,20 @@ func Verify(ctx context.Context, conns []Conn, reporter Reporter, inOpts ...Veri
 func verifyDataWorker(
 	ctx context.Context, conns []Conn, reporter Reporter, rowBatchSize int, tbl verifyTableResult,
 ) error {
-	connsCopy := make([]Conn, len(conns))
-	copy(connsCopy, conns)
-	for i := range connsCopy {
+	// Copy connections over naming wise, but initialize a new pgx connection
+	// for each table.
+	workerConns := make([]Conn, len(conns))
+	copy(workerConns, conns)
+	for i := range workerConns {
 		i := i
 		var err error
-		connsCopy[i].Conn, err = pgx.ConnectConfig(ctx, conns[i].Conn.Config())
+		workerConns[i].Conn, err = pgx.ConnectConfig(ctx, conns[i].Conn.Config())
 		if err != nil {
 			return errors.Wrap(err, "error establishing connection to compare")
 		}
 		defer func() {
-			_ = connsCopy[i].Conn.Close(ctx)
+			_ = workerConns[i].Conn.Close(ctx)
 		}()
 	}
-	return compareRows(ctx, connsCopy, tbl, rowBatchSize, reporter)
+	return compareRows(ctx, workerConns, tbl, rowBatchSize, reporter)
 }

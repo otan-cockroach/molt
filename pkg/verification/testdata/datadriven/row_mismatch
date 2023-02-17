@@ -1,3 +1,42 @@
+# Throw in every type into a table and ensure we can compare.
+exec all
+CREATE TABLE test_table (
+    id INT4 PRIMARY KEY,
+    bool_test BOOL DEFAULT true,
+    char_test "char" DEFAULT 'abc',
+    bpchar_test CHAR DEFAULT 'a',
+    varchar_test VARCHAR DEFAULT 'abcd',
+    oid_test OID DEFAULT 81,
+    float4_test FLOAT4 DEFAULT 1.25,
+    float8_test FLOAT8 DEFAULT 1.5,
+    int2_test INT2 DEFAULT -1,
+    int4_test INT4 DEFAULT 123,
+    int8_test INT8 DEFAULT 666,
+    jsonb_test JSONB DEFAULT '[1,2,3]',
+    uuid UUID DEFAULT '35750bee-6d1f-43f0-a36c-d660474bfd2d',
+    ts_test TIMESTAMP DEFAULT '2020-03-21 01:02:03.123456',
+    tstz_test TIMESTAMPTZ DEFAULT '2020-03-21 01:02:03.123456',
+    time_test TIME DEFAULT '01:02:45.123456',
+    timetz_test TIME DEFAULT '01:02:03.234999+03',
+    date_test DATE DEFAULT '2020-09-13',
+    bytes_test BYTEA DEFAULT 'deadbeef'
+);
+INSERT INTO test_table(id) VALUES (1)
+----
+[conn 0] INSERT 0 1
+[conn 1] INSERT 0 1
+
+verify
+----
+[STATUS] finished row verification on public.test_table: truth rows seen: 1, success: 1, missing: 0, mismatch: 0, extraneous: 0
+
+exec all
+DROP TABLE test_table
+----
+[conn 0] DROP TABLE
+[conn 1] DROP TABLE
+
+# Check we report mismatches.
 exec all
 CREATE TABLE common_table (
     id INT8 PRIMARY KEY,

@@ -1,6 +1,7 @@
 package verification
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
@@ -33,10 +34,13 @@ func (p parseTimeContext) GetDateStyle() pgdate.DateStyle {
 var timeCtx = &parseTimeContext{}
 
 func convertRowValue(val any, typOID OID) (tree.Datum, error) {
+	// TODO(#migrations): arrays
 	switch typOID {
 	case pgtype.BoolOID:
 		return tree.MakeDBool(tree.DBool(val.(bool))), nil
-	case pgtype.QCharOID, pgtype.VarcharOID, pgtype.TextOID:
+	case pgtype.QCharOID:
+		return tree.NewDString(fmt.Sprintf("%c", val.(int32))), nil
+	case pgtype.VarcharOID, pgtype.TextOID, pgtype.BPCharOID:
 		return tree.NewDString(val.(string)), nil
 	case pgtype.NameOID:
 		return tree.NewDName(val.(string)), nil
@@ -59,7 +63,8 @@ func convertRowValue(val any, typOID OID) (tree.Datum, error) {
 		}
 		return tree.NewDJSON(j), nil
 	case pgtype.UUIDOID:
-		u, err := uuid.FromString(val.(string))
+		b := val.([16]uint8)
+		u, err := uuid.FromBytes(b[:])
 		if err != nil {
 			return nil, errors.Wrapf(err, "error decoding UUID %v", val)
 		}
@@ -81,6 +86,7 @@ func convertRowValue(val any, typOID OID) (tree.Datum, error) {
 	case OID(oid.T_timetz): // does not exist in pgtype.
 		d, _, err := tree.ParseDTimeTZ(timeCtx, val.(string), time.Microsecond)
 		return d, err
+		// BitArray, Numeric.
 	}
 	return nil, errors.AssertionFailedf("value %v (%T) of type OID %d not yet translatable", val, val, typOID)
 }

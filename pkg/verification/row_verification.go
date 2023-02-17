@@ -109,6 +109,7 @@ func compareRows(
 					})
 					stats.numExtraneous++
 				case 0:
+					// Matching primary key. compare values and break loop.
 					targetVals = it.next(ctx)
 					mismatches := MismatchingRow{
 						ConnID:            it.conn.ID,
