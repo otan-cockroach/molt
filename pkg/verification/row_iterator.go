@@ -39,7 +39,7 @@ func (it *rowIterator) hasNext(ctx context.Context) bool {
 				it.err = err
 				return false
 			}
-			it.peekCache, err = convertRowValues(rows, it.table.MatchingColumnOIDs)
+			it.peekCache, err = convertRowValues(rows, it.table.MatchingColumnTypeOIDs)
 			if err != nil {
 				it.err = err
 				return false

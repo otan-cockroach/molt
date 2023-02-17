@@ -60,14 +60,14 @@ func convertRowValue(val any, typOID OID) (tree.Datum, error) {
 	return nil, errors.AssertionFailedf("value %v of typOID %d not yet translatable", val, typOID)
 }
 
-func convertRowValues(vals []any, oids []OID) (tree.Datums, error) {
+func convertRowValues(vals []any, typOIDs []OID) (tree.Datums, error) {
 	ret := make(tree.Datums, len(vals))
-	if len(vals) != len(oids) {
-		return nil, errors.AssertionFailedf("val length != oid length: %v vs %v", vals, oids)
+	if len(vals) != len(typOIDs) {
+		return nil, errors.AssertionFailedf("val length != oid length: %v vs %v", vals, typOIDs)
 	}
 	for i := range vals {
 		var err error
-		if ret[i], err = convertRowValue(vals[i], oids[i]); err != nil {
+		if ret[i], err = convertRowValue(vals[i], typOIDs[i]); err != nil {
 			return nil, err
 		}
 	}

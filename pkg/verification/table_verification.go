@@ -91,7 +91,7 @@ type verifyTableResult struct {
 	Table                       string
 	RowVerifiable               bool
 	MatchingColumns             []columnName
-	MatchingColumnOIDs          []OID
+	MatchingColumnTypeOIDs      []OID
 	PrimaryKeyColumns           []columnName
 	MismatchingTableDefinitions []MismatchingTableDefinition
 }
@@ -241,14 +241,14 @@ func verifyCommonTables(
 		for _, col := range truthPKCols {
 			if _, ok := comparableColumns[col]; !ok {
 				res.MatchingColumns = append(res.MatchingColumns, col)
-				res.MatchingColumnOIDs = append(res.MatchingColumnOIDs, columnOIDs[col])
+				res.MatchingColumnTypeOIDs = append(res.MatchingColumnTypeOIDs, columnOIDs[col])
 				delete(comparableColumns, col)
 			}
 		}
 		for _, col := range truthCols {
 			if _, ok := comparableColumns[col.columnName]; ok {
 				res.MatchingColumns = append(res.MatchingColumns, col.columnName)
-				res.MatchingColumnOIDs = append(res.MatchingColumnOIDs, columnOIDs[col.columnName])
+				res.MatchingColumnTypeOIDs = append(res.MatchingColumnTypeOIDs, columnOIDs[col.columnName])
 			}
 		}
 		res.RowVerifiable = pkSame && len(truthPKCols) > 0
