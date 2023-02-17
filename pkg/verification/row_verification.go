@@ -76,7 +76,7 @@ func compareRows(
 
 		itLoop:
 			for {
-				if !it.hasNext(ctx) {
+				if !it.hasNext(ctx) && it.error() == nil {
 					stats.numMissing++
 					reporter.Report(MissingRow{
 						ConnID:            it.conn.ID,
@@ -147,6 +147,24 @@ func compareRows(
 		}
 	}
 
+	for _, it := range iterators {
+		for it.hasNext(ctx) {
+			targetVals := it.next(ctx)
+			reporter.Report(ExtraneousRow{
+				ConnID:            it.conn.ID,
+				Schema:            table.Schema,
+				Table:             table.Table,
+				PrimaryKeyColumns: table.PrimaryKeyColumns,
+				PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
+			})
+			stats.numExtraneous++
+		}
+		if err := it.error(); err != nil {
+			reporter.Report(StatusReport{
+				Info: fmt.Sprintf("error validating %s.%s on %s: %v", table.Schema, table.Table, it.conn.ID, err),
+			})
+		}
+	}
 	reporter.Report(StatusReport{
 		Info: fmt.Sprintf("finished row verification on %s.%s: %s", table.Schema, table.Table, stats.String()),
 	})

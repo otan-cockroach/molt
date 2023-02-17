@@ -22,9 +22,10 @@ INSERT INTO common_table VALUES
     (50, 'extraneous row'),
     (100, 'same value'),
     (150, 'bad value'),
-    (200, 'also same value')
+    (200, 'also same value'),
+    (300, 'missing on truth')
 ----
-[conn 1] INSERT 0 4
+[conn 1] INSERT 0 5
 
 verify
 ----
@@ -32,7 +33,8 @@ verify
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=125)
 [ROW MISMATCH] table public.common_table on lie has a mismatching row on (id=150): column str: 'bad value' vs 'different value'
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=250)
-[STATUS] finished row verification on public.common_table: truth rows seen: 5, success: 2, missing: 2, mismatch: 1, extraneous: 1
+[ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=300)
+[STATUS] finished row verification on public.common_table: truth rows seen: 5, success: 2, missing: 2, mismatch: 1, extraneous: 2
 
 # Test two tables, but mismatching columns.
 exec source_of_truth
@@ -67,7 +69,8 @@ verify
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=125)
 [ROW MISMATCH] table public.common_table on lie has a mismatching row on (id=150): column str: 'bad value' vs 'different value'
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=250)
-[STATUS] finished row verification on public.common_table: truth rows seen: 5, success: 2, missing: 2, mismatch: 1, extraneous: 1
+[ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=300)
+[STATUS] finished row verification on public.common_table: truth rows seen: 5, success: 2, missing: 2, mismatch: 1, extraneous: 2
 [ROW MISMATCH] table public.table_misaligned_columns on lie has a mismatching row on (id=2): column a: 4 vs 3
 [STATUS] finished row verification on public.table_misaligned_columns: truth rows seen: 2, success: 1, missing: 0, mismatch: 1, extraneous: 0
 

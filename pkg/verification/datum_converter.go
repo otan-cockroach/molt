@@ -5,6 +5,7 @@ import (
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/json"
+	"github.com/cockroachdb/cockroachdb-parser/pkg/util/timeofday"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/timeutil/pgdate"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/uuid"
 	"github.com/cockroachdb/errors"
@@ -48,6 +49,8 @@ func convertRowValue(val any, typOID OID) (tree.Datum, error) {
 		return tree.MakeDTimestamp(val.(time.Time), time.Microsecond)
 	case pgtype.TimestamptzOID:
 		return tree.MakeDTimestampTZ(val.(time.Time), time.Microsecond)
+	case pgtype.TimeOID:
+		return tree.MakeDTime(timeofday.FromInt(val.(pgtype.Time).Microseconds)), nil
 	case pgtype.DateOID:
 		d, err := pgdate.MakeDateFromTime(val.(time.Time))
 		if err != nil {
@@ -57,7 +60,7 @@ func convertRowValue(val any, typOID OID) (tree.Datum, error) {
 	case pgtype.ByteaOID:
 		return tree.NewDBytes(tree.DBytes(val.([]byte))), nil
 	}
-	return nil, errors.AssertionFailedf("value %v of typOID %d not yet translatable", val, typOID)
+	return nil, errors.AssertionFailedf("value %v (%T) of typOID %d not yet translatable", val, val, typOID)
 }
 
 func convertRowValues(vals []any, typOIDs []OID) (tree.Datums, error) {

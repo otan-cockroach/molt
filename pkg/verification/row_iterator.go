@@ -82,6 +82,29 @@ func (it *rowIterator) nextPage(ctx context.Context) error {
 			},
 		)
 	}
+	// If we have a cursor, set the where clause.
+	if len(it.pkCursor) > 0 {
+		cmpExpr := &tree.ComparisonExpr{
+			Operator: treecmp.MakeComparisonOperator(treecmp.GT),
+		}
+		if len(it.pkCursor) > 1 {
+			colNames := &tree.Tuple{}
+			colVals := &tree.Tuple{}
+			for i := range table.PrimaryKeyColumns {
+				colNames.Exprs = append(colNames.Exprs, tree.NewUnresolvedName(string(table.PrimaryKeyColumns[i])))
+				colVals.Exprs = append(colVals.Exprs, it.pkCursor[i])
+			}
+			cmpExpr.Left = colNames
+			cmpExpr.Right = colVals
+		} else {
+			cmpExpr.Left = tree.NewUnresolvedName(string(table.PrimaryKeyColumns[0]))
+			cmpExpr.Right = it.pkCursor[0]
+		}
+		selectClause.Where = &tree.Where{
+			Type: tree.AstWhere,
+			Expr: cmpExpr,
+		}
+	}
 	baseSelectExpr := tree.Select{
 		Select: selectClause,
 	}
@@ -90,24 +113,6 @@ func (it *rowIterator) nextPage(ctx context.Context) error {
 			baseSelectExpr.OrderBy,
 			&tree.Order{Expr: tree.NewUnresolvedName(string(pkCol))},
 		)
-	}
-	// If we have a cursor, set the where clause.
-	if len(it.pkCursor) > 0 {
-		colNames := &tree.Tuple{}
-		colVals := &tree.Tuple{}
-		for i := range table.PrimaryKeyColumns {
-			colNames.Exprs = append(colNames.Exprs, tree.NewUnresolvedName(string(table.PrimaryKeyColumns[i])))
-			colVals.Exprs = append(colVals.Exprs, it.pkCursor[i])
-		}
-		cmpExpr := &tree.ComparisonExpr{
-			Operator: treecmp.MakeComparisonOperator(treecmp.GT),
-			Left:     colNames,
-			Right:    colVals,
-		}
-		selectClause.Where = &tree.Where{
-			Type: tree.AstWhere,
-			Expr: cmpExpr,
-		}
 	}
 	rows, err := it.conn.Conn.Query(ctx, baseSelectExpr.String())
 	if err != nil {
