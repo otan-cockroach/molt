@@ -223,6 +223,10 @@ func verifyCommonTables(
 						currPKSame = false
 						break
 					}
+					if _, ok := comparableColumns[targetPKCols[i]]; !ok {
+						currPKSame = false
+						break
+					}
 				}
 			}
 			if !currPKSame && len(truthPKCols) > 0 {
@@ -232,7 +236,7 @@ func verifyCommonTables(
 					MismatchingTableDefinition{
 						ConnID:        conn.ID,
 						TableMetadata: targetTbl,
-						Info:          "PRIMARY KEY does not match source of truth",
+						Info:          "PRIMARY KEY does not match source of truth (columns and types must match)",
 					},
 				)
 			}

@@ -28,6 +28,9 @@ CREATE TABLE t (
     t TEXT NULL,
     missing_in_lie_col JSONB,
     mismatching_type INT4
+);
+CREATE TABLE different_pk_type (
+    id INT8 PRIMARY KEY
 )
 ----
 [conn 0] CREATE TABLE
@@ -39,14 +42,19 @@ CREATE TABLE t (
     t TEXT NULL NULL,
     extra_col JSONB,
     mismatching_type TEXT
+);
+CREATE TABLE different_pk_type (
+    id FLOAT8 PRIMARY KEY
 )
 ----
 [conn 1] CREATE TABLE
 
 verify
 ----
+[TABLE MISMATCH] table public.different_pk_type on lie has an issue: column type mismatch on id: truth=int8 vs lie=float8
+[TABLE MISMATCH] table public.different_pk_type on lie has an issue: PRIMARY KEY does not match source of truth (columns and types must match)
 [TABLE MISMATCH] table public.t on lie has an issue: extraneous column mismatching_pk found
 [TABLE MISMATCH] table public.t on lie has an issue: extraneous column extra_col found
 [TABLE MISMATCH] table public.t on lie has an issue: column type mismatch on mismatching_type: truth=int4 vs lie=text
 [TABLE MISMATCH] table public.t on lie has an issue: missing column missing_in_lie_col
-[TABLE MISMATCH] table public.t on lie has an issue: PRIMARY KEY does not match source of truth
+[TABLE MISMATCH] table public.t on lie has an issue: PRIMARY KEY does not match source of truth (columns and types must match)
