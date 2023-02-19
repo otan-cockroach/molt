@@ -63,12 +63,12 @@ func compareRows(
 	var stats rowStats
 	truth := iterators[0]
 	for truth.hasNext(ctx) {
-		stats.numVerified++
-		if stats.numVerified%10000 == 0 {
+		if stats.numVerified%10000 == 0 && stats.numVerified > 0 {
 			reporter.Report(StatusReport{
 				Info: fmt.Sprintf("progress on %s.%s: %s", table.Schema, table.Table, stats.String()),
 			})
 		}
+		stats.numVerified++
 
 		truthVals := truth.next(ctx)
 		for itIdx := 1; itIdx < len(iterators); itIdx++ {
