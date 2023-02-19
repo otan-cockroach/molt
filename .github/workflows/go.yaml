@@ -1,0 +1,78 @@
+name: Go
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: [1.19.x]
+
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Start CockroachDB
+        working-directory: .github
+        run: docker-compose up -d cockroachdb
+
+      # Just cache based on job and go.sum contents.
+      - name: Write cache key
+        run: echo '${{ github.job }} ${{ hashFiles('go.sum') }}' > CACHE_KEY
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+          cache-dependency-path: CACHE_KEY
+
+      - name: Setup test database
+        run: PGPASSWORD=postgres psql -U postgres -h localhost -c "CREATE DATABASE testdb"
+
+      - name: Test
+        run: POSTGRES_URL="postgres://postgres:postgres@localhost:5432/testdb" go test ./... -v
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Just cache based on job and go.sum contents.
+      - name: Write cache key
+        run: echo '${{ github.job }} ${{ hashFiles('go.sum') }}' > CACHE_KEY
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+          cache-dependency-path: CACHE_KEY
+
+      - name: crlfmt returns no deltas
+        if: ${{ always() }}
+        run: |
+          DELTA=$(go run github.com/cockroachdb/crlfmt -ignore _gen.go .)
+          echo $DELTA
+          test -z "$DELTA"
+      
+      - name: golangci-lint
+        if: ${{ always() }}
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest

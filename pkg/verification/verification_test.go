@@ -3,6 +3,7 @@ package verification
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -18,8 +19,16 @@ func TestDataDriven(t *testing.T) {
 func testDataDriven(t *testing.T, path string) {
 	ctx := context.Background()
 
+	pgInstanceURL := "postgres://localhost:5432/testdb"
+	if override, ok := os.LookupEnv("POSTGRES_URL"); ok {
+		pgInstanceURL = override
+	}
+
+	const dbName = "_ddtest"
+
+	var cfgs []*pgx.ConnConfig
 	for _, pgurl := range []string{
-		"postgres://localhost:5432/testdb",
+		pgInstanceURL,
 		"postgres://root@127.0.0.1:26257/defaultdb?sslmode=disable",
 	} {
 		func() {
@@ -27,22 +36,25 @@ func testDataDriven(t *testing.T, path string) {
 			require.NoError(t, err)
 			defer func() { _ = conn.Close(ctx) }()
 
-			_, err = conn.Exec(ctx, "DROP DATABASE IF EXISTS _ddtest")
+			_, err = conn.Exec(ctx, "DROP DATABASE IF EXISTS "+dbName)
 			require.NoError(t, err)
-			_, err = conn.Exec(ctx, "CREATE DATABASE _ddtest")
+			_, err = conn.Exec(ctx, "CREATE DATABASE "+dbName)
 			require.NoError(t, err)
+
+			cfgCopy := conn.Config().Copy()
+			cfgCopy.Database = dbName
+			cfgs = append(cfgs, cfgCopy)
 		}()
 	}
 
 	var conns []Conn
-	for _, cfg := range []struct {
-		name  string
-		pgurl string
+	for i, cfg := range []struct {
+		name string
 	}{
-		{name: "truth", pgurl: "postgres://localhost:5432/_ddtest"},
-		{name: "lie", pgurl: "postgres://root@127.0.0.1:26257/_ddtest?sslmode=disable"},
+		{name: "truth"},
+		{name: "lie"},
 	} {
-		conn, err := pgx.Connect(ctx, cfg.pgurl)
+		conn, err := pgx.ConnectConfig(ctx, cfgs[i])
 		require.NoError(t, err)
 		conns = append(conns, Conn{ID: ConnID(cfg.name), Conn: conn})
 	}

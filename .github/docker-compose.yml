@@ -1,0 +1,5 @@
+services:
+  cockroachdb:
+    image: cockroachdb/cockroach:latest-v22.2
+    network_mode: host
+    command: start-single-node --insecure --store type=mem,size=2G
