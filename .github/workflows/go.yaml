@@ -8,9 +8,6 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: [1.19.x]
 
     services:
       postgres:
@@ -52,10 +49,46 @@ jobs:
         run: PGPASSWORD=postgres psql -U postgres -h localhost -c "CREATE DATABASE testdb"
 
       - name: Test
-        run: POSTGRES_URL="postgres://postgres:postgres@localhost:5432/testdb" go test ./... -v
+        run: |
+          POSTGRES_URL="postgres://postgres:postgres@localhost:5432/testdb" go test -v 2>&1 ./... | tee test_output.txt
+          go run github.com/jstemmer/go-junit-report -set-exit-code < test_output.txt > report.xml
+
+      - name: Test Summary
+        uses: test-summary/action@v2
+        with:
+          paths: |
+            report.xml
+          output: test-summary.md
+        if: always()
+
+      - name: Writing markdown summary
+        run: |
+          cat test-summary.md >> $GITHUB_STEP_SUMMARY
+        if: always()
+
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-artifacts
+          path: |
+            test-summary.md
+            test_output.txt
+            report.xml
+        if: always()
 
   lint:
     name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '1.19'
+      - uses: actions/checkout@v3
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+
+  format:
+    name: Format
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -78,9 +111,3 @@ jobs:
           DELTA=$(go run github.com/cockroachdb/crlfmt -ignore _gen.go .)
           echo $DELTA
           test -z "$DELTA"
-
-      - name: golangci-lint
-        if: ${{ always() }}
-        uses: golangci/golangci-lint-action@v3
-        with:
-          version: latest

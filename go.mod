@@ -3,11 +3,13 @@ module github.com/cockroachdb/molt
 go 1.19
 
 require (
+	github.com/cockroachdb/apd/v3 v3.1.0
 	github.com/cockroachdb/cockroachdb-parser v0.0.0-20221207165326-ea0ac1a4778b
 	github.com/cockroachdb/crlfmt v0.0.0-20221214225007-b2fc5c302548
 	github.com/cockroachdb/datadriven v1.0.2
 	github.com/cockroachdb/errors v1.9.1
 	github.com/jackc/pgx/v5 v5.3.0
+	github.com/jstemmer/go-junit-report v1.0.0
 	github.com/lib/pq v1.10.6
 	github.com/stretchr/testify v1.8.1
 	golang.org/x/sync v0.1.0
@@ -15,7 +17,6 @@ require (
 
 require (
 	github.com/biogo/store v0.0.0-20201120204734-aad293a2328f // indirect
-	github.com/cockroachdb/apd/v3 v3.1.0 // indirect
 	github.com/cockroachdb/gostdlib v1.19.0 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f // indirect
 	github.com/cockroachdb/redact v1.1.3 // indirect
