@@ -20,6 +20,47 @@ type rowIterator struct {
 	err          error
 	currRows     pgx.Rows
 	currRowsRead int
+	queryCache   tree.Select
+}
+
+func newRowIterator(conn Conn, table verifyTableResult, rowBatchSize int) *rowIterator {
+	return &rowIterator{
+		conn:         conn,
+		table:        table,
+		rowBatchSize: rowBatchSize,
+		queryCache:   constructBaseSelectClause(table, rowBatchSize),
+	}
+}
+
+func constructBaseSelectClause(table verifyTableResult, rowBatchSize int) tree.Select {
+	tn := tree.MakeTableNameFromPrefix(
+		tree.ObjectNamePrefix{SchemaName: tree.Name(table.Schema), ExplicitSchema: true},
+		tree.Name(table.Table),
+	)
+	selectClause := &tree.SelectClause{
+		From: tree.From{
+			Tables: tree.TableExprs{&tn},
+		},
+	}
+	for _, col := range table.MatchingColumns {
+		selectClause.Exprs = append(
+			selectClause.Exprs,
+			tree.SelectExpr{
+				Expr: tree.NewUnresolvedName(string(col)),
+			},
+		)
+	}
+	baseSelectExpr := tree.Select{
+		Select: selectClause,
+		Limit:  &tree.Limit{Count: tree.NewDInt(tree.DInt(rowBatchSize))},
+	}
+	for _, pkCol := range table.PrimaryKeyColumns {
+		baseSelectExpr.OrderBy = append(
+			baseSelectExpr.OrderBy,
+			&tree.Order{Expr: tree.NewUnresolvedName(string(pkCol))},
+		)
+	}
+	return baseSelectExpr
 }
 
 func (it *rowIterator) hasNext(ctx context.Context) bool {
@@ -61,25 +102,6 @@ func (it *rowIterator) hasNext(ctx context.Context) bool {
 }
 
 func (it *rowIterator) nextPage(ctx context.Context) error {
-	// Read the next page.
-	table := it.table
-	tn := tree.MakeTableNameFromPrefix(
-		tree.ObjectNamePrefix{SchemaName: tree.Name(table.Schema), ExplicitSchema: true},
-		tree.Name(table.Table),
-	)
-	selectClause := &tree.SelectClause{
-		From: tree.From{
-			Tables: tree.TableExprs{&tn},
-		},
-	}
-	for _, col := range table.MatchingColumns {
-		selectClause.Exprs = append(
-			selectClause.Exprs,
-			tree.SelectExpr{
-				Expr: tree.NewUnresolvedName(string(col)),
-			},
-		)
-	}
 	// If we have a cursor, set the where clause.
 	if len(it.pkCursor) > 0 {
 		cmpExpr := &tree.ComparisonExpr{
@@ -88,32 +110,25 @@ func (it *rowIterator) nextPage(ctx context.Context) error {
 		if len(it.pkCursor) > 1 {
 			colNames := &tree.Tuple{}
 			colVals := &tree.Tuple{}
-			for i := range table.PrimaryKeyColumns {
-				colNames.Exprs = append(colNames.Exprs, tree.NewUnresolvedName(string(table.PrimaryKeyColumns[i])))
+			for i := range it.table.PrimaryKeyColumns {
+				colNames.Exprs = append(colNames.Exprs, tree.NewUnresolvedName(string(it.table.PrimaryKeyColumns[i])))
 				colVals.Exprs = append(colVals.Exprs, it.pkCursor[i])
 			}
 			cmpExpr.Left = colNames
 			cmpExpr.Right = colVals
 		} else {
-			cmpExpr.Left = tree.NewUnresolvedName(string(table.PrimaryKeyColumns[0]))
+			cmpExpr.Left = tree.NewUnresolvedName(string(it.table.PrimaryKeyColumns[0]))
 			cmpExpr.Right = it.pkCursor[0]
 		}
-		selectClause.Where = &tree.Where{
+		it.queryCache.Select.(*tree.SelectClause).Where = &tree.Where{
 			Type: tree.AstWhere,
 			Expr: cmpExpr,
 		}
+	} else {
+		it.queryCache.Select.(*tree.SelectClause).Where = nil
 	}
-	baseSelectExpr := tree.Select{
-		Select: selectClause,
-		Limit:  &tree.Limit{Count: tree.NewDInt(tree.DInt(it.rowBatchSize))},
-	}
-	for _, pkCol := range table.PrimaryKeyColumns {
-		baseSelectExpr.OrderBy = append(
-			baseSelectExpr.OrderBy,
-			&tree.Order{Expr: tree.NewUnresolvedName(string(pkCol))},
-		)
-	}
-	rows, err := it.conn.Conn.Query(ctx, baseSelectExpr.String())
+
+	rows, err := it.conn.Conn.Query(ctx, it.queryCache.String())
 	if err != nil {
 		return errors.Wrapf(err, "error getting rows for table %s.%s from %s", it.table.Schema, it.table.Table, it.conn.ID)
 	}

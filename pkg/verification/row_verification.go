@@ -55,7 +55,7 @@ func compareRows(
 
 	iterators := make([]*rowIterator, len(conns))
 	for i, conn := range conns {
-		iterators[i] = &rowIterator{conn: conn, table: table, rowBatchSize: rowBatchSize}
+		iterators[i] = newRowIterator(conn, table, rowBatchSize)
 	}
 
 	cmpCtx := &compareContext{}
