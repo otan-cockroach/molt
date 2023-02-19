@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/duration"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/json"
@@ -86,9 +87,22 @@ func convertRowValue(val any, typOID OID) (tree.Datum, error) {
 	case OID(oid.T_timetz): // does not exist in pgtype.
 		d, _, err := tree.ParseDTimeTZ(timeCtx, val.(string), time.Microsecond)
 		return d, err
+	case pgtype.NumericOID:
+		return convertNumeric(val.(pgtype.Numeric))
 		// BitArray, Numeric.
 	}
 	return nil, errors.AssertionFailedf("value %v (%T) of type OID %d not yet translatable", val, val, typOID)
+}
+
+func convertNumeric(val pgtype.Numeric) (*tree.DDecimal, error) {
+	if val.NaN {
+		return tree.ParseDDecimal("NaN")
+	} else if val.InfinityModifier == pgtype.Infinity {
+		return tree.ParseDDecimal("Inf")
+	} else if val.InfinityModifier == pgtype.NegativeInfinity {
+		return tree.ParseDDecimal("-Inf")
+	}
+	return &tree.DDecimal{Decimal: *apd.New(val.Int.Int64(), val.Exp)}, nil
 }
 
 func convertRowValues(vals []any, typOIDs []OID) (tree.Datums, error) {

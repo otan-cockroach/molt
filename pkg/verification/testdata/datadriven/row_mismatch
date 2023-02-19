@@ -1,4 +1,7 @@
-# Throw in every type into a table and ensure we can compare.
+#
+# Throw in every type into a table and ensure we can compare all of them.
+#
+
 exec all
 CREATE TABLE test_table (
     id INT4 PRIMARY KEY,
@@ -19,7 +22,8 @@ CREATE TABLE test_table (
     time_test TIME DEFAULT '01:02:45.123456',
     timetz_test TIME DEFAULT '01:02:03.234999+03',
     date_test DATE DEFAULT '2020-09-13',
-    bytes_test BYTEA DEFAULT 'deadbeef'
+    bytes_test BYTEA DEFAULT 'deadbeef',
+    numeric_test NUMERIC DEFAULT '123.549875545'
 );
 INSERT INTO test_table(id) VALUES (1)
 ----
@@ -36,7 +40,10 @@ DROP TABLE test_table
 [conn 0] DROP TABLE
 [conn 1] DROP TABLE
 
+#
 # Check we report mismatches.
+#
+
 exec all
 CREATE TABLE common_table (
     id INT8 PRIMARY KEY,
