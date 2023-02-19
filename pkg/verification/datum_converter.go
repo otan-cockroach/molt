@@ -108,7 +108,20 @@ func convertRowValue(val any, typOID OID) (tree.Datum, error) {
 		return d, err
 	case pgtype.NumericOID:
 		return convertNumeric(val.(pgtype.Numeric))
-		// BitArray, Numeric.
+	case pgtype.BitOID, pgtype.VarbitOID:
+		// This can be a lot more efficient, but we don't have the right abstractions.
+		val := val.(pgtype.Bits)
+		var buf []byte
+		for i := int32(0); i < val.Len; i++ {
+			byteIdx := i / 8
+			bitMask := byte(128 >> byte(i%8))
+			char := byte('0')
+			if val.Bytes[byteIdx]&bitMask > 0 {
+				char = '1'
+			}
+			buf = append(buf, char)
+		}
+		return tree.ParseDBitArray(string(buf))
 	}
 	return nil, errors.AssertionFailedf("value %v (%T) of type OID %d not yet translatable", val, val, typOID)
 }

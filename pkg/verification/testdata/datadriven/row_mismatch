@@ -24,7 +24,8 @@ CREATE TABLE test_table (
     date_test DATE DEFAULT '2020-09-13',
     bytes_test BYTEA DEFAULT 'deadbeef',
     numeric_test NUMERIC DEFAULT '123.549875545',
-    simple_arr_test TEXT[] DEFAULT '{"a", "b"}'
+    simple_arr_test TEXT[] DEFAULT '{"a", "b"}',
+    bitarr VARBIT(10) DEFAULT '0100'
 );
 INSERT INTO test_table(id) VALUES (1), (2), (3), (4), (5), (6), (7)
 ----

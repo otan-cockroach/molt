@@ -87,3 +87,18 @@ convert
 '24:00:00-07'::timetz
 ----
 *tree.DTimeTZ: '24:00:00-07:00:00'
+
+convert
+'0'::bit
+----
+*tree.DBitArray: B'0'
+
+convert
+'1'::bit
+----
+*tree.DBitArray: B'1'
+
+convert
+'0110001010101000011100'::varbit
+----
+*tree.DBitArray: B'0110001010101000011100'
