@@ -6,6 +6,7 @@ import (
 
 	"github.com/cockroachdb/apd/v3"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/duration"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/json"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/timeofday"
@@ -35,7 +36,22 @@ func (p parseTimeContext) GetDateStyle() pgdate.DateStyle {
 var timeCtx = &parseTimeContext{}
 
 func convertRowValue(val any, typOID OID) (tree.Datum, error) {
-	// TODO(#migrations): arrays
+	if _, isArray := types.ArrayOids[oid.Oid(typOID)]; isArray {
+		arrayType := types.OidToType[oid.Oid(typOID)]
+		ret := tree.NewDArray(arrayType.ArrayContents())
+		// Only worry about 1D arrays for now.
+		for arrIdx, arr := range val.([]interface{}) {
+			elem, err := convertRowValue(arr, OID(arrayType.ArrayContents().Oid()))
+			if err != nil {
+				return nil, errors.Wrapf(err, "error converting array element %d", arrIdx)
+			}
+			if err := ret.Append(elem); err != nil {
+				return nil, errors.Wrapf(err, "error appending array element %d", arrIdx)
+			}
+		}
+		return ret, nil
+	}
+
 	switch typOID {
 	case pgtype.BoolOID:
 		return tree.MakeDBool(tree.DBool(val.(bool))), nil
@@ -75,6 +91,9 @@ func convertRowValue(val any, typOID OID) (tree.Datum, error) {
 	case pgtype.TimestamptzOID:
 		return tree.MakeDTimestampTZ(val.(time.Time).UTC(), time.Microsecond)
 	case pgtype.TimeOID:
+		if val.(pgtype.Time).Microseconds == 24*60*60*1000000 {
+			return tree.MakeDTime(timeofday.Time2400), nil
+		}
 		return tree.MakeDTime(timeofday.FromInt(val.(pgtype.Time).Microseconds)), nil
 	case pgtype.DateOID:
 		d, err := pgdate.MakeDateFromTime(val.(time.Time))

@@ -12,6 +12,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func pgURLs() []string {
+	pgInstanceURL := "postgres://localhost:5432/testdb"
+	if override, ok := os.LookupEnv("POSTGRES_URL"); ok {
+		pgInstanceURL = override
+	}
+	crdbInstanceURL := "postgres://root@127.0.0.1:26257/defaultdb?sslmode=disable"
+	if override, ok := os.LookupEnv("COCKROACH_URL"); ok {
+		crdbInstanceURL = override
+	}
+	return []string{pgInstanceURL, crdbInstanceURL}
+}
+
 func TestDataDriven(t *testing.T) {
 	datadriven.Walk(t, "testdata/datadriven", testDataDriven)
 }
@@ -19,18 +31,10 @@ func TestDataDriven(t *testing.T) {
 func testDataDriven(t *testing.T, path string) {
 	ctx := context.Background()
 
-	pgInstanceURL := "postgres://localhost:5432/testdb"
-	if override, ok := os.LookupEnv("POSTGRES_URL"); ok {
-		pgInstanceURL = override
-	}
-
 	const dbName = "_ddtest"
 
 	var cfgs []*pgx.ConnConfig
-	for _, pgurl := range []string{
-		pgInstanceURL,
-		"postgres://root@127.0.0.1:26257/defaultdb?sslmode=disable",
-	} {
+	for _, pgurl := range pgURLs() {
 		func() {
 			conn, err := pgx.Connect(ctx, pgurl)
 			require.NoError(t, err)
@@ -64,12 +68,12 @@ func testDataDriven(t *testing.T, path string) {
 		}
 	}()
 
-	datadriven.RunTest(t, path, func(t *testing.T, td *datadriven.TestData) string {
+	datadriven.RunTest(t, path, func(t *testing.T, d *datadriven.TestData) string {
 		var sb strings.Builder
-		switch td.Cmd {
+		switch d.Cmd {
 		case "exec":
 			var connIdxs []int
-			for _, arg := range td.CmdArgs {
+			for _, arg := range d.CmdArgs {
 				switch arg.Key {
 				case "source_of_truth":
 					connIdxs = append(connIdxs, 0)
@@ -83,7 +87,7 @@ func testDataDriven(t *testing.T, path string) {
 			}
 			require.NotEmpty(t, connIdxs, "destination sql must be defined")
 			for _, connIdx := range connIdxs {
-				tag, err := conns[connIdx].Conn.Exec(ctx, td.Input)
+				tag, err := conns[connIdx].Conn.Exec(ctx, d.Input)
 				if err != nil {
 					sb.WriteString(fmt.Sprintf("[conn %d] error: %s\n", connIdx, err.Error()))
 					continue
@@ -103,7 +107,7 @@ func testDataDriven(t *testing.T, path string) {
 				sb.WriteString(fmt.Sprintf("error: %s\n", err.Error()))
 			}
 		default:
-			t.Fatalf("unknown command: %s", td.Cmd)
+			t.Fatalf("unknown command: %s", d.Cmd)
 		}
 		return sb.String()
 	})

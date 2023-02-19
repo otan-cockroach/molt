@@ -1,32 +1,51 @@
 package verification
 
 import (
+	"context"
+	"fmt"
+	"strings"
 	"testing"
 
-	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/cockroachdb/datadriven"
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 )
 
-func TestConvertNumeric(t *testing.T) {
-	for _, tc := range []string{
-		"NaN",
-		"Infinity",
-		"-Infinity",
-		"-1.55",
-		"1.578384378473",
-	} {
-		t.Run(tc, func(t *testing.T) {
-			var inVal pgtype.Numeric
-			require.NoError(t, inVal.Scan(tc))
-			require.True(t, inVal.Valid)
+func TestConvertRowValue(t *testing.T) {
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, pgURLs()[0])
+	require.NoError(t, err)
+	defer func() { _ = conn.Close(ctx) }()
 
-			expected, err := tree.ParseDDecimal(tc)
-			require.NoError(t, err)
+	datadriven.Walk(t, "testdata/rowvalue", func(t *testing.T, path string) {
+		datadriven.RunTest(t, path, func(t *testing.T, d *datadriven.TestData) string {
 
-			n, err := convertNumeric(inVal)
-			require.NoError(t, err)
-			require.Equal(t, expected, n)
+			var sb strings.Builder
+			switch d.Cmd {
+			case "convert":
+				rows, err := conn.Query(ctx, "SELECT "+d.Input)
+				require.NoError(t, err)
+				for rows.Next() {
+					vals, err := rows.Values()
+					require.NoError(t, err)
+
+					for i, val := range vals {
+						converted, err := convertRowValue(val, OID(rows.FieldDescriptions()[i].DataTypeOID))
+						require.NoError(t, err)
+
+						extra := ""
+						if t := converted.ResolvedType().ArrayContents(); t != nil {
+							extra += fmt.Sprintf(" (%s)", t.SQLString())
+						}
+						sb.WriteString(fmt.Sprintf("%T%s: %s", converted, extra, converted.String()))
+					}
+				}
+				require.NoError(t, rows.Err())
+				return sb.String()
+			default:
+				t.Fatalf("unknown command: %s", d.Cmd)
+			}
+			return sb.String()
 		})
-	}
+	})
 }

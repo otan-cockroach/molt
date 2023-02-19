@@ -1,0 +1,89 @@
+convert
+'NaN'::DECIMAL
+----
+*tree.DDecimal: NaN
+
+convert
+'Inf'::DECIMAL
+----
+*tree.DDecimal: Infinity
+
+convert
+'-Inf'::DECIMAL
+----
+*tree.DDecimal: -Infinity
+
+convert
+'-1.55'::DECIMAL
+----
+*tree.DDecimal: -1.55
+
+convert
+'1.578'::DECIMAL
+----
+*tree.DDecimal: 1.578
+
+convert
+'2020-01-03 12:14:16'::timestamp
+----
+*tree.DTimestamp: '2020-01-03 12:14:16'
+
+convert
+'2020-01-03 12:14:16'::timestamptz
+----
+*tree.DTimestampTZ: '2020-01-03 12:14:16+00:00'
+
+convert
+'a'::"char"
+----
+*tree.DString: 'a'
+
+convert
+'abc'::char
+----
+*tree.DString: 'a'
+
+convert
+'1'::jsonb
+----
+*tree.DJSON: '1'
+
+convert
+'"a"'::jsonb
+----
+*tree.DJSON: '"a"'
+
+convert
+'true'::jsonb
+----
+*tree.DJSON: 'true'
+
+convert
+'[1, 2, 3]'::jsonb
+----
+*tree.DJSON: '[1, 2, 3]'
+
+convert
+'{"a": 1, "b": [1234, 5678], "c": false}'::jsonb
+----
+*tree.DJSON: '{"a": 1, "b": [1234, 5678], "c": false}'
+
+convert
+'9ed1c1c2-722f-461b-8048-5bf62dacb3ff'::uuid
+----
+*tree.DUuid: '9ed1c1c2-722f-461b-8048-5bf62dacb3ff'
+
+convert
+'2020-09-21'::date
+----
+*tree.DDate: '2020-09-21'
+
+convert
+'24:00:00'::time
+----
+*tree.DTime: '24:00:00'
+
+convert
+'24:00:00-07'::timetz
+----
+*tree.DTimeTZ: '24:00:00-07:00:00'

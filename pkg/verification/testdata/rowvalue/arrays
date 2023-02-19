@@ -1,0 +1,9 @@
+convert
+'{"a", "b"}'::text[]
+----
+*tree.DArray (STRING): ARRAY['a','b']
+
+convert
+'{"24:00:00", "00:00:00"}'::time[]
+----
+*tree.DArray (TIME): ARRAY['24:00:00','00:00:00']
