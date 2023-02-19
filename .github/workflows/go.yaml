@@ -14,13 +14,20 @@ jobs:
 
     services:
       postgres:
-        image: postgres:13
+        image: postgres:15
         env:
           POSTGRES_PASSWORD: postgres
         options: >-
           --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
         ports:
           - 5432:5432
+     # doesn't like cockroach-data not existing.
+     #cockroachdb:
+     #  image: cockroachdb/cockroach:latest-v22.2
+     #  ports:
+     #     - 26257:26257
+     #  options: >-
+     #     cockroachdb/cockroach:latest-v22.2 start-single-node --insecure --store type=mem,size=2G
 
     steps:
       - name: Checkout code
@@ -46,6 +53,7 @@ jobs:
 
       - name: Test
         run: POSTGRES_URL="postgres://postgres:postgres@localhost:5432/testdb" go test ./... -v
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -70,7 +78,7 @@ jobs:
           DELTA=$(go run github.com/cockroachdb/crlfmt -ignore _gen.go .)
           echo $DELTA
           test -z "$DELTA"
-      
+
       - name: golangci-lint
         if: ${{ always() }}
         uses: golangci/golangci-lint-action@v3
