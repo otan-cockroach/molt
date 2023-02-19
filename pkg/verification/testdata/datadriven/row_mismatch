@@ -23,16 +23,17 @@ CREATE TABLE test_table (
     timetz_test TIME DEFAULT '01:02:03.234999+03',
     date_test DATE DEFAULT '2020-09-13',
     bytes_test BYTEA DEFAULT 'deadbeef',
-    numeric_test NUMERIC DEFAULT '123.549875545'
+    numeric_test NUMERIC DEFAULT '123.549875545',
+    simple_arr_test TEXT[] DEFAULT '{"a", "b"}'
 );
-INSERT INTO test_table(id) VALUES (1)
+INSERT INTO test_table(id) VALUES (1), (2), (3), (4), (5), (6), (7)
 ----
-[conn 0] INSERT 0 1
-[conn 1] INSERT 0 1
+[conn 0] INSERT 0 7
+[conn 1] INSERT 0 7
 
 verify
 ----
-[STATUS] finished row verification on public.test_table: truth rows seen: 1, success: 1, missing: 0, mismatch: 0, extraneous: 0
+[STATUS] finished row verification on public.test_table: truth rows seen: 7, success: 7, missing: 0, mismatch: 0, extraneous: 0
 
 exec all
 DROP TABLE test_table
