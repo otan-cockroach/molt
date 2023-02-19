@@ -35,13 +35,13 @@ func (p parseTimeContext) GetDateStyle() pgdate.DateStyle {
 
 var timeCtx = &parseTimeContext{}
 
-func convertRowValue(val any, typOID OID) (tree.Datum, error) {
-	if _, isArray := types.ArrayOids[oid.Oid(typOID)]; isArray {
-		arrayType := types.OidToType[oid.Oid(typOID)]
+func convertRowValue(val any, typOID oid.Oid) (tree.Datum, error) {
+	if _, isArray := types.ArrayOids[typOID]; isArray {
+		arrayType := types.OidToType[typOID]
 		ret := tree.NewDArray(arrayType.ArrayContents())
 		// Only worry about 1D arrays for now.
 		for arrIdx, arr := range val.([]interface{}) {
-			elem, err := convertRowValue(arr, OID(arrayType.ArrayContents().Oid()))
+			elem, err := convertRowValue(arr, arrayType.ArrayContents().Oid())
 			if err != nil {
 				return nil, errors.Wrapf(err, "error converting array element %d", arrIdx)
 			}
@@ -103,7 +103,7 @@ func convertRowValue(val any, typOID OID) (tree.Datum, error) {
 		return tree.NewDDate(d), nil
 	case pgtype.ByteaOID:
 		return tree.NewDBytes(tree.DBytes(val.([]byte))), nil
-	case OID(oid.T_timetz): // does not exist in pgtype.
+	case oid.T_timetz: // does not exist in pgtype.
 		d, _, err := tree.ParseDTimeTZ(timeCtx, val.(string), time.Microsecond)
 		return d, err
 	case pgtype.NumericOID:
@@ -137,7 +137,7 @@ func convertNumeric(val pgtype.Numeric) (*tree.DDecimal, error) {
 	return &tree.DDecimal{Decimal: *apd.New(val.Int.Int64(), val.Exp)}, nil
 }
 
-func convertRowValues(vals []any, typOIDs []OID) (tree.Datums, error) {
+func convertRowValues(vals []any, typOIDs []oid.Oid) (tree.Datums, error) {
 	ret := make(tree.Datums, len(vals))
 	if len(vals) != len(typOIDs) {
 		return nil, errors.AssertionFailedf("val length != oid length: %v vs %v", vals, typOIDs)

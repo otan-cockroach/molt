@@ -8,6 +8,7 @@ import (
 
 	"github.com/cockroachdb/datadriven"
 	"github.com/jackc/pgx/v5"
+	"github.com/lib/pq/oid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,7 +31,7 @@ func TestConvertRowValue(t *testing.T) {
 					require.NoError(t, err)
 
 					for i, val := range vals {
-						converted, err := convertRowValue(val, OID(rows.FieldDescriptions()[i].DataTypeOID))
+						converted, err := convertRowValue(val, oid.Oid(rows.FieldDescriptions()[i].DataTypeOID))
 						require.NoError(t, err)
 
 						extra := ""

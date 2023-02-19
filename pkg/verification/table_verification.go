@@ -6,6 +6,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/lib/pq/oid"
 )
 
 type columnName string
@@ -14,11 +15,11 @@ type columnMetadata struct {
 	columnName columnName
 	// TODO: account for geospatial types.
 	// TODO: compare typMod, which CRDB does not really support.
-	typeOID OID
+	typeOID oid.Oid
 	notNull bool
 }
 
-func getColumns(ctx context.Context, conn Conn, tableOID OID) ([]columnMetadata, error) {
+func getColumns(ctx context.Context, conn Conn, tableOID oid.Oid) ([]columnMetadata, error) {
 	var ret []columnMetadata
 
 	rows, err := conn.Conn.Query(
@@ -43,7 +44,7 @@ func getColumns(ctx context.Context, conn Conn, tableOID OID) ([]columnMetadata,
 	return ret, nil
 }
 
-func getPrimaryKey(ctx context.Context, conn Conn, tableOID OID) ([]columnName, error) {
+func getPrimaryKey(ctx context.Context, conn Conn, tableOID oid.Oid) ([]columnName, error) {
 	var ret []columnName
 
 	rows, err := conn.Conn.Query(
@@ -91,7 +92,7 @@ type verifyTableResult struct {
 	Table                       string
 	RowVerifiable               bool
 	MatchingColumns             []columnName
-	MatchingColumnTypeOIDs      []OID
+	MatchingColumnTypeOIDs      []oid.Oid
 	PrimaryKeyColumns           []columnName
 	MismatchingTableDefinitions []MismatchingTableDefinition
 }
@@ -109,7 +110,7 @@ func verifyCommonTables(
 		if err != nil {
 			return nil, errors.Wrap(err, "error getting columns for table")
 		}
-		columnOIDs := make(map[columnName]OID)
+		columnOIDs := make(map[columnName]oid.Oid)
 		for _, truthCol := range truthCols {
 			columnOIDs[truthCol.columnName] = truthCol.typeOID
 		}

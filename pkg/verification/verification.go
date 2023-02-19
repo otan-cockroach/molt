@@ -17,8 +17,6 @@ type Conn struct {
 	ID   ConnID
 }
 
-type OID uint32
-
 func (tm TableMetadata) Compare(o TableMetadata) int {
 	if c := strings.Compare(tm.Schema, o.Schema); c != 0 {
 		return c

@@ -5,10 +5,11 @@ import (
 	"sort"
 
 	"github.com/cockroachdb/errors"
+	"github.com/lib/pq/oid"
 )
 
 type TableMetadata struct {
-	OID    OID
+	OID    oid.Oid
 	Schema string
 	Table  string
 }
