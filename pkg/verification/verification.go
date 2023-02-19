@@ -62,7 +62,7 @@ func Verify(ctx context.Context, conns []Conn, reporter Reporter, inOpts ...Veri
 
 	ret, err := verifyDatabaseTables(ctx, conns)
 	if err != nil {
-		return errors.Wrap(err, "error comparing conns")
+		return errors.Wrap(err, "error comparing database tables")
 	}
 
 	for _, missingTable := range ret.missingTables {
