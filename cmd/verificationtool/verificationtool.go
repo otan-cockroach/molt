@@ -21,6 +21,21 @@ var flagCRDBURL = flag.String(
 	"postgresql://root@127.0.0.1:26257/defaultdb?sslmode=disable",
 	"cockroachdb url",
 )
+var flagConcurrency = flag.Int(
+	"concurrency",
+	8,
+	"number of threads to run",
+)
+var flagTableSplits = flag.Int(
+	"table_splits",
+	8,
+	"number of splits for each table",
+)
+var flagRowBatchSize = flag.Int(
+	"row_batch_size",
+	1000,
+	"number of rows to fetch at a table from the database",
+)
 
 func main() {
 	flag.Parse()
@@ -50,6 +65,9 @@ func main() {
 		ctx,
 		conns,
 		reporter,
+		verification.WithConcurrency(*flagConcurrency),
+		verification.WithTableSplits(*flagTableSplits),
+		verification.WithRowBatchSize(*flagRowBatchSize),
 	); err != nil {
 		log.Fatal(errors.Wrapf(err, "error verifying"))
 	}
