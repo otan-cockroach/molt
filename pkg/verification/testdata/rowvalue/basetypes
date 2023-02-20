@@ -29,7 +29,7 @@ convert
 *tree.DTimestamp: '2020-01-03 12:14:16'
 
 convert
-'2020-01-03 12:14:16'::timestamptz
+'2020-01-03 12:14:16+00'::timestamptz
 ----
 *tree.DTimestampTZ: '2020-01-03 12:14:16+00:00'
 

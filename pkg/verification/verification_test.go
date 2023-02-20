@@ -14,7 +14,7 @@ import (
 )
 
 func pgURLs() []string {
-	pgInstanceURL := "postgres://localhost:5432/testdb"
+	pgInstanceURL := "postgres://postgres:postgres@localhost:5432/testdb"
 	if override, ok := os.LookupEnv("POSTGRES_URL"); ok {
 		pgInstanceURL = override
 	}

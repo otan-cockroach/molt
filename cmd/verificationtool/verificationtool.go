@@ -13,7 +13,7 @@ import (
 
 var flagPGURL = flag.String(
 	"pg_url",
-	"postgres://otan@localhost:5432/otan",
+	"postgres://postgres:postgres@localhost:5432/testdb",
 	"postgresql url",
 )
 var flagCRDBURL = flag.String(
