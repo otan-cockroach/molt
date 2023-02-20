@@ -12,7 +12,7 @@ import (
 
 type columnMetadata struct {
 	columnName tree.Name
-	// TODO: account for geospatial types.
+	// TODO: account for geospatial, enums, user defined types.
 	// TODO: compare typMod, which CRDB does not really support.
 	typeOID oid.Oid
 	notNull bool
