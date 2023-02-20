@@ -256,7 +256,7 @@ func getTableExtremes(
 		return nil, errors.Wrapf(err, "error getting minimum value for %s.%s", tbl.Schema, tbl.Table)
 	}
 	defer rows.Close()
-	for rows.Next() {
+	if rows.Next() {
 		vals, err := rows.Values()
 		if err != nil {
 			return nil, err
