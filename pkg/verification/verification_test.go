@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -95,14 +96,23 @@ func testDataDriven(t *testing.T, path string) {
 				sb.WriteString(fmt.Sprintf("[conn %d] %s\n", connIdx, tag.String()))
 			}
 		case "verify":
+			numSplits := 1
+			for _, arg := range d.CmdArgs {
+				switch arg.Key {
+				case "splits":
+					var err error
+					numSplits, err = strconv.Atoi(arg.Vals[0])
+					require.NoError(t, err)
+				}
+			}
 			reporter := &LogReporter{
 				Printf: func(f string, args ...any) {
 					sb.WriteString(fmt.Sprintf(f, args...))
 					sb.WriteRune('\n')
 				},
 			}
-			// Use 1 concurrency to ensure deterministic results.
-			err := Verify(ctx, conns, reporter, WithConcurrency(1), WithRowBatchSize(2))
+			// Use 1 concurrency / splitting to ensure deterministic results.
+			err := Verify(ctx, conns, reporter, WithConcurrency(1), WithRowBatchSize(2), WithTableSplits(numSplits))
 			if err != nil {
 				sb.WriteString(fmt.Sprintf("error: %s\n", err.Error()))
 			}

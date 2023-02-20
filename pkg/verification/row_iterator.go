@@ -11,7 +11,7 @@ import (
 
 type rowIterator struct {
 	conn         Conn
-	table        verifyTableResult
+	table        rowVerifiableTableShard
 	rowBatchSize int
 
 	isComplete   bool
@@ -23,7 +23,7 @@ type rowIterator struct {
 	queryCache   tree.Select
 }
 
-func newRowIterator(conn Conn, table verifyTableResult, rowBatchSize int) *rowIterator {
+func newRowIterator(conn Conn, table rowVerifiableTableShard, rowBatchSize int) *rowIterator {
 	return &rowIterator{
 		conn:         conn,
 		table:        table,
@@ -32,7 +32,7 @@ func newRowIterator(conn Conn, table verifyTableResult, rowBatchSize int) *rowIt
 	}
 }
 
-func constructBaseSelectClause(table verifyTableResult, rowBatchSize int) tree.Select {
+func constructBaseSelectClause(table rowVerifiableTableShard, rowBatchSize int) tree.Select {
 	tn := tree.MakeTableNameFromPrefix(
 		tree.ObjectNamePrefix{SchemaName: tree.Name(table.Schema), ExplicitSchema: true},
 		tree.Name(table.Table),
@@ -102,30 +102,34 @@ func (it *rowIterator) hasNext(ctx context.Context) bool {
 }
 
 func (it *rowIterator) nextPage(ctx context.Context) error {
-	// If we have a cursor, set the where clause.
+	andClause := &tree.AndExpr{
+		Left:  tree.DBoolTrue,
+		Right: tree.DBoolTrue,
+	}
+	// Use the cursor if available, otherwise not.
 	if len(it.pkCursor) > 0 {
-		cmpExpr := &tree.ComparisonExpr{
-			Operator: treecmp.MakeComparisonOperator(treecmp.GT),
-		}
-		if len(it.pkCursor) > 1 {
-			colNames := &tree.Tuple{}
-			colVals := &tree.Tuple{}
-			for i := range it.table.PrimaryKeyColumns {
-				colNames.Exprs = append(colNames.Exprs, tree.NewUnresolvedName(string(it.table.PrimaryKeyColumns[i])))
-				colVals.Exprs = append(colVals.Exprs, it.pkCursor[i])
-			}
-			cmpExpr.Left = colNames
-			cmpExpr.Right = colVals
-		} else {
-			cmpExpr.Left = tree.NewUnresolvedName(string(it.table.PrimaryKeyColumns[0]))
-			cmpExpr.Right = it.pkCursor[0]
-		}
-		it.queryCache.Select.(*tree.SelectClause).Where = &tree.Where{
-			Type: tree.AstWhere,
-			Expr: cmpExpr,
-		}
-	} else {
-		it.queryCache.Select.(*tree.SelectClause).Where = nil
+		andClause.Left = makeCompareExpr(
+			treecmp.MakeComparisonOperator(treecmp.GT),
+			it.table.MatchingColumns,
+			it.pkCursor,
+		)
+	} else if len(it.table.StartPKVals) > 0 {
+		andClause.Left = makeCompareExpr(
+			treecmp.MakeComparisonOperator(treecmp.GE),
+			it.table.MatchingColumns,
+			it.table.StartPKVals,
+		)
+	}
+	if len(it.table.EndPKVals) > 0 {
+		andClause.Right = makeCompareExpr(
+			treecmp.MakeComparisonOperator(treecmp.LT),
+			it.table.MatchingColumns,
+			it.table.EndPKVals,
+		)
+	}
+	it.queryCache.Select.(*tree.SelectClause).Where = &tree.Where{
+		Type: tree.AstWhere,
+		Expr: andClause,
 	}
 
 	rows, err := it.conn.Conn.Query(ctx, it.queryCache.String())
@@ -136,6 +140,28 @@ func (it *rowIterator) nextPage(ctx context.Context) error {
 	it.currRows = rows
 	it.currRowsRead = 0
 	return nil
+}
+
+func makeCompareExpr(
+	op treecmp.ComparisonOperator, cols []columnName, vals tree.Datums,
+) *tree.ComparisonExpr {
+	cmpExpr := &tree.ComparisonExpr{
+		Operator: op,
+	}
+	if len(vals) > 1 {
+		colNames := &tree.Tuple{}
+		colVals := &tree.Tuple{}
+		for i := range vals {
+			colNames.Exprs = append(colNames.Exprs, tree.NewUnresolvedName(string(cols[i])))
+			colVals.Exprs = append(colVals.Exprs, vals[i])
+		}
+		cmpExpr.Left = colNames
+		cmpExpr.Right = colVals
+	} else {
+		cmpExpr.Left = tree.NewUnresolvedName(string(cols[0]))
+		cmpExpr.Right = vals[0]
+	}
+	return cmpExpr
 }
 
 func (it *rowIterator) peek(ctx context.Context) tree.Datums {

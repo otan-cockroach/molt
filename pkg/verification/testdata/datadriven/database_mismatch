@@ -18,4 +18,5 @@ verify
 ----
 [DATABASE MISMATCH] lie is missing table public.truth_table
 [DATABASE MISMATCH] lie has an extraneous table public.non_truth_table
-[STATUS] finished row verification on public.in_both: truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0
+[STATUS] starting verify on public.in_both, shard 1/1
+[STATUS] finished row verification on public.in_both (shard 1/1): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0

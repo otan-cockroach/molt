@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
+	"github.com/lib/pq/oid"
 )
 
 type rowStats struct {
@@ -46,13 +47,26 @@ func (c *compareContext) MustGetPlaceholderValue(p *tree.Placeholder) tree.Datum
 	return p
 }
 
-func compareRows(
-	ctx context.Context, conns []Conn, table verifyTableResult, rowBatchSize int, reporter Reporter,
-) error {
-	if !table.RowVerifiable {
-		return nil
-	}
+type rowVerifiableTableShard struct {
+	Schema                 string
+	Table                  string
+	MatchingColumns        []columnName
+	MatchingColumnTypeOIDs []oid.Oid
+	PrimaryKeyColumns      []columnName
+	StartPKVals            []tree.Datum
+	EndPKVals              []tree.Datum
 
+	ShardNum    int
+	TotalShards int
+}
+
+func compareRows(
+	ctx context.Context,
+	conns []Conn,
+	table rowVerifiableTableShard,
+	rowBatchSize int,
+	reporter Reporter,
+) error {
 	iterators := make([]*rowIterator, len(conns))
 	for i, conn := range conns {
 		iterators[i] = newRowIterator(conn, table, rowBatchSize)
@@ -65,7 +79,7 @@ func compareRows(
 	for truth.hasNext(ctx) {
 		if stats.numVerified%10000 == 0 && stats.numVerified > 0 {
 			reporter.Report(StatusReport{
-				Info: fmt.Sprintf("progress on %s.%s: %s", table.Schema, table.Table, stats.String()),
+				Info: fmt.Sprintf("progress on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, stats.String()),
 			})
 		}
 		stats.numVerified++
@@ -167,7 +181,7 @@ func compareRows(
 		}
 	}
 	reporter.Report(StatusReport{
-		Info: fmt.Sprintf("finished row verification on %s.%s: %s", table.Schema, table.Table, stats.String()),
+		Info: fmt.Sprintf("finished row verification on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, stats.String()),
 	})
 
 	return nil

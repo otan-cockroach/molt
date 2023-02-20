@@ -27,14 +27,27 @@ CREATE TABLE test_table (
     simple_arr_test TEXT[] DEFAULT '{"a", "b"}',
     bitarr VARBIT(10) DEFAULT '0100'
 );
-INSERT INTO test_table(id) VALUES (1), (2), (3), (4), (5), (6), (7)
+INSERT INTO test_table(id)
+SELECT id FROM generate_series(1, 100) AS t(id)
 ----
-[conn 0] INSERT 0 7
-[conn 1] INSERT 0 7
+[conn 0] INSERT 0 100
+[conn 1] INSERT 0 100
 
 verify
 ----
-[STATUS] finished row verification on public.test_table: truth rows seen: 7, success: 7, missing: 0, mismatch: 0, extraneous: 0
+[STATUS] starting verify on public.test_table, shard 1/1
+[STATUS] finished row verification on public.test_table (shard 1/1): truth rows seen: 100, success: 100, missing: 0, mismatch: 0, extraneous: 0
+
+verify splits=4
+----
+[STATUS] starting verify on public.test_table, shard 1/4, range: [<beginning> - 25)
+[STATUS] finished row verification on public.test_table (shard 1/4): truth rows seen: 24, success: 24, missing: 0, mismatch: 0, extraneous: 0
+[STATUS] starting verify on public.test_table, shard 2/4, range: [25 - 49)
+[STATUS] finished row verification on public.test_table (shard 2/4): truth rows seen: 24, success: 24, missing: 0, mismatch: 0, extraneous: 0
+[STATUS] starting verify on public.test_table, shard 3/4, range: [49 - 73)
+[STATUS] finished row verification on public.test_table (shard 3/4): truth rows seen: 24, success: 24, missing: 0, mismatch: 0, extraneous: 0
+[STATUS] starting verify on public.test_table, shard 4/4, range: [73 - <end>]
+[STATUS] finished row verification on public.test_table (shard 4/4): truth rows seen: 28, success: 28, missing: 0, mismatch: 0, extraneous: 0
 
 exec all
 DROP TABLE test_table
@@ -78,12 +91,13 @@ INSERT INTO common_table VALUES
 # Verify with extraneous rows on non source of truth.
 verify
 ----
+[STATUS] starting verify on public.common_table, shard 1/1
 [ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=50)
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=125)
 [ROW MISMATCH] table public.common_table on lie has a mismatching row on (id=150): column str: 'bad value' vs 'different value'
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=250)
 [ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=300)
-[STATUS] finished row verification on public.common_table: truth rows seen: 5, success: 2, missing: 2, mismatch: 1, extraneous: 2
+[STATUS] finished row verification on public.common_table (shard 1/1): truth rows seen: 5, success: 2, missing: 2, mismatch: 1, extraneous: 2
 
 # Verify with extraneous rows on source of truth.
 exec source_of_truth
@@ -94,13 +108,14 @@ INSERT INTO common_table VALUES
 
 verify
 ----
+[STATUS] starting verify on public.common_table, shard 1/1
 [ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=50)
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=125)
 [ROW MISMATCH] table public.common_table on lie has a mismatching row on (id=150): column str: 'bad value' vs 'different value'
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=250)
 [ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=300)
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=400)
-[STATUS] finished row verification on public.common_table: truth rows seen: 6, success: 2, missing: 3, mismatch: 1, extraneous: 2
+[STATUS] finished row verification on public.common_table (shard 1/1): truth rows seen: 6, success: 2, missing: 3, mismatch: 1, extraneous: 2
 
 # Test two tables, but mismatching columns.
 exec source_of_truth
@@ -131,15 +146,17 @@ verify
 ----
 [TABLE MISMATCH] table public.table_misaligned_columns on lie has an issue: extraneous column not_common_b found
 [TABLE MISMATCH] table public.table_misaligned_columns on lie has an issue: missing column not_common_a
+[STATUS] starting verify on public.common_table, shard 1/1
 [ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=50)
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=125)
 [ROW MISMATCH] table public.common_table on lie has a mismatching row on (id=150): column str: 'bad value' vs 'different value'
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=250)
 [ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=300)
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=400)
-[STATUS] finished row verification on public.common_table: truth rows seen: 6, success: 2, missing: 3, mismatch: 1, extraneous: 2
+[STATUS] finished row verification on public.common_table (shard 1/1): truth rows seen: 6, success: 2, missing: 3, mismatch: 1, extraneous: 2
+[STATUS] starting verify on public.table_misaligned_columns, shard 1/1
 [ROW MISMATCH] table public.table_misaligned_columns on lie has a mismatching row on (id=2): column a: 4 vs 3
-[STATUS] finished row verification on public.table_misaligned_columns: truth rows seen: 2, success: 1, missing: 0, mismatch: 1, extraneous: 0
+[STATUS] finished row verification on public.table_misaligned_columns (shard 1/1): truth rows seen: 2, success: 1, missing: 0, mismatch: 1, extraneous: 0
 
 exec all
 DROP TABLE table_misaligned_columns
