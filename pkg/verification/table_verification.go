@@ -4,15 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
 )
 
-type columnName string
-
 type columnMetadata struct {
-	columnName columnName
+	columnName tree.Name
 	// TODO: account for geospatial types.
 	// TODO: compare typMod, which CRDB does not really support.
 	typeOID oid.Oid
@@ -44,8 +43,8 @@ func getColumns(ctx context.Context, conn Conn, tableOID oid.Oid) ([]columnMetad
 	return ret, nil
 }
 
-func getPrimaryKey(ctx context.Context, conn Conn, tableOID oid.Oid) ([]columnName, error) {
-	var ret []columnName
+func getPrimaryKey(ctx context.Context, conn Conn, tableOID oid.Oid) ([]tree.Name, error) {
+	var ret []tree.Name
 
 	rows, err := conn.Conn.Query(
 		ctx,
@@ -67,7 +66,7 @@ where
 	}
 
 	for rows.Next() {
-		var c columnName
+		var c tree.Name
 		if err := rows.Scan(&c); err != nil {
 			return ret, errors.Wrap(err, "error decoding column name")
 		}
@@ -79,8 +78,8 @@ where
 	return ret, nil
 }
 
-func mapColumns(cols []columnMetadata) map[columnName]columnMetadata {
-	ret := make(map[columnName]columnMetadata, len(cols))
+func mapColumns(cols []columnMetadata) map[tree.Name]columnMetadata {
+	ret := make(map[tree.Name]columnMetadata, len(cols))
 	for _, col := range cols {
 		ret[col.columnName] = col
 	}
@@ -88,12 +87,12 @@ func mapColumns(cols []columnMetadata) map[columnName]columnMetadata {
 }
 
 type verifyTableResult struct {
-	Schema                      string
-	Table                       string
+	Schema                      tree.Name
+	Table                       tree.Name
 	RowVerifiable               bool
-	MatchingColumns             []columnName
+	MatchingColumns             []tree.Name
 	MatchingColumnTypeOIDs      []oid.Oid
-	PrimaryKeyColumns           []columnName
+	PrimaryKeyColumns           []tree.Name
 	MismatchingTableDefinitions []MismatchingTableDefinition
 }
 
@@ -110,7 +109,7 @@ func verifyCommonTables(
 		if err != nil {
 			return nil, errors.Wrap(err, "error getting columns for table")
 		}
-		columnOIDs := make(map[columnName]oid.Oid)
+		columnOIDs := make(map[tree.Name]oid.Oid)
 		for _, truthCol := range truthCols {
 			columnOIDs[truthCol.columnName] = truthCol.typeOID
 		}

@@ -21,10 +21,10 @@ type Conn struct {
 }
 
 func (tm TableMetadata) Compare(o TableMetadata) int {
-	if c := strings.Compare(tm.Schema, o.Schema); c != 0 {
+	if c := strings.Compare(string(tm.Schema), string(o.Schema)); c != 0 {
 		return c
 	}
-	return strings.Compare(tm.Table, o.Table)
+	return strings.Compare(string(tm.Table), string(o.Table))
 }
 
 func (tm TableMetadata) Less(o TableMetadata) bool {
@@ -272,8 +272,8 @@ func getTableExtremes(
 
 func buildSelectForSplit(tbl verifyTableResult, isMin bool) *tree.Select {
 	tn := tree.MakeTableNameFromPrefix(
-		tree.ObjectNamePrefix{SchemaName: tree.Name(tbl.Schema), ExplicitSchema: true},
-		tree.Name(tbl.Table),
+		tree.ObjectNamePrefix{SchemaName: tbl.Schema, ExplicitSchema: true},
+		tbl.Table,
 	)
 	selectClause := &tree.SelectClause{
 		From: tree.From{

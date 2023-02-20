@@ -61,7 +61,7 @@ func (l LogReporter) Report(obj ReportableObject) {
 	}
 }
 
-func zipPrimaryKeysForReporting(columnNames []columnName, columnVals tree.Datums) string {
+func zipPrimaryKeysForReporting(columnNames []tree.Name, columnVals tree.Datums) string {
 	var sb strings.Builder
 	for i := range columnNames {
 		if i > 0 {

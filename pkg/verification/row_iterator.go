@@ -34,8 +34,8 @@ func newRowIterator(conn Conn, table rowVerifiableTableShard, rowBatchSize int) 
 
 func constructBaseSelectClause(table rowVerifiableTableShard, rowBatchSize int) tree.Select {
 	tn := tree.MakeTableNameFromPrefix(
-		tree.ObjectNamePrefix{SchemaName: tree.Name(table.Schema), ExplicitSchema: true},
-		tree.Name(table.Table),
+		tree.ObjectNamePrefix{SchemaName: table.Schema, ExplicitSchema: true},
+		table.Table,
 	)
 	selectClause := &tree.SelectClause{
 		From: tree.From{
@@ -143,7 +143,7 @@ func (it *rowIterator) nextPage(ctx context.Context) error {
 }
 
 func makeCompareExpr(
-	op treecmp.ComparisonOperator, cols []columnName, vals tree.Datums,
+	op treecmp.ComparisonOperator, cols []tree.Name, vals tree.Datums,
 ) *tree.ComparisonExpr {
 	cmpExpr := &tree.ComparisonExpr{
 		Operator: op,

@@ -48,11 +48,11 @@ func (c *compareContext) MustGetPlaceholderValue(p *tree.Placeholder) tree.Datum
 }
 
 type rowVerifiableTableShard struct {
-	Schema                 string
-	Table                  string
-	MatchingColumns        []columnName
+	Schema                 tree.Name
+	Table                  tree.Name
+	MatchingColumns        []tree.Name
 	MatchingColumnTypeOIDs []oid.Oid
-	PrimaryKeyColumns      []columnName
+	PrimaryKeyColumns      []tree.Name
 	StartPKVals            []tree.Datum
 	EndPKVals              []tree.Datum
 

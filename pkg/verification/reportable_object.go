@@ -22,31 +22,31 @@ type MismatchingTableDefinition struct {
 
 type MissingRow struct {
 	ConnID ConnID
-	Schema string
-	Table  string
+	Schema tree.Name
+	Table  tree.Name
 
-	PrimaryKeyColumns []columnName
+	PrimaryKeyColumns []tree.Name
 	PrimaryKeyValues  tree.Datums
 }
 
 type ExtraneousRow struct {
 	ConnID ConnID
-	Schema string
-	Table  string
+	Schema tree.Name
+	Table  tree.Name
 
-	PrimaryKeyColumns []columnName
+	PrimaryKeyColumns []tree.Name
 	PrimaryKeyValues  tree.Datums
 }
 
 type MismatchingRow struct {
 	ConnID ConnID
-	Schema string
-	Table  string
+	Schema tree.Name
+	Table  tree.Name
 
-	PrimaryKeyColumns []columnName
+	PrimaryKeyColumns []tree.Name
 	PrimaryKeyValues  tree.Datums
 
-	MismatchingColumns []columnName
+	MismatchingColumns []tree.Name
 	TruthVals          tree.Datums
 	TargetVals         tree.Datums
 }

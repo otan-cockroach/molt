@@ -4,14 +4,15 @@ import (
 	"context"
 	"sort"
 
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
 	"github.com/lib/pq/oid"
 )
 
 type TableMetadata struct {
 	OID    oid.Oid
-	Schema string
-	Table  string
+	Schema tree.Name
+	Table  tree.Name
 }
 
 type connWithTables struct {
