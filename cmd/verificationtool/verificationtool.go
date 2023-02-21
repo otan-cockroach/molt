@@ -23,17 +23,17 @@ var flagCRDBURL = flag.String(
 )
 var flagConcurrency = flag.Int(
 	"concurrency",
-	8,
+	16,
 	"number of threads to run",
 )
 var flagTableSplits = flag.Int(
 	"table_splits",
-	8,
+	16,
 	"number of splits for each table",
 )
 var flagRowBatchSize = flag.Int(
 	"row_batch_size",
-	1000,
+	20000,
 	"number of rows to fetch at a table from the database",
 )
 
