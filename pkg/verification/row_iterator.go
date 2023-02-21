@@ -2,6 +2,7 @@ package verification
 
 import (
 	"context"
+	"go/constant"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree/treecmp"
@@ -52,7 +53,7 @@ func constructBaseSelectClause(table rowVerifiableTableShard, rowBatchSize int) 
 	}
 	baseSelectExpr := tree.Select{
 		Select: selectClause,
-		Limit:  &tree.Limit{Count: tree.NewDInt(tree.DInt(rowBatchSize))},
+		Limit:  &tree.Limit{Count: tree.NewNumVal(constant.MakeUint64(uint64(rowBatchSize)), "", false)},
 	}
 	for _, pkCol := range table.PrimaryKeyColumns {
 		baseSelectExpr.OrderBy = append(
@@ -132,7 +133,9 @@ func (it *rowIterator) nextPage(ctx context.Context) error {
 		Expr: andClause,
 	}
 
-	rows, err := it.conn.Conn.Query(ctx, it.queryCache.String())
+	f := tree.NewFmtCtx(tree.FmtParsableNumerics)
+	f.FormatNode(&it.queryCache)
+	rows, err := it.conn.Conn.Query(ctx, f.CloseAndGetString())
 	if err != nil {
 		return errors.Wrapf(err, "error getting rows for table %s.%s from %s", it.table.Schema, it.table.Table, it.conn.ID)
 	}
@@ -182,5 +185,9 @@ func (it *rowIterator) next(ctx context.Context) tree.Datums {
 }
 
 func (it *rowIterator) error() error {
-	return errors.CombineErrors(it.err, it.currRows.Err())
+	var err error
+	if it.currRows != nil {
+		err = it.currRows.Err()
+	}
+	return errors.CombineErrors(it.err, err)
 }

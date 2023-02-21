@@ -95,6 +95,11 @@ func testDataDriven(t *testing.T, path string) {
 				}
 				sb.WriteString(fmt.Sprintf("[conn %d] %s\n", connIdx, tag.String()))
 			}
+
+			// Deallocate caches - otherwise the plans may stick around.
+			for _, conn := range conns {
+				require.NoError(t, conn.Conn.DeallocateAll(ctx))
+			}
 		case "verify":
 			numSplits := 1
 			for _, arg := range d.CmdArgs {
