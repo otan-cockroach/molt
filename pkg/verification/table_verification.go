@@ -6,7 +6,6 @@ import (
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
 )
 
@@ -175,8 +174,8 @@ func verifyCommonTables(
 				if sourceCol.typeOID != targetCol.typeOID {
 					// TODO(otan): re-use type map.
 					// TODO(otan): allow similar types to be compared anyway, e.g. int/int, float/float, json/jsonb.
-					aTyp, _ := pgtype.NewMap().TypeForOID(uint32(sourceCol.typeOID))
-					bTyp, _ := pgtype.NewMap().TypeForOID(uint32(targetCol.typeOID))
+					aTyp, _ := conns[0].Conn.TypeMap().TypeForOID(uint32(sourceCol.typeOID))
+					bTyp, _ := conn.Conn.TypeMap().TypeForOID(uint32(targetCol.typeOID))
 					res.MismatchingTableDefinitions = append(
 						res.MismatchingTableDefinitions,
 						MismatchingTableDefinition{
