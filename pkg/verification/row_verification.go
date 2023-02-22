@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
+	"github.com/cockroachdb/errors"
 	"github.com/lib/pq/oid"
 )
 
@@ -51,7 +52,7 @@ type rowVerifiableTableShard struct {
 	Schema                 tree.Name
 	Table                  tree.Name
 	MatchingColumns        []tree.Name
-	MatchingColumnTypeOIDs []oid.Oid
+	MatchingColumnTypeOIDs map[ConnID][]oid.Oid
 	PrimaryKeyColumns      []tree.Name
 	StartPKVals            []tree.Datum
 	EndPKVals              []tree.Datum
@@ -69,7 +70,11 @@ func compareRows(
 ) error {
 	iterators := make([]*rowIterator, len(conns))
 	for i, conn := range conns {
-		iterators[i] = newRowIterator(conn, table, rowBatchSize)
+		var err error
+		iterators[i], err = newRowIterator(ctx, conn, table, rowBatchSize)
+		if err != nil {
+			return errors.Wrapf(err, "error initializing row iterator on %s", conn.Conn)
+		}
 	}
 
 	cmpCtx := &compareContext{}

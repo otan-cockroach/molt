@@ -3,6 +3,7 @@
 #
 
 exec all
+CREATE TYPE test_enum AS ENUM('a', 'bbb', 'c');
 CREATE TABLE test_table (
     id INT4 PRIMARY KEY,
     bool_test BOOL DEFAULT true,
@@ -25,7 +26,9 @@ CREATE TABLE test_table (
     bytes_test BYTEA DEFAULT 'deadbeef',
     numeric_test NUMERIC DEFAULT '123.549875545',
     simple_arr_test TEXT[] DEFAULT '{"a", "b"}',
-    bitarr VARBIT(10) DEFAULT '0100'
+    bitarr_test VARBIT(10) DEFAULT '0100',
+    enum_test test_enum DEFAULT 'bbb'
+    -- enum_arr_test _test_enum DEFAULT '{"a", "bbb"}' # TODO: support enum arrays
 );
 INSERT INTO test_table(id)
 SELECT id FROM generate_series(1, 100) AS t(id)

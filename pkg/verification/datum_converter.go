@@ -35,13 +35,13 @@ func (p parseTimeContext) GetDateStyle() pgdate.DateStyle {
 
 var timeCtx = &parseTimeContext{}
 
-func convertRowValue(val any, typOID oid.Oid) (tree.Datum, error) {
+func convertRowValue(typMap *pgtype.Map, val any, typOID oid.Oid) (tree.Datum, error) {
 	if _, isArray := types.ArrayOids[typOID]; isArray {
 		arrayType := types.OidToType[typOID]
 		ret := tree.NewDArray(arrayType.ArrayContents())
 		// Only worry about 1D arrays for now.
 		for arrIdx, arr := range val.([]interface{}) {
-			elem, err := convertRowValue(arr, arrayType.ArrayContents().Oid())
+			elem, err := convertRowValue(typMap, arr, arrayType.ArrayContents().Oid())
 			if err != nil {
 				return nil, errors.Wrapf(err, "error converting array element %d", arrIdx)
 			}
@@ -123,6 +123,14 @@ func convertRowValue(val any, typOID oid.Oid) (tree.Datum, error) {
 		}
 		return tree.ParseDBitArray(string(buf))
 	}
+	typ, ok := typMap.TypeForOID(uint32(typOID))
+	if !ok {
+		return nil, errors.AssertionFailedf("value %v (%T) of type OID %d not initialised", val, val, typOID)
+	}
+	switch typ.Codec.(type) {
+	case *pgtype.EnumCodec:
+		return tree.NewDString(val.(string)), nil
+	}
 	return nil, errors.AssertionFailedf("value %v (%T) of type OID %d not yet translatable", val, val, typOID)
 }
 
@@ -137,14 +145,14 @@ func convertNumeric(val pgtype.Numeric) (*tree.DDecimal, error) {
 	return &tree.DDecimal{Decimal: *apd.New(val.Int.Int64(), val.Exp)}, nil
 }
 
-func convertRowValues(vals []any, typOIDs []oid.Oid) (tree.Datums, error) {
+func convertRowValues(typMap *pgtype.Map, vals []any, typOIDs []oid.Oid) (tree.Datums, error) {
 	ret := make(tree.Datums, len(vals))
 	if len(vals) != len(typOIDs) {
 		return nil, errors.AssertionFailedf("val length != oid length: %v vs %v", vals, typOIDs)
 	}
 	for i := range vals {
 		var err error
-		if ret[i], err = convertRowValue(vals[i], typOIDs[i]); err != nil {
+		if ret[i], err = convertRowValue(typMap, vals[i], typOIDs[i]); err != nil {
 			return nil, err
 		}
 	}

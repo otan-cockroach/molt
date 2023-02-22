@@ -11,11 +11,10 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/uint128"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/uuid"
 	"github.com/cockroachdb/errors"
-	"github.com/jackc/pgx/v5"
 )
 
 func splitTable(
-	ctx context.Context, truthConn *pgx.Conn, tbl verifyTableResult, reporter Reporter, numSplits int,
+	ctx context.Context, truthConn Conn, tbl verifyTableResult, reporter Reporter, numSplits int,
 ) ([]rowVerifiableTableShard, error) {
 	if numSplits < 1 {
 		return nil, errors.AssertionFailedf("failed to split rows: %d\n", numSplits)
@@ -81,7 +80,7 @@ func splitTable(
 				Table:                  tbl.Table,
 				Schema:                 tbl.Schema,
 				MatchingColumns:        tbl.MatchingColumns,
-				MatchingColumnTypeOIDs: tbl.MatchingColumnTypeOIDs,
+				MatchingColumnTypeOIDs: tbl.ColumnTypeOIDs,
 				PrimaryKeyColumns:      tbl.PrimaryKeyColumns,
 				StartPKVals:            nextMin,
 				EndPKVals:              nextMax,
@@ -97,7 +96,7 @@ func splitTable(
 				Table:                  tbl.Table,
 				Schema:                 tbl.Schema,
 				MatchingColumns:        tbl.MatchingColumns,
-				MatchingColumnTypeOIDs: tbl.MatchingColumnTypeOIDs,
+				MatchingColumnTypeOIDs: tbl.ColumnTypeOIDs,
 				PrimaryKeyColumns:      tbl.PrimaryKeyColumns,
 				ShardNum:               1,
 				TotalShards:            1,
@@ -117,13 +116,13 @@ func splitTable(
 }
 
 func getTableExtremes(
-	ctx context.Context, truthConn *pgx.Conn, tbl verifyTableResult, isMin bool,
+	ctx context.Context, truthConn Conn, tbl verifyTableResult, isMin bool,
 ) (tree.Datums, error) {
 	f := tree.NewFmtCtx(tree.FmtParsableNumerics)
 	s := buildSelectForSplit(tbl, isMin)
 	f.FormatNode(s)
 	q := f.CloseAndGetString()
-	rows, err := truthConn.Query(ctx, q)
+	rows, err := truthConn.Conn.Query(ctx, q)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error getting minimum value for %s.%s", tbl.Schema, tbl.Table)
 	}
@@ -133,7 +132,7 @@ func getTableExtremes(
 		if err != nil {
 			return nil, err
 		}
-		rowVals, err := convertRowValues(vals, tbl.MatchingColumnTypeOIDs[:len(tbl.PrimaryKeyColumns)])
+		rowVals, err := convertRowValues(truthConn.Conn.TypeMap(), vals, tbl.ColumnTypeOIDs[truthConn.ID][:len(tbl.PrimaryKeyColumns)])
 		if err != nil {
 			return nil, err
 		}

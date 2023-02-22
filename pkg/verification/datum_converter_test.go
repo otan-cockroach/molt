@@ -31,7 +31,7 @@ func TestConvertRowValue(t *testing.T) {
 					require.NoError(t, err)
 
 					for i, val := range vals {
-						converted, err := convertRowValue(val, oid.Oid(rows.FieldDescriptions()[i].DataTypeOID))
+						converted, err := convertRowValue(conn.TypeMap(), val, oid.Oid(rows.FieldDescriptions()[i].DataTypeOID))
 						require.NoError(t, err)
 
 						extra := ""

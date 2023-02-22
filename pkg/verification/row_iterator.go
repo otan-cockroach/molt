@@ -24,13 +24,21 @@ type rowIterator struct {
 	queryCache   tree.Select
 }
 
-func newRowIterator(conn Conn, table rowVerifiableTableShard, rowBatchSize int) *rowIterator {
+func newRowIterator(
+	ctx context.Context, conn Conn, table rowVerifiableTableShard, rowBatchSize int,
+) (*rowIterator, error) {
+	// Initialize the type map on the connection.
+	for _, typOID := range table.MatchingColumnTypeOIDs[conn.ID] {
+		if _, err := getDataType(ctx, conn.Conn, typOID); err != nil {
+			return nil, errors.Wrapf(err, "error initializing type oid %d", typOID)
+		}
+	}
 	return &rowIterator{
 		conn:         conn,
 		table:        table,
 		rowBatchSize: rowBatchSize,
 		queryCache:   constructBaseSelectClause(table, rowBatchSize),
-	}
+	}, nil
 }
 
 func constructBaseSelectClause(table rowVerifiableTableShard, rowBatchSize int) tree.Select {
@@ -79,7 +87,7 @@ func (it *rowIterator) hasNext(ctx context.Context) bool {
 				it.err = err
 				return false
 			}
-			it.peekCache, err = convertRowValues(rows, it.table.MatchingColumnTypeOIDs)
+			it.peekCache, err = convertRowValues(it.conn.Conn.TypeMap(), rows, it.table.MatchingColumnTypeOIDs[it.conn.ID])
 			if err != nil {
 				it.err = err
 				return false

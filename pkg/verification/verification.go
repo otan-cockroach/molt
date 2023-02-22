@@ -153,7 +153,7 @@ func Verify(ctx context.Context, conns []Conn, reporter Reporter, inOpts ...Veri
 		}
 
 		// Get and first and last of each PK.
-		splitTables, err := splitTable(ctx, conns[0].Conn, tbl, reporter, opts.tableSplits)
+		splitTables, err := splitTable(ctx, conns[0], tbl, reporter, opts.tableSplits)
 		if err != nil {
 			return errors.Wrapf(err, "error splitting tables")
 		}

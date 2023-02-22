@@ -6,6 +6,8 @@ import (
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
 )
 
@@ -90,7 +92,7 @@ type verifyTableResult struct {
 	Table                       tree.Name
 	RowVerifiable               bool
 	MatchingColumns             []tree.Name
-	MatchingColumnTypeOIDs      []oid.Oid
+	ColumnTypeOIDs              map[ConnID][]oid.Oid
 	PrimaryKeyColumns           []tree.Name
 	MismatchingTableDefinitions []MismatchingTableDefinition
 }
@@ -99,6 +101,9 @@ func verifyCommonTables(
 	ctx context.Context, conns []Conn, tables map[ConnID][]TableMetadata,
 ) ([]verifyTableResult, error) {
 	var ret []verifyTableResult
+
+	columnOIDMap := make(map[ConnID]map[tree.Name]oid.Oid)
+
 	for tblIdx, truthTbl := range tables[conns[0].ID] {
 		res := verifyTableResult{
 			Schema: truthTbl.Schema,
@@ -108,9 +113,9 @@ func verifyCommonTables(
 		if err != nil {
 			return nil, errors.Wrap(err, "error getting columns for table")
 		}
-		columnOIDs := make(map[tree.Name]oid.Oid)
+		columnOIDMap[conns[0].ID] = make(map[tree.Name]oid.Oid)
 		for _, truthCol := range truthCols {
-			columnOIDs[truthCol.columnName] = truthCol.typeOID
+			columnOIDMap[conns[0].ID][truthCol.columnName] = truthCol.typeOID
 		}
 
 		pkSame := true
@@ -138,7 +143,9 @@ func verifyCommonTables(
 			if err != nil {
 				return nil, errors.Wrap(err, "error getting columns for table")
 			}
+			columnOIDMap[conn.ID] = make(map[tree.Name]oid.Oid)
 			for _, targetCol := range compareColumns {
+				columnOIDMap[conn.ID][targetCol.columnName] = targetCol.typeOID
 				sourceCol, ok := truthMappedCols[targetCol.columnName]
 				if !ok {
 					res.MismatchingTableDefinitions = append(
@@ -171,11 +178,16 @@ func verifyCommonTables(
 						},
 					)
 				}
-				if sourceCol.typeOID != targetCol.typeOID {
-					// TODO(otan): re-use type map.
+				truthTyp, err := getDataType(ctx, conns[0].Conn, sourceCol.typeOID)
+				if err != nil {
+					return nil, err
+				}
+				compareTyp, err := getDataType(ctx, conn.Conn, targetCol.typeOID)
+				if err != nil {
+					return nil, err
+				}
+				if truthTyp.Name != compareTyp.Name {
 					// TODO(otan): allow similar types to be compared anyway, e.g. int/int, float/float, json/jsonb.
-					aTyp, _ := conns[0].Conn.TypeMap().TypeForOID(uint32(sourceCol.typeOID))
-					bTyp, _ := conn.Conn.TypeMap().TypeForOID(uint32(targetCol.typeOID))
 					res.MismatchingTableDefinitions = append(
 						res.MismatchingTableDefinitions,
 						MismatchingTableDefinition{
@@ -185,9 +197,9 @@ func verifyCommonTables(
 								"column type mismatch on %s: %s=%s vs %s=%s",
 								targetCol.columnName,
 								conns[0].ID,
-								aTyp.Name,
+								truthTyp.Name,
 								conn.ID,
-								bTyp.Name,
+								compareTyp.Name,
 							),
 						},
 					)
@@ -241,22 +253,44 @@ func verifyCommonTables(
 		}
 
 		res.PrimaryKeyColumns = truthPKCols
+		res.ColumnTypeOIDs = make(map[ConnID][]oid.Oid, len(conns))
 		// Place PK columns first.
 		for _, col := range truthPKCols {
 			if _, ok := comparableColumns[col]; !ok {
 				res.MatchingColumns = append(res.MatchingColumns, col)
-				res.MatchingColumnTypeOIDs = append(res.MatchingColumnTypeOIDs, columnOIDs[col])
+				for _, conn := range conns {
+					res.ColumnTypeOIDs[conn.ID] = append(res.ColumnTypeOIDs[conn.ID], columnOIDMap[conn.ID][col])
+				}
 				delete(comparableColumns, col)
 			}
 		}
+		// Then every other row.
 		for _, col := range truthCols {
 			if _, ok := comparableColumns[col.columnName]; ok {
 				res.MatchingColumns = append(res.MatchingColumns, col.columnName)
-				res.MatchingColumnTypeOIDs = append(res.MatchingColumnTypeOIDs, columnOIDs[col.columnName])
+				for _, conn := range conns {
+					res.ColumnTypeOIDs[conn.ID] = append(res.ColumnTypeOIDs[conn.ID], columnOIDMap[conn.ID][col.columnName])
+				}
 			}
 		}
 		res.RowVerifiable = pkSame && len(truthPKCols) > 0
 		ret = append(ret, res)
 	}
 	return ret, nil
+}
+
+func getDataType(ctx context.Context, conn *pgx.Conn, oid oid.Oid) (*pgtype.Type, error) {
+	if typ, ok := conn.TypeMap().TypeForOID(uint32(oid)); ok {
+		return typ, nil
+	}
+	var typName string
+	if err := conn.QueryRow(ctx, "SELECT $1::oid::regtype", oid).Scan(&typName); err != nil {
+		return nil, errors.Wrapf(err, "error getting data type info for oid %d", oid)
+	}
+	typ, err := conn.LoadType(ctx, typName)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error loading type %s", typName)
+	}
+	conn.TypeMap().RegisterType(typ)
+	return typ, nil
 }
