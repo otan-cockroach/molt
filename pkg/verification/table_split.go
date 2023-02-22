@@ -132,7 +132,7 @@ func getTableExtremes(
 		if err != nil {
 			return nil, err
 		}
-		rowVals, err := convertRowValues(truthConn.Conn.TypeMap(), vals, tbl.ColumnTypeOIDs[truthConn.ID][:len(tbl.PrimaryKeyColumns)])
+		rowVals, err := convertRowValues(truthConn.Conn.TypeMap(), vals, tbl.ColumnTypeOIDs[0][:len(tbl.PrimaryKeyColumns)])
 		if err != nil {
 			return nil, err
 		}

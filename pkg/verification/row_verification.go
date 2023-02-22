@@ -52,7 +52,7 @@ type rowVerifiableTableShard struct {
 	Schema                 tree.Name
 	Table                  tree.Name
 	MatchingColumns        []tree.Name
-	MatchingColumnTypeOIDs map[ConnID][]oid.Oid
+	MatchingColumnTypeOIDs [][]oid.Oid
 	PrimaryKeyColumns      []tree.Name
 	StartPKVals            []tree.Datum
 	EndPKVals              []tree.Datum
@@ -71,7 +71,7 @@ func compareRows(
 	iterators := make([]*rowIterator, len(conns))
 	for i, conn := range conns {
 		var err error
-		iterators[i], err = newRowIterator(ctx, conn, table, rowBatchSize)
+		iterators[i], err = newRowIterator(ctx, conn, i, table, rowBatchSize)
 		if err != nil {
 			return errors.Wrapf(err, "error initializing row iterator on %s", conn.Conn)
 		}

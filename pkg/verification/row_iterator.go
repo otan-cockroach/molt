@@ -14,6 +14,7 @@ type rowIterator struct {
 	conn         Conn
 	table        rowVerifiableTableShard
 	rowBatchSize int
+	connIdx      int
 
 	isComplete   bool
 	pkCursor     tree.Datums
@@ -25,10 +26,10 @@ type rowIterator struct {
 }
 
 func newRowIterator(
-	ctx context.Context, conn Conn, table rowVerifiableTableShard, rowBatchSize int,
+	ctx context.Context, conn Conn, connIdx int, table rowVerifiableTableShard, rowBatchSize int,
 ) (*rowIterator, error) {
 	// Initialize the type map on the connection.
-	for _, typOID := range table.MatchingColumnTypeOIDs[conn.ID] {
+	for _, typOID := range table.MatchingColumnTypeOIDs[connIdx] {
 		if _, err := getDataType(ctx, conn.Conn, typOID); err != nil {
 			return nil, errors.Wrapf(err, "error initializing type oid %d", typOID)
 		}
@@ -37,6 +38,7 @@ func newRowIterator(
 		conn:         conn,
 		table:        table,
 		rowBatchSize: rowBatchSize,
+		connIdx:      connIdx,
 		queryCache:   constructBaseSelectClause(table, rowBatchSize),
 	}, nil
 }
@@ -87,7 +89,7 @@ func (it *rowIterator) hasNext(ctx context.Context) bool {
 				it.err = err
 				return false
 			}
-			it.peekCache, err = convertRowValues(it.conn.Conn.TypeMap(), rows, it.table.MatchingColumnTypeOIDs[it.conn.ID])
+			it.peekCache, err = convertRowValues(it.conn.Conn.TypeMap(), rows, it.table.MatchingColumnTypeOIDs[it.connIdx])
 			if err != nil {
 				it.err = err
 				return false

@@ -92,7 +92,7 @@ type verifyTableResult struct {
 	Table                       tree.Name
 	RowVerifiable               bool
 	MatchingColumns             []tree.Name
-	ColumnTypeOIDs              map[ConnID][]oid.Oid
+	ColumnTypeOIDs              [][]oid.Oid
 	PrimaryKeyColumns           []tree.Name
 	MismatchingTableDefinitions []MismatchingTableDefinition
 }
@@ -102,7 +102,7 @@ func verifyCommonTables(
 ) ([]verifyTableResult, error) {
 	var ret []verifyTableResult
 
-	columnOIDMap := make(map[ConnID]map[tree.Name]oid.Oid)
+	columnOIDMap := make(map[int]map[tree.Name]oid.Oid)
 
 	for tblIdx, truthTbl := range tables[conns[0].ID] {
 		res := verifyTableResult{
@@ -113,9 +113,9 @@ func verifyCommonTables(
 		if err != nil {
 			return nil, errors.Wrap(err, "error getting columns for table")
 		}
-		columnOIDMap[conns[0].ID] = make(map[tree.Name]oid.Oid)
+		columnOIDMap[0] = make(map[tree.Name]oid.Oid)
 		for _, truthCol := range truthCols {
-			columnOIDMap[conns[0].ID][truthCol.columnName] = truthCol.typeOID
+			columnOIDMap[0][truthCol.columnName] = truthCol.typeOID
 		}
 
 		pkSame := true
@@ -143,9 +143,9 @@ func verifyCommonTables(
 			if err != nil {
 				return nil, errors.Wrap(err, "error getting columns for table")
 			}
-			columnOIDMap[conn.ID] = make(map[tree.Name]oid.Oid)
+			columnOIDMap[i] = make(map[tree.Name]oid.Oid)
 			for _, targetCol := range compareColumns {
-				columnOIDMap[conn.ID][targetCol.columnName] = targetCol.typeOID
+				columnOIDMap[i][targetCol.columnName] = targetCol.typeOID
 				sourceCol, ok := truthMappedCols[targetCol.columnName]
 				if !ok {
 					res.MismatchingTableDefinitions = append(
@@ -253,13 +253,13 @@ func verifyCommonTables(
 		}
 
 		res.PrimaryKeyColumns = truthPKCols
-		res.ColumnTypeOIDs = make(map[ConnID][]oid.Oid, len(conns))
+		res.ColumnTypeOIDs = make([][]oid.Oid, len(conns))
 		// Place PK columns first.
 		for _, col := range truthPKCols {
 			if _, ok := comparableColumns[col]; !ok {
 				res.MatchingColumns = append(res.MatchingColumns, col)
-				for _, conn := range conns {
-					res.ColumnTypeOIDs[conn.ID] = append(res.ColumnTypeOIDs[conn.ID], columnOIDMap[conn.ID][col])
+				for i := range conns {
+					res.ColumnTypeOIDs[i] = append(res.ColumnTypeOIDs[i], columnOIDMap[i][col])
 				}
 				delete(comparableColumns, col)
 			}
@@ -268,8 +268,8 @@ func verifyCommonTables(
 		for _, col := range truthCols {
 			if _, ok := comparableColumns[col.columnName]; ok {
 				res.MatchingColumns = append(res.MatchingColumns, col.columnName)
-				for _, conn := range conns {
-					res.ColumnTypeOIDs[conn.ID] = append(res.ColumnTypeOIDs[conn.ID], columnOIDMap[conn.ID][col.columnName])
+				for i := range conns {
+					res.ColumnTypeOIDs[i] = append(res.ColumnTypeOIDs[i], columnOIDMap[i][col.columnName])
 				}
 			}
 		}
