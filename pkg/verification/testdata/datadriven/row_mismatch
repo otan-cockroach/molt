@@ -27,7 +27,8 @@ CREATE TABLE test_table (
     numeric_test NUMERIC DEFAULT '123.549875545',
     simple_arr_test TEXT[] DEFAULT '{"a", "b"}',
     bitarr_test VARBIT(10) DEFAULT '0100',
-    enum_test test_enum DEFAULT 'bbb'
+    enum_test test_enum DEFAULT 'bbb',
+    int_arr_test int8[] DEFAULT '{1, 2, 3}'
     -- enum_arr_test _test_enum DEFAULT '{"a", "bbb"}' # TODO: support enum arrays
 );
 INSERT INTO test_table(id)
