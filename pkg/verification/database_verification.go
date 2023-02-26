@@ -6,6 +6,7 @@ import (
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/molt/pkg/dbconn"
 	"github.com/lib/pq/oid"
 )
 
@@ -16,12 +17,12 @@ type TableMetadata struct {
 }
 
 type connWithTables struct {
-	Conn
+	dbconn.Conn
 	tableMetadata []TableMetadata
 }
 
 type databaseTableVerificationResult struct {
-	verified map[ConnID][]TableMetadata
+	verified map[dbconn.ID][]TableMetadata
 
 	missingTables    []MissingTable
 	extraneousTables []ExtraneousTable
@@ -46,16 +47,16 @@ func (c *tableVerificationIterator) curr() TableMetadata {
 
 // verifyDatabaseTables verifies tables exist in all databases.
 func verifyDatabaseTables(
-	ctx context.Context, conns []Conn,
+	ctx context.Context, conns []dbconn.Conn,
 ) (databaseTableVerificationResult, error) {
 	ret := databaseTableVerificationResult{
-		verified: make(map[ConnID][]TableMetadata),
+		verified: make(map[dbconn.ID][]TableMetadata),
 	}
 
 	// Grab all tables and verify them.
 	var in []connWithTables
 	for _, conn := range conns {
-		rows, err := conn.Conn.Query(
+		rows, err := conn.(*dbconn.PGConn).Query(
 			ctx,
 			`SELECT pg_class.oid, pg_class.relname, pg_namespace.nspname
 FROM pg_class
@@ -118,7 +119,7 @@ WHERE relkind = 'r' AND pg_namespace.nspname NOT IN ('pg_catalog', 'information_
 				// Extraneous row compared to source of truthIterator.
 				ret.extraneousTables = append(
 					ret.extraneousTables,
-					ExtraneousTable{ConnID: it.table.ID, TableMetadata: it.curr()},
+					ExtraneousTable{ConnID: it.table.ID(), TableMetadata: it.curr()},
 				)
 				// Move the curr table over.
 				commonOnAll = false
@@ -131,7 +132,7 @@ WHERE relkind = 'r' AND pg_namespace.nspname NOT IN ('pg_catalog', 'information_
 				// Missing a row from source of truthIterator.
 				ret.missingTables = append(
 					ret.missingTables,
-					MissingTable{ConnID: it.table.ID, TableMetadata: truthIterator.curr()},
+					MissingTable{ConnID: it.table.ID(), TableMetadata: truthIterator.curr()},
 				)
 				commonOnAll = false
 			}
@@ -140,8 +141,8 @@ WHERE relkind = 'r' AND pg_namespace.nspname NOT IN ('pg_catalog', 'information_
 		// If the state is common, add the table metadata attributed to the current state.
 		if commonOnAll {
 			for i, it := range iterators {
-				ret.verified[conns[i].ID] = append(
-					ret.verified[conns[i].ID],
+				ret.verified[conns[i].ID()] = append(
+					ret.verified[conns[i].ID()],
 					it.curr(),
 				)
 			}
@@ -163,7 +164,7 @@ WHERE relkind = 'r' AND pg_namespace.nspname NOT IN ('pg_catalog', 'information_
 		for !it.done() {
 			ret.extraneousTables = append(
 				ret.extraneousTables,
-				ExtraneousTable{ConnID: it.table.ID, TableMetadata: it.curr()},
+				ExtraneousTable{ConnID: it.table.ID(), TableMetadata: it.curr()},
 			)
 			it.next()
 		}

@@ -9,11 +9,17 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/datadriven"
+	"github.com/cockroachdb/molt/pkg/dbconn"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 )
 
-func pgURLs() []string {
+type connArg struct {
+	id      dbconn.ID
+	connStr string
+}
+
+func pgConnArgs() []connArg {
 	pgInstanceURL := "postgres://postgres:postgres@localhost:5432/testdb"
 	if override, ok := os.LookupEnv("POSTGRES_URL"); ok {
 		pgInstanceURL = override
@@ -22,7 +28,10 @@ func pgURLs() []string {
 	if override, ok := os.LookupEnv("COCKROACH_URL"); ok {
 		crdbInstanceURL = override
 	}
-	return []string{pgInstanceURL, crdbInstanceURL}
+	return []connArg{
+		{id: "truth", connStr: pgInstanceURL},
+		{id: "lie", connStr: crdbInstanceURL},
+	}
 }
 
 func TestDataDriven(t *testing.T) {
@@ -35,9 +44,9 @@ func testDataDriven(t *testing.T, path string) {
 	const dbName = "_ddtest"
 
 	var cfgs []*pgx.ConnConfig
-	for _, pgurl := range pgURLs() {
+	for _, pgArgs := range pgConnArgs() {
 		func() {
-			conn, err := pgx.Connect(ctx, pgurl)
+			conn, err := pgx.Connect(ctx, pgArgs.connStr)
 			require.NoError(t, err)
 			defer func() { _ = conn.Close(ctx) }()
 
@@ -52,20 +61,16 @@ func testDataDriven(t *testing.T, path string) {
 		}()
 	}
 
-	var conns []Conn
-	for i, cfg := range []struct {
-		name string
-	}{
-		{name: "truth"},
-		{name: "lie"},
-	} {
-		conn, err := pgx.ConnectConfig(ctx, cfgs[i])
+	var conns []dbconn.Conn
+	for i, connArg := range pgConnArgs() {
+		pgConn, err := pgx.ConnectConfig(ctx, cfgs[i])
 		require.NoError(t, err)
-		conns = append(conns, Conn{ID: ConnID(cfg.name), Conn: conn})
+		conn := dbconn.NewPGConn(connArg.id, pgConn)
+		conns = append(conns, conn)
 	}
 	defer func() {
 		for _, conn := range conns {
-			_ = conn.Conn.Close(ctx)
+			_ = conn.Close(ctx)
 		}
 	}()
 
@@ -88,17 +93,17 @@ func testDataDriven(t *testing.T, path string) {
 			}
 			require.NotEmpty(t, connIdxs, "destination sql must be defined")
 			for _, connIdx := range connIdxs {
-				tag, err := conns[connIdx].Conn.Exec(ctx, d.Input)
+				tag, err := conns[connIdx].(*dbconn.PGConn).Exec(ctx, d.Input)
 				if err != nil {
-					sb.WriteString(fmt.Sprintf("[conn %d] error: %s\n", connIdx, err.Error()))
+					sb.WriteString(fmt.Sprintf("[%s] error: %s\n", conns[connIdx].ID(), err.Error()))
 					continue
 				}
-				sb.WriteString(fmt.Sprintf("[conn %d] %s\n", connIdx, tag.String()))
+				sb.WriteString(fmt.Sprintf("[%s] %s\n", conns[connIdx].ID(), tag.String()))
 			}
 
 			// Deallocate caches - otherwise the plans may stick around.
 			for _, conn := range conns {
-				require.NoError(t, conn.Conn.DeallocateAll(ctx))
+				require.NoError(t, conn.(*dbconn.PGConn).DeallocateAll(ctx))
 			}
 		case "verify":
 			numSplits := 1

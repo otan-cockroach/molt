@@ -11,10 +11,15 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/uint128"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/uuid"
 	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/molt/pkg/dbconn"
 )
 
 func splitTable(
-	ctx context.Context, truthConn Conn, tbl verifyTableResult, reporter Reporter, numSplits int,
+	ctx context.Context,
+	truthConn dbconn.Conn,
+	tbl verifyTableResult,
+	reporter Reporter,
+	numSplits int,
 ) ([]rowVerifiableTableShard, error) {
 	if numSplits < 1 {
 		return nil, errors.AssertionFailedf("failed to split rows: %d\n", numSplits)
@@ -116,13 +121,13 @@ func splitTable(
 }
 
 func getTableExtremes(
-	ctx context.Context, truthConn Conn, tbl verifyTableResult, isMin bool,
+	ctx context.Context, truthConn dbconn.Conn, tbl verifyTableResult, isMin bool,
 ) (tree.Datums, error) {
 	f := tree.NewFmtCtx(tree.FmtParsableNumerics)
 	s := buildSelectForSplit(tbl, isMin)
 	f.FormatNode(s)
 	q := f.CloseAndGetString()
-	rows, err := truthConn.Conn.Query(ctx, q)
+	rows, err := truthConn.(*dbconn.PGConn).Query(ctx, q)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error getting minimum value for %s.%s", tbl.Schema, tbl.Table)
 	}
@@ -132,7 +137,7 @@ func getTableExtremes(
 		if err != nil {
 			return nil, err
 		}
-		rowVals, err := convertRowValues(truthConn.Conn.TypeMap(), vals, tbl.ColumnTypeOIDs[0][:len(tbl.PrimaryKeyColumns)])
+		rowVals, err := convertRowValues(truthConn.(*dbconn.PGConn).TypeMap(), vals, tbl.ColumnTypeOIDs[0][:len(tbl.PrimaryKeyColumns)])
 		if err != nil {
 			return nil, err
 		}

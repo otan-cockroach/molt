@@ -1,27 +1,30 @@
 package verification
 
-import "github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
+import (
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
+	"github.com/cockroachdb/molt/pkg/dbconn"
+)
 
 type ReportableObject interface{}
 
 type MissingTable struct {
-	ConnID ConnID
+	ConnID dbconn.ID
 	TableMetadata
 }
 
 type ExtraneousTable struct {
-	ConnID ConnID
+	ConnID dbconn.ID
 	TableMetadata
 }
 
 type MismatchingTableDefinition struct {
-	ConnID ConnID
+	ConnID dbconn.ID
 	TableMetadata
 	Info string
 }
 
 type MissingRow struct {
-	ConnID ConnID
+	ConnID dbconn.ID
 	Schema tree.Name
 	Table  tree.Name
 
@@ -30,7 +33,7 @@ type MissingRow struct {
 }
 
 type ExtraneousRow struct {
-	ConnID ConnID
+	ConnID dbconn.ID
 	Schema tree.Name
 	Table  tree.Name
 
@@ -39,7 +42,7 @@ type ExtraneousRow struct {
 }
 
 type MismatchingRow struct {
-	ConnID ConnID
+	ConnID dbconn.ID
 	Schema tree.Name
 	Table  tree.Name
 

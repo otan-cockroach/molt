@@ -14,7 +14,7 @@ import (
 
 func TestConvertRowValue(t *testing.T) {
 	ctx := context.Background()
-	conn, err := pgx.Connect(ctx, pgURLs()[0])
+	conn, err := pgx.Connect(ctx, pgConnArgs()[0].connStr)
 	require.NoError(t, err)
 	defer func() { _ = conn.Close(ctx) }()
 

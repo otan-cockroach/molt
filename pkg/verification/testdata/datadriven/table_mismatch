@@ -3,12 +3,12 @@
 exec source_of_truth
 CREATE TABLE t (id INT4 NOT NULL)
 ----
-[conn 0] CREATE TABLE
+[truth] CREATE TABLE
 
 exec non_source_of_truth
 CREATE TABLE t (id INT4 PRIMARY KEY)
 ----
-[conn 1] CREATE TABLE
+[lie] CREATE TABLE
 
 verify
 ----
@@ -17,8 +17,8 @@ verify
 exec all
 DROP TABLE t
 ----
-[conn 0] DROP TABLE
-[conn 1] DROP TABLE
+[truth] DROP TABLE
+[lie] DROP TABLE
 
 # Table mismatches on multiple axis.
 
@@ -33,7 +33,7 @@ CREATE TABLE different_pk_type (
     id INT8 PRIMARY KEY
 )
 ----
-[conn 0] CREATE TABLE
+[truth] CREATE TABLE
 
 exec non_source_of_truth
 CREATE TABLE t (
@@ -47,7 +47,7 @@ CREATE TABLE different_pk_type (
     id FLOAT8 PRIMARY KEY
 )
 ----
-[conn 1] CREATE TABLE
+[lie] CREATE TABLE
 
 verify
 ----

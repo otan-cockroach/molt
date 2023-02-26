@@ -6,7 +6,7 @@ import (
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
-	"github.com/jackc/pgx/v5"
+	"github.com/cockroachdb/molt/pkg/dbconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
 )
@@ -19,10 +19,10 @@ type columnMetadata struct {
 	notNull bool
 }
 
-func getColumns(ctx context.Context, conn Conn, tableOID oid.Oid) ([]columnMetadata, error) {
+func getColumns(ctx context.Context, conn dbconn.Conn, tableOID oid.Oid) ([]columnMetadata, error) {
 	var ret []columnMetadata
 
-	rows, err := conn.Conn.Query(
+	rows, err := conn.(*dbconn.PGConn).Query(
 		ctx,
 		`SELECT attname, atttypid, attnotnull FROM pg_attribute WHERE attrelid = $1 AND attnum > 0`,
 		tableOID,
@@ -44,10 +44,10 @@ func getColumns(ctx context.Context, conn Conn, tableOID oid.Oid) ([]columnMetad
 	return ret, nil
 }
 
-func getPrimaryKey(ctx context.Context, conn Conn, tableOID oid.Oid) ([]tree.Name, error) {
+func getPrimaryKey(ctx context.Context, conn dbconn.Conn, tableOID oid.Oid) ([]tree.Name, error) {
 	var ret []tree.Name
 
-	rows, err := conn.Conn.Query(
+	rows, err := conn.(*dbconn.PGConn).Query(
 		ctx,
 		`
 select
@@ -98,18 +98,19 @@ type verifyTableResult struct {
 }
 
 func verifyCommonTables(
-	ctx context.Context, conns []Conn, tables map[ConnID][]TableMetadata,
+	ctx context.Context, conns []dbconn.Conn, tables map[dbconn.ID][]TableMetadata,
 ) ([]verifyTableResult, error) {
 	var ret []verifyTableResult
 
 	columnOIDMap := make(map[int]map[tree.Name]oid.Oid)
 
-	for tblIdx, truthTbl := range tables[conns[0].ID] {
+	truthConn := conns[0]
+	for tblIdx, truthTbl := range tables[truthConn.ID()] {
 		res := verifyTableResult{
 			Schema: truthTbl.Schema,
 			Table:  truthTbl.Table,
 		}
-		truthCols, err := getColumns(ctx, conns[0], truthTbl.OID)
+		truthCols, err := getColumns(ctx, truthConn, truthTbl.OID)
 		if err != nil {
 			return nil, errors.Wrap(err, "error getting columns for table")
 		}
@@ -119,7 +120,7 @@ func verifyCommonTables(
 		}
 
 		pkSame := true
-		truthPKCols, err := getPrimaryKey(ctx, conns[0], truthTbl.OID)
+		truthPKCols, err := getPrimaryKey(ctx, truthConn, truthTbl.OID)
 		if err != nil {
 			return nil, errors.Wrap(err, "error getting primary key")
 		}
@@ -127,7 +128,7 @@ func verifyCommonTables(
 			res.MismatchingTableDefinitions = append(
 				res.MismatchingTableDefinitions,
 				MismatchingTableDefinition{
-					ConnID:        conns[0].ID,
+					ConnID:        truthConn.ID(),
 					TableMetadata: truthTbl,
 					Info:          "missing a PRIMARY KEY - results cannot be compared",
 				},
@@ -136,9 +137,9 @@ func verifyCommonTables(
 		comparableColumns := mapColumns(truthCols)
 
 		for i := 1; i < len(conns); i++ {
-			conn := conns[i]
+			compareConn := conns[i]
 			truthMappedCols := mapColumns(truthCols)
-			targetTbl := tables[conn.ID][tblIdx]
+			targetTbl := tables[compareConn.ID()][tblIdx]
 			compareColumns, err := getColumns(ctx, conns[i], targetTbl.OID)
 			if err != nil {
 				return nil, errors.Wrap(err, "error getting columns for table")
@@ -151,7 +152,7 @@ func verifyCommonTables(
 					res.MismatchingTableDefinitions = append(
 						res.MismatchingTableDefinitions,
 						MismatchingTableDefinition{
-							ConnID:        conn.ID,
+							ConnID:        compareConn.ID(),
 							TableMetadata: targetTbl,
 							Info:          fmt.Sprintf("extraneous column %s found", targetCol.columnName),
 						},
@@ -165,24 +166,24 @@ func verifyCommonTables(
 					res.MismatchingTableDefinitions = append(
 						res.MismatchingTableDefinitions,
 						MismatchingTableDefinition{
-							ConnID:        conn.ID,
+							ConnID:        compareConn.ID(),
 							TableMetadata: targetTbl,
 							Info: fmt.Sprintf(
 								"column %s NOT NULL mismatch: %s=%t vs %s=%t",
 								targetCol.columnName,
-								conns[0].ID,
+								truthConn.ID(),
 								sourceCol.notNull,
-								conn.ID,
+								compareConn.ID(),
 								targetCol.notNull,
 							),
 						},
 					)
 				}
-				truthTyp, err := getDataType(ctx, conns[0].Conn, sourceCol.typeOID)
+				truthTyp, err := getDataType(ctx, truthConn, sourceCol.typeOID)
 				if err != nil {
 					return nil, err
 				}
-				compareTyp, err := getDataType(ctx, conn.Conn, targetCol.typeOID)
+				compareTyp, err := getDataType(ctx, compareConn, targetCol.typeOID)
 				if err != nil {
 					return nil, err
 				}
@@ -191,14 +192,14 @@ func verifyCommonTables(
 					res.MismatchingTableDefinitions = append(
 						res.MismatchingTableDefinitions,
 						MismatchingTableDefinition{
-							ConnID:        conn.ID,
+							ConnID:        compareConn.ID(),
 							TableMetadata: targetTbl,
 							Info: fmt.Sprintf(
 								"column type mismatch on %s: %s=%s vs %s=%s",
 								targetCol.columnName,
-								conns[0].ID,
+								truthConn.ID(),
 								truthTyp.Name,
-								conn.ID,
+								compareConn.ID(),
 								compareTyp.Name,
 							),
 						},
@@ -210,7 +211,7 @@ func verifyCommonTables(
 				res.MismatchingTableDefinitions = append(
 					res.MismatchingTableDefinitions,
 					MismatchingTableDefinition{
-						ConnID:        conn.ID,
+						ConnID:        compareConn.ID(),
 						TableMetadata: targetTbl,
 						Info: fmt.Sprintf(
 							"missing column %s",
@@ -221,7 +222,7 @@ func verifyCommonTables(
 				delete(comparableColumns, colName)
 			}
 
-			targetPKCols, err := getPrimaryKey(ctx, conn, targetTbl.OID)
+			targetPKCols, err := getPrimaryKey(ctx, compareConn, targetTbl.OID)
 			if err != nil {
 				return nil, errors.Wrap(err, "error getting primary key")
 			}
@@ -244,7 +245,7 @@ func verifyCommonTables(
 				res.MismatchingTableDefinitions = append(
 					res.MismatchingTableDefinitions,
 					MismatchingTableDefinition{
-						ConnID:        conn.ID,
+						ConnID:        compareConn.ID(),
 						TableMetadata: targetTbl,
 						Info:          "PRIMARY KEY does not match source of truth (columns and types must match)",
 					},
@@ -279,7 +280,8 @@ func verifyCommonTables(
 	return ret, nil
 }
 
-func getDataType(ctx context.Context, conn *pgx.Conn, oid oid.Oid) (*pgtype.Type, error) {
+func getDataType(ctx context.Context, inConn dbconn.Conn, oid oid.Oid) (*pgtype.Type, error) {
+	conn := inConn.(*dbconn.PGConn)
 	if typ, ok := conn.TypeMap().TypeForOID(uint32(oid)); ok {
 		return typ, nil
 	}

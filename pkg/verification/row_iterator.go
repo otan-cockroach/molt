@@ -7,11 +7,12 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree/treecmp"
 	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/molt/pkg/dbconn"
 	"github.com/jackc/pgx/v5"
 )
 
 type rowIterator struct {
-	conn         Conn
+	conn         dbconn.Conn
 	table        rowVerifiableTableShard
 	rowBatchSize int
 	connIdx      int
@@ -26,11 +27,15 @@ type rowIterator struct {
 }
 
 func newRowIterator(
-	ctx context.Context, conn Conn, connIdx int, table rowVerifiableTableShard, rowBatchSize int,
+	ctx context.Context,
+	conn dbconn.Conn,
+	connIdx int,
+	table rowVerifiableTableShard,
+	rowBatchSize int,
 ) (*rowIterator, error) {
 	// Initialize the type map on the connection.
 	for _, typOID := range table.MatchingColumnTypeOIDs[connIdx] {
-		if _, err := getDataType(ctx, conn.Conn, typOID); err != nil {
+		if _, err := getDataType(ctx, conn.(*dbconn.PGConn), typOID); err != nil {
 			return nil, errors.Wrapf(err, "error initializing type oid %d", typOID)
 		}
 	}
@@ -89,7 +94,7 @@ func (it *rowIterator) hasNext(ctx context.Context) bool {
 				it.err = err
 				return false
 			}
-			it.peekCache, err = convertRowValues(it.conn.Conn.TypeMap(), rows, it.table.MatchingColumnTypeOIDs[it.connIdx])
+			it.peekCache, err = convertRowValues(it.conn.(*dbconn.PGConn).TypeMap(), rows, it.table.MatchingColumnTypeOIDs[it.connIdx])
 			if err != nil {
 				it.err = err
 				return false
@@ -145,7 +150,7 @@ func (it *rowIterator) nextPage(ctx context.Context) error {
 
 	f := tree.NewFmtCtx(tree.FmtParsableNumerics)
 	f.FormatNode(&it.queryCache)
-	rows, err := it.conn.Conn.Query(ctx, f.CloseAndGetString())
+	rows, err := it.conn.(*dbconn.PGConn).Query(ctx, f.CloseAndGetString())
 	if err != nil {
 		return errors.Wrapf(err, "error getting rows for table %s.%s from %s", it.table.Schema, it.table.Table, it.conn.ID)
 	}

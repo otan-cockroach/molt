@@ -8,15 +8,8 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/pkg/ctxgroup"
-	"github.com/jackc/pgx/v5"
+	"github.com/cockroachdb/molt/pkg/dbconn"
 )
-
-type ConnID string
-
-type Conn struct {
-	Conn *pgx.Conn
-	ID   ConnID
-}
 
 func (tm TableMetadata) Compare(o TableMetadata) int {
 	if c := strings.Compare(string(tm.Schema), string(o.Schema)); c != 0 {
@@ -60,7 +53,9 @@ func WithTableSplits(c int) VerifyOpt {
 }
 
 // Verify verifies the given connections have matching tables and contents.
-func Verify(ctx context.Context, conns []Conn, reporter Reporter, inOpts ...VerifyOpt) error {
+func Verify(
+	ctx context.Context, conns []dbconn.Conn, reporter Reporter, inOpts ...VerifyOpt,
+) error {
 	opts := verifyOpts{
 		concurrency:  DefaultConcurrency,
 		rowBatchSize: DefaultRowBatchSize,
@@ -167,24 +162,24 @@ func Verify(ctx context.Context, conns []Conn, reporter Reporter, inOpts ...Veri
 
 func verifyDataWorker(
 	ctx context.Context,
-	conns []Conn,
+	conns []dbconn.Conn,
 	reporter Reporter,
 	rowBatchSize int,
 	tbl rowVerifiableTableShard,
 ) error {
 	// Copy connections over naming wise, but initialize a new pgx connection
 	// for each table.
-	workerConns := make([]Conn, len(conns))
-	copy(workerConns, conns)
+	workerConns := make([]dbconn.Conn, len(conns))
 	for i := range workerConns {
+		// Make a copy of i so the worker closes correctly.
 		i := i
 		var err error
-		workerConns[i].Conn, err = pgx.ConnectConfig(ctx, conns[i].Conn.Config())
+		workerConns[i], err = conns[i].Clone(ctx)
 		if err != nil {
 			return errors.Wrap(err, "error establishing connection to compare")
 		}
 		defer func() {
-			_ = workerConns[i].Conn.Close(ctx)
+			_ = workerConns[i].Close(ctx)
 		}()
 	}
 	return compareRows(ctx, workerConns, tbl, rowBatchSize, reporter)

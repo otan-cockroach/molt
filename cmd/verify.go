@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
+	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/molt/pkg/dbconn"
 	"github.com/cockroachdb/molt/pkg/verification"
-	"github.com/jackc/pgx/v5"
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -26,14 +27,21 @@ var (
 			defer reporter.Close()
 
 			ctx := context.Background()
-			var conns []verification.Conn
+			var conns []dbconn.Conn
 			for _, arg := range args {
-				conn, err := pgx.Connect(ctx, arg)
-				if err != nil {
-					return errors.Wrapf(err, "error connecting to %s", arg)
+				var preferredID dbconn.ID
+				connStr := arg
+				splitArgs := strings.SplitN(arg, "===", 2)
+				if len(splitArgs) == 2 {
+					preferredID, connStr = dbconn.ID(splitArgs[0]), splitArgs[1]
 				}
-				conns = append(conns, verification.Conn{ID: verification.ConnID(arg), Conn: conn})
-				reporter.Report(verification.StatusReport{Info: fmt.Sprintf("connected to %s", arg)})
+				reporter.Report(verification.StatusReport{Info: fmt.Sprintf("connecting to %s", connStr)})
+				conn, err := dbconn.Connect(ctx, preferredID, connStr)
+				if err != nil {
+					return err
+				}
+				conns = append(conns, conn)
+				reporter.Report(verification.StatusReport{Info: fmt.Sprintf("connected to %s as %s", connStr, conn.ID())})
 			}
 
 			reporter.Report(verification.StatusReport{Info: "verification in progress"})

@@ -7,6 +7,7 @@ import (
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/molt/pkg/dbconn"
 	"github.com/lib/pq/oid"
 )
 
@@ -63,7 +64,7 @@ type rowVerifiableTableShard struct {
 
 func compareRows(
 	ctx context.Context,
-	conns []Conn,
+	conns []dbconn.Conn,
 	table rowVerifiableTableShard,
 	rowBatchSize int,
 	reporter Reporter,
@@ -73,7 +74,7 @@ func compareRows(
 		var err error
 		iterators[i], err = newRowIterator(ctx, conn, i, table, rowBatchSize)
 		if err != nil {
-			return errors.Wrapf(err, "error initializing row iterator on %s", conn.Conn)
+			return errors.Wrapf(err, "error initializing row iterator on %s", conn.ID())
 		}
 	}
 
@@ -98,7 +99,7 @@ func compareRows(
 				if !it.hasNext(ctx) && it.error() == nil {
 					stats.numMissing++
 					reporter.Report(MissingRow{
-						ConnID:            it.conn.ID,
+						ConnID:            it.conn.ID(),
 						Schema:            table.Schema,
 						Table:             table.Table,
 						PrimaryKeyColumns: table.PrimaryKeyColumns,
@@ -120,7 +121,7 @@ func compareRows(
 					// Extraneous row. Log and continue.
 					it.next(ctx)
 					reporter.Report(ExtraneousRow{
-						ConnID:            it.conn.ID,
+						ConnID:            it.conn.ID(),
 						Schema:            table.Schema,
 						Table:             table.Table,
 						PrimaryKeyColumns: table.PrimaryKeyColumns,
@@ -131,7 +132,7 @@ func compareRows(
 					// Matching primary key. compare values and break loop.
 					targetVals = it.next(ctx)
 					mismatches := MismatchingRow{
-						ConnID:            it.conn.ID,
+						ConnID:            it.conn.ID(),
 						Schema:            table.Schema,
 						Table:             table.Table,
 						PrimaryKeyColumns: table.PrimaryKeyColumns,
@@ -154,7 +155,7 @@ func compareRows(
 				case -1:
 					// Missing a row.
 					reporter.Report(MissingRow{
-						ConnID:            it.conn.ID,
+						ConnID:            it.conn.ID(),
 						Schema:            table.Schema,
 						Table:             table.Table,
 						PrimaryKeyColumns: table.PrimaryKeyColumns,
@@ -171,7 +172,7 @@ func compareRows(
 		for it.hasNext(ctx) {
 			targetVals := it.next(ctx)
 			reporter.Report(ExtraneousRow{
-				ConnID:            it.conn.ID,
+				ConnID:            it.conn.ID(),
 				Schema:            table.Schema,
 				Table:             table.Table,
 				PrimaryKeyColumns: table.PrimaryKeyColumns,
@@ -181,7 +182,7 @@ func compareRows(
 		}
 		if err := it.error(); err != nil {
 			reporter.Report(StatusReport{
-				Info: fmt.Sprintf("error validating %s.%s on %s: %v", table.Schema, table.Table, it.conn.ID, err),
+				Info: fmt.Sprintf("error validating %s.%s on %s: %v", table.Schema, table.Table, it.conn.ID(), err),
 			})
 		}
 	}

@@ -34,8 +34,8 @@ CREATE TABLE test_table (
 INSERT INTO test_table(id)
 SELECT id FROM generate_series(1, 100) AS t(id)
 ----
-[conn 0] INSERT 0 100
-[conn 1] INSERT 0 100
+[truth] INSERT 0 100
+[lie] INSERT 0 100
 
 verify
 ----
@@ -56,8 +56,8 @@ verify splits=4
 exec all
 DROP TABLE test_table
 ----
-[conn 0] DROP TABLE
-[conn 1] DROP TABLE
+[truth] DROP TABLE
+[lie] DROP TABLE
 
 #
 # Check we report mismatches.
@@ -69,8 +69,8 @@ CREATE TABLE common_table (
     str TEXT
 )
 ----
-[conn 0] CREATE TABLE
-[conn 1] CREATE TABLE
+[truth] CREATE TABLE
+[lie] CREATE TABLE
 
 exec source_of_truth
 INSERT INTO common_table VALUES
@@ -80,7 +80,7 @@ INSERT INTO common_table VALUES
     (200, 'also same value'),
     (250, 'missing on lie')
 ----
-[conn 0] INSERT 0 5
+[truth] INSERT 0 5
 
 exec non_source_of_truth
 INSERT INTO common_table VALUES
@@ -90,7 +90,7 @@ INSERT INTO common_table VALUES
     (200, 'also same value'),
     (300, 'missing on truth')
 ----
-[conn 1] INSERT 0 5
+[lie] INSERT 0 5
 
 # Verify with extraneous rows on non source of truth.
 verify
@@ -108,7 +108,7 @@ exec source_of_truth
 INSERT INTO common_table VALUES
      (400, 'same value')
 ----
-[conn 0] INSERT 0 1
+[truth] INSERT 0 1
 
 verify
 ----
@@ -132,7 +132,7 @@ INSERT INTO table_misaligned_columns VALUES
     (1, 2, 1),
     (2, 3, 2)
 ----
-[conn 0] INSERT 0 2
+[truth] INSERT 0 2
 
 exec non_source_of_truth
 CREATE TABLE table_misaligned_columns (
@@ -144,7 +144,7 @@ INSERT INTO table_misaligned_columns VALUES
     (1, 2, 1),
     (2, 4, 2)
 ----
-[conn 1] INSERT 0 2
+[lie] INSERT 0 2
 
 verify
 ----
@@ -165,5 +165,5 @@ verify
 exec all
 DROP TABLE table_misaligned_columns
 ----
-[conn 0] DROP TABLE
-[conn 1] DROP TABLE
+[truth] DROP TABLE
+[lie] DROP TABLE

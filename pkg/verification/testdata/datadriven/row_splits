@@ -3,8 +3,8 @@
 exec all
 CREATE TABLE test_table (id INT4 PRIMARY KEY)
 ----
-[conn 0] CREATE TABLE
-[conn 1] CREATE TABLE
+[truth] CREATE TABLE
+[lie] CREATE TABLE
 
 verify splits=4
 ----
@@ -15,8 +15,8 @@ verify splits=4
 exec all
 INSERT INTO test_table VALUES (1)
 ----
-[conn 0] INSERT 0 1
-[conn 1] INSERT 0 1
+[truth] INSERT 0 1
+[lie] INSERT 0 1
 
 verify splits=4
 ----
@@ -29,8 +29,8 @@ verify splits=4
 exec all
 INSERT INTO test_table VALUES (2)
 ----
-[conn 0] INSERT 0 1
-[conn 1] INSERT 0 1
+[truth] INSERT 0 1
+[lie] INSERT 0 1
 
 verify splits=4
 ----
@@ -51,8 +51,8 @@ INSERT INTO test_table VALUES
     ('205ffda9-7ad4-4783-9f9c-efad83a5eacd'),
     ('9337f4b4-298c-4fbd-b6c1-ef487d555a57');
 ----
-[conn 0] INSERT 0 2
-[conn 1] INSERT 0 2
+[truth] INSERT 0 2
+[lie] INSERT 0 2
 
 verify splits=4
 ----
@@ -73,8 +73,8 @@ INSERT INTO test_table VALUES
     ('2132323'),
     (-19999443.23);
 ----
-[conn 0] INSERT 0 2
-[conn 1] INSERT 0 2
+[truth] INSERT 0 2
+[lie] INSERT 0 2
 
 verify splits=4
 ----
@@ -91,8 +91,8 @@ exec all
 INSERT INTO test_table VALUES
     ('-Infinity');
 ----
-[conn 0] INSERT 0 1
-[conn 1] INSERT 0 1
+[truth] INSERT 0 1
+[lie] INSERT 0 1
 
 verify splits=4
 ----
