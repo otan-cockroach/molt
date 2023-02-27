@@ -1,0 +1,9 @@
+mysql
+mysql://root@localhost:3306/defaultdb
+----
+root@tcp(localhost:3306)/defaultdb?allowNativePasswords=false&checkConnLiveness=false&maxAllowedPacket=0
+
+mysql
+mysql://username:password@192.168.0.1:3306/defaultdb?query=true
+----
+username:password@tcp(192.168.0.1:3306)/defaultdb?allowNativePasswords=false&checkConnLiveness=false&maxAllowedPacket=0
