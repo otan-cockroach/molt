@@ -17,14 +17,14 @@ CREATE TABLE test_table (
     PRIMARY KEY (id, id_b)
 )
 ----
-[truth] 0 rows affected
-[lie] CREATE TABLE
+[mysql] 0 rows affected
+[crdb] CREATE TABLE
 
 exec all
 INSERT INTO test_table (id) VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10);
 ----
-[truth] 10 rows affected
-[lie] INSERT 0 10
+[mysql] 10 rows affected
+[crdb] INSERT 0 10
 
 verify
 ----
@@ -34,8 +34,8 @@ verify
 exec all
 DROP TABLE test_table
 ----
-[truth] 0 rows affected
-[lie] DROP TABLE
+[mysql] 0 rows affected
+[crdb] DROP TABLE
 
 # All the slightly differently named tables.
 exec source_of_truth
@@ -46,7 +46,7 @@ CREATE TABLE test_table (
     dt_table DATETIME NOT NULL DEFAULT '2020-01-02 19:18:17'
 )
 ----
-[truth] 0 rows affected
+[mysql] 0 rows affected
 
 exec non_source_of_truth
 CREATE TABLE test_table (
@@ -56,13 +56,13 @@ CREATE TABLE test_table (
     dt_table TIMESTAMP NOT NULL DEFAULT '2020-01-02 19:18:17'
 )
 ----
-[lie] CREATE TABLE
+[crdb] CREATE TABLE
 
 exec all
 INSERT INTO test_table (id) VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10);
 ----
-[truth] 10 rows affected
-[lie] INSERT 0 10
+[mysql] 10 rows affected
+[crdb] INSERT 0 10
 
 verify
 ----
@@ -72,5 +72,73 @@ verify
 exec all
 DROP TABLE test_table
 ----
-[truth] 0 rows affected
-[lie] DROP TABLE
+[mysql] 0 rows affected
+[crdb] DROP TABLE
+
+# Table with differences.
+
+exec all
+CREATE TABLE common_table (
+    id INT8 PRIMARY KEY,
+    str TEXT
+)
+----
+[mysql] 0 rows affected
+[crdb] CREATE TABLE
+
+exec source_of_truth
+INSERT INTO common_table VALUES
+    (100, 'same value'),
+    (125, 'i am missing'),
+    (150, 'different value'),
+    (175, NULL),
+    (200, 'also same value'),
+    (250, 'missing on lie')
+----
+[mysql] 6 rows affected
+
+exec non_source_of_truth
+INSERT INTO common_table VALUES
+    (50, 'extraneous row'),
+    (100, 'same value'),
+    (150, NULL),
+    (175, NULL),
+    (200, 'also same value'),
+    (300, 'missing on truth')
+----
+[crdb] INSERT 0 6
+
+# Verify with extraneous rows on non source of truth.
+verify
+----
+[STATUS] starting verify on public.common_table, shard 1/1
+[ROW MISMATCH] table public.common_table on crdb has an extraneous row with PK (id=50)
+[ROW MISMATCH] table public.common_table on crdb is missing a row with PK (id=125)
+[ROW MISMATCH] table public.common_table on crdb has a mismatching row on (id=150): column str: NULL vs 'different value'
+[ROW MISMATCH] table public.common_table on crdb is missing a row with PK (id=250)
+[ROW MISMATCH] table public.common_table on crdb has an extraneous row with PK (id=300)
+[STATUS] finished row verification on public.common_table (shard 1/1): truth rows seen: 6, success: 3, missing: 2, mismatch: 1, extraneous: 2
+
+# Verify with extraneous rows on source of truth.
+exec source_of_truth
+INSERT INTO common_table VALUES
+     (400, 'same value')
+----
+[mysql] 1 rows affected
+
+verify
+----
+[STATUS] starting verify on public.common_table, shard 1/1
+[ROW MISMATCH] table public.common_table on crdb has an extraneous row with PK (id=50)
+[ROW MISMATCH] table public.common_table on crdb is missing a row with PK (id=125)
+[ROW MISMATCH] table public.common_table on crdb has a mismatching row on (id=150): column str: NULL vs 'different value'
+[ROW MISMATCH] table public.common_table on crdb is missing a row with PK (id=250)
+[ROW MISMATCH] table public.common_table on crdb has an extraneous row with PK (id=300)
+[ROW MISMATCH] table public.common_table on crdb is missing a row with PK (id=400)
+[STATUS] finished row verification on public.common_table (shard 1/1): truth rows seen: 7, success: 3, missing: 3, mismatch: 1, extraneous: 2
+
+exec all
+DROP TABLE common_table
+----
+[mysql] 0 rows affected
+[crdb] DROP TABLE

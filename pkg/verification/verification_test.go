@@ -24,8 +24,8 @@ func TestDataDrivenPG(t *testing.T) {
 		"testdata/datadriven/pg",
 		func(t *testing.T, path string) {
 			testDataDriven(t, path, []connArg{
-				{id: "truth", connStr: testutils.PGConnStr()},
-				{id: "lie", connStr: testutils.CRDBConnStr()},
+				{id: "pg", connStr: testutils.PGConnStr()},
+				{id: "crdb", connStr: testutils.CRDBConnStr()},
 			})
 		},
 	)
@@ -37,8 +37,8 @@ func TestDataDrivenMySQL(t *testing.T) {
 		"testdata/datadriven/mysql",
 		func(t *testing.T, path string) {
 			testDataDriven(t, path, []connArg{
-				{id: "truth", connStr: testutils.MySQLConnStr()},
-				{id: "lie", connStr: testutils.CRDBConnStr()},
+				{id: "mysql", connStr: testutils.MySQLConnStr()},
+				{id: "crdb", connStr: testutils.CRDBConnStr()},
 			})
 		},
 	)

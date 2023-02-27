@@ -1,22 +1,22 @@
 exec all
 CREATE TABLE in_both (id INT4 PRIMARY KEY)
 ----
-[truth] CREATE TABLE
-[lie] CREATE TABLE
+[pg] CREATE TABLE
+[crdb] CREATE TABLE
 
 exec source_of_truth
 CREATE TABLE truth_table (id INT4 PRIMARY KEY)
 ----
-[truth] CREATE TABLE
+[pg] CREATE TABLE
 
 exec non_source_of_truth
 CREATE TABLE non_truth_table (id INT4 PRIMARY KEY)
 ----
-[lie] CREATE TABLE
+[crdb] CREATE TABLE
 
 verify
 ----
-[DATABASE MISMATCH] lie is missing table public.truth_table
-[DATABASE MISMATCH] lie has an extraneous table public.non_truth_table
+[DATABASE MISMATCH] crdb is missing table public.truth_table
+[DATABASE MISMATCH] crdb has an extraneous table public.non_truth_table
 [STATUS] starting verify on public.in_both, shard 1/1
 [STATUS] finished row verification on public.in_both (shard 1/1): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0

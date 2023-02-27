@@ -3,8 +3,8 @@
 exec all
 CREATE TABLE test_table (id INT4 PRIMARY KEY)
 ----
-[truth] CREATE TABLE
-[lie] CREATE TABLE
+[pg] CREATE TABLE
+[crdb] CREATE TABLE
 
 verify splits=4
 ----
@@ -15,8 +15,8 @@ verify splits=4
 exec all
 INSERT INTO test_table VALUES (1)
 ----
-[truth] INSERT 0 1
-[lie] INSERT 0 1
+[pg] INSERT 0 1
+[crdb] INSERT 0 1
 
 verify splits=4
 ----
@@ -29,8 +29,8 @@ verify splits=4
 exec all
 INSERT INTO test_table VALUES (2)
 ----
-[truth] INSERT 0 1
-[lie] INSERT 0 1
+[pg] INSERT 0 1
+[crdb] INSERT 0 1
 
 verify splits=4
 ----
@@ -51,8 +51,8 @@ INSERT INTO test_table VALUES
     ('205ffda9-7ad4-4783-9f9c-efad83a5eacd'),
     ('9337f4b4-298c-4fbd-b6c1-ef487d555a57');
 ----
-[truth] INSERT 0 2
-[lie] INSERT 0 2
+[pg] INSERT 0 2
+[crdb] INSERT 0 2
 
 verify splits=4
 ----
@@ -73,8 +73,8 @@ INSERT INTO test_table VALUES
     ('2132323'),
     (-19999443.23);
 ----
-[truth] INSERT 0 2
-[lie] INSERT 0 2
+[pg] INSERT 0 2
+[crdb] INSERT 0 2
 
 verify splits=4
 ----
@@ -91,12 +91,12 @@ exec all
 INSERT INTO test_table VALUES
     ('-Infinity');
 ----
-[truth] INSERT 0 1
-[lie] INSERT 0 1
+[pg] INSERT 0 1
+[crdb] INSERT 0 1
 
 verify splits=4
 ----
 [STATUS] unable to identify a split for primary key public.test_table, defaulting to a full scan
 [STATUS] starting verify on public.test_table, shard 1/1
-[ROW MISMATCH] table public.test_table on lie has an extraneous row with PK (id=-1.9999444e+07)
+[ROW MISMATCH] table public.test_table on crdb has an extraneous row with PK (id=-1.9999444e+07)
 [STATUS] finished row verification on public.test_table (shard 1/1): truth rows seen: 3, success: 3, missing: 0, mismatch: 0, extraneous: 1

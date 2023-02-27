@@ -36,8 +36,8 @@ CREATE TABLE test_table (
 INSERT INTO test_table(id)
 SELECT id FROM generate_series(1, 100) AS t(id)
 ----
-[truth] INSERT 0 100
-[lie] INSERT 0 100
+[pg] INSERT 0 100
+[crdb] INSERT 0 100
 
 verify
 ----
@@ -58,8 +58,8 @@ verify splits=4
 exec all
 DROP TABLE test_table
 ----
-[truth] DROP TABLE
-[lie] DROP TABLE
+[pg] DROP TABLE
+[crdb] DROP TABLE
 
 #
 # Check we report mismatches.
@@ -71,8 +71,8 @@ CREATE TABLE common_table (
     str TEXT
 )
 ----
-[truth] CREATE TABLE
-[lie] CREATE TABLE
+[pg] CREATE TABLE
+[crdb] CREATE TABLE
 
 exec source_of_truth
 INSERT INTO common_table VALUES
@@ -83,7 +83,7 @@ INSERT INTO common_table VALUES
     (200, 'also same value'),
     (250, 'missing on lie')
 ----
-[truth] INSERT 0 6
+[pg] INSERT 0 6
 
 exec non_source_of_truth
 INSERT INTO common_table VALUES
@@ -94,17 +94,17 @@ INSERT INTO common_table VALUES
     (200, 'also same value'),
     (300, 'missing on truth')
 ----
-[lie] INSERT 0 6
+[crdb] INSERT 0 6
 
 # Verify with extraneous rows on non source of truth.
 verify
 ----
 [STATUS] starting verify on public.common_table, shard 1/1
-[ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=50)
-[ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=125)
-[ROW MISMATCH] table public.common_table on lie has a mismatching row on (id=150): column str: NULL vs 'different value'
-[ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=250)
-[ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=300)
+[ROW MISMATCH] table public.common_table on crdb has an extraneous row with PK (id=50)
+[ROW MISMATCH] table public.common_table on crdb is missing a row with PK (id=125)
+[ROW MISMATCH] table public.common_table on crdb has a mismatching row on (id=150): column str: NULL vs 'different value'
+[ROW MISMATCH] table public.common_table on crdb is missing a row with PK (id=250)
+[ROW MISMATCH] table public.common_table on crdb has an extraneous row with PK (id=300)
 [STATUS] finished row verification on public.common_table (shard 1/1): truth rows seen: 6, success: 3, missing: 2, mismatch: 1, extraneous: 2
 
 # Verify with extraneous rows on source of truth.
@@ -112,24 +112,24 @@ exec source_of_truth
 INSERT INTO common_table VALUES
      (400, 'same value')
 ----
-[truth] INSERT 0 1
+[pg] INSERT 0 1
 
 verify
 ----
 [STATUS] starting verify on public.common_table, shard 1/1
-[ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=50)
-[ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=125)
-[ROW MISMATCH] table public.common_table on lie has a mismatching row on (id=150): column str: NULL vs 'different value'
-[ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=250)
-[ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=300)
-[ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=400)
+[ROW MISMATCH] table public.common_table on crdb has an extraneous row with PK (id=50)
+[ROW MISMATCH] table public.common_table on crdb is missing a row with PK (id=125)
+[ROW MISMATCH] table public.common_table on crdb has a mismatching row on (id=150): column str: NULL vs 'different value'
+[ROW MISMATCH] table public.common_table on crdb is missing a row with PK (id=250)
+[ROW MISMATCH] table public.common_table on crdb has an extraneous row with PK (id=300)
+[ROW MISMATCH] table public.common_table on crdb is missing a row with PK (id=400)
 [STATUS] finished row verification on public.common_table (shard 1/1): truth rows seen: 7, success: 3, missing: 3, mismatch: 1, extraneous: 2
 
 exec all
 DROP TABLE common_table
 ----
-[truth] DROP TABLE
-[lie] DROP TABLE
+[pg] DROP TABLE
+[crdb] DROP TABLE
 
 # Test two tables, but mismatching columns.
 exec source_of_truth
@@ -142,7 +142,7 @@ INSERT INTO table_misaligned_columns VALUES
     (1, 2, 1),
     (2, 3, 2)
 ----
-[truth] INSERT 0 2
+[pg] INSERT 0 2
 
 exec non_source_of_truth
 CREATE TABLE table_misaligned_columns (
@@ -154,21 +154,21 @@ INSERT INTO table_misaligned_columns VALUES
     (1, 2, 1),
     (2, 4, 2)
 ----
-[lie] INSERT 0 2
+[crdb] INSERT 0 2
 
 verify
 ----
-[TABLE MISMATCH] table public.table_misaligned_columns on lie has an issue: extraneous column not_common_b found
-[TABLE MISMATCH] table public.table_misaligned_columns on lie has an issue: missing column not_common_a
+[TABLE MISMATCH] table public.table_misaligned_columns on crdb has an issue: extraneous column not_common_b found
+[TABLE MISMATCH] table public.table_misaligned_columns on crdb has an issue: missing column not_common_a
 [STATUS] starting verify on public.table_misaligned_columns, shard 1/1
-[ROW MISMATCH] table public.table_misaligned_columns on lie has a mismatching row on (id=2): column a: 4 vs 3
+[ROW MISMATCH] table public.table_misaligned_columns on crdb has a mismatching row on (id=2): column a: 4 vs 3
 [STATUS] finished row verification on public.table_misaligned_columns (shard 1/1): truth rows seen: 2, success: 1, missing: 0, mismatch: 1, extraneous: 0
 
 exec all
 DROP TABLE table_misaligned_columns
 ----
-[truth] DROP TABLE
-[lie] DROP TABLE
+[pg] DROP TABLE
+[crdb] DROP TABLE
 
 # Test two tables with comparable types that are not the same.
 exec source_of_truth
@@ -181,7 +181,7 @@ INSERT INTO comparable_type VALUES
     (1, 1.5, '[]'::jsonb),
     (3, 4, '["mismatch"]'::jsonb);
 ----
-[truth] INSERT 0 2
+[pg] INSERT 0 2
 
 exec non_source_of_truth
 CREATE TABLE comparable_type (
@@ -193,10 +193,10 @@ INSERT INTO comparable_type VALUES
     (1, 1.5, '[]'::jsonb),
     (3, 4, '["big mismatch"]'::jsonb);
 ----
-[lie] INSERT 0 2
+[crdb] INSERT 0 2
 
 verify
 ----
 [STATUS] starting verify on public.comparable_type, shard 1/1
-[ROW MISMATCH] table public.comparable_type on lie has a mismatching row on (id=3): column j: '["big mismatch"]' vs '["mismatch"]'
+[ROW MISMATCH] table public.comparable_type on crdb has a mismatching row on (id=3): column j: '["big mismatch"]' vs '["mismatch"]'
 [STATUS] finished row verification on public.comparable_type (shard 1/1): truth rows seen: 2, success: 1, missing: 0, mismatch: 1, extraneous: 0
