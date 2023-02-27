@@ -77,20 +77,22 @@ INSERT INTO common_table VALUES
     (100, 'same value'),
     (125, 'i am missing'),
     (150, 'different value'),
+    (175, NULL),
     (200, 'also same value'),
     (250, 'missing on lie')
 ----
-[truth] INSERT 0 5
+[truth] INSERT 0 6
 
 exec non_source_of_truth
 INSERT INTO common_table VALUES
     (50, 'extraneous row'),
     (100, 'same value'),
-    (150, 'bad value'),
+    (150, NULL),
+    (175, NULL),
     (200, 'also same value'),
     (300, 'missing on truth')
 ----
-[lie] INSERT 0 5
+[lie] INSERT 0 6
 
 # Verify with extraneous rows on non source of truth.
 verify
@@ -98,10 +100,10 @@ verify
 [STATUS] starting verify on public.common_table, shard 1/1
 [ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=50)
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=125)
-[ROW MISMATCH] table public.common_table on lie has a mismatching row on (id=150): column str: 'bad value' vs 'different value'
+[ROW MISMATCH] table public.common_table on lie has a mismatching row on (id=150): column str: NULL vs 'different value'
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=250)
 [ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=300)
-[STATUS] finished row verification on public.common_table (shard 1/1): truth rows seen: 5, success: 2, missing: 2, mismatch: 1, extraneous: 2
+[STATUS] finished row verification on public.common_table (shard 1/1): truth rows seen: 6, success: 3, missing: 2, mismatch: 1, extraneous: 2
 
 # Verify with extraneous rows on source of truth.
 exec source_of_truth
@@ -115,11 +117,11 @@ verify
 [STATUS] starting verify on public.common_table, shard 1/1
 [ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=50)
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=125)
-[ROW MISMATCH] table public.common_table on lie has a mismatching row on (id=150): column str: 'bad value' vs 'different value'
+[ROW MISMATCH] table public.common_table on lie has a mismatching row on (id=150): column str: NULL vs 'different value'
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=250)
 [ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=300)
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=400)
-[STATUS] finished row verification on public.common_table (shard 1/1): truth rows seen: 6, success: 2, missing: 3, mismatch: 1, extraneous: 2
+[STATUS] finished row verification on public.common_table (shard 1/1): truth rows seen: 7, success: 3, missing: 3, mismatch: 1, extraneous: 2
 
 # Test two tables, but mismatching columns.
 exec source_of_truth
@@ -153,11 +155,11 @@ verify
 [STATUS] starting verify on public.common_table, shard 1/1
 [ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=50)
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=125)
-[ROW MISMATCH] table public.common_table on lie has a mismatching row on (id=150): column str: 'bad value' vs 'different value'
+[ROW MISMATCH] table public.common_table on lie has a mismatching row on (id=150): column str: NULL vs 'different value'
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=250)
 [ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=300)
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=400)
-[STATUS] finished row verification on public.common_table (shard 1/1): truth rows seen: 6, success: 2, missing: 3, mismatch: 1, extraneous: 2
+[STATUS] finished row verification on public.common_table (shard 1/1): truth rows seen: 7, success: 3, missing: 3, mismatch: 1, extraneous: 2
 [STATUS] starting verify on public.table_misaligned_columns, shard 1/1
 [ROW MISMATCH] table public.table_misaligned_columns on lie has a mismatching row on (id=2): column a: 4 vs 3
 [STATUS] finished row verification on public.table_misaligned_columns (shard 1/1): truth rows seen: 2, success: 1, missing: 0, mismatch: 1, extraneous: 0

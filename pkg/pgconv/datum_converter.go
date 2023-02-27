@@ -36,6 +36,9 @@ func (p parseTimeContext) GetDateStyle() pgdate.DateStyle {
 var timeCtx = &parseTimeContext{}
 
 func ConvertRowValue(typMap *pgtype.Map, val any, typOID oid.Oid) (tree.Datum, error) {
+	if val == nil {
+		return tree.DNull, nil
+	}
 	if _, isArray := types.ArrayOids[typOID]; isArray {
 		arrayType := types.OidToType[typOID]
 		ret := tree.NewDArray(arrayType.ArrayContents())
