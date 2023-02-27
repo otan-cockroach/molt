@@ -8,6 +8,7 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/pkg/dbconn"
+	"github.com/cockroachdb/molt/pkg/rowiterator"
 	"github.com/lib/pq/oid"
 )
 
@@ -69,10 +70,23 @@ func compareRows(
 	rowBatchSize int,
 	reporter Reporter,
 ) error {
-	iterators := make([]*rowIterator, len(conns))
+	iterators := make([]*rowiterator.Iterator, len(conns))
 	for i, conn := range conns {
 		var err error
-		iterators[i], err = newRowIterator(ctx, conn, i, table, rowBatchSize)
+		iterators[i], err = rowiterator.NewIterator(
+			ctx,
+			conn,
+			rowiterator.Table{
+				Schema:            table.Schema,
+				Table:             table.Table,
+				ColumnNames:       table.MatchingColumns,
+				ColumnOIDs:        table.MatchingColumnTypeOIDs[i],
+				PrimaryKeyColumns: table.PrimaryKeyColumns,
+				StartPKVals:       table.StartPKVals,
+				EndPKVals:         table.EndPKVals,
+			},
+			rowBatchSize,
+		)
 		if err != nil {
 			return errors.Wrapf(err, "error initializing row iterator on %s", conn.ID())
 		}
@@ -82,7 +96,7 @@ func compareRows(
 
 	var stats rowStats
 	truth := iterators[0]
-	for truth.hasNext(ctx) {
+	for truth.HasNext(ctx) {
 		if stats.numVerified%10000 == 0 && stats.numVerified > 0 {
 			reporter.Report(StatusReport{
 				Info: fmt.Sprintf("progress on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, stats.String()),
@@ -90,16 +104,16 @@ func compareRows(
 		}
 		stats.numVerified++
 
-		truthVals := truth.next(ctx)
+		truthVals := truth.Next(ctx)
 		for itIdx := 1; itIdx < len(iterators); itIdx++ {
 			it := iterators[itIdx]
 
 		itLoop:
 			for {
-				if !it.hasNext(ctx) && it.error() == nil {
+				if !it.HasNext(ctx) && it.Error() == nil {
 					stats.numMissing++
 					reporter.Report(MissingRow{
-						ConnID:            it.conn.ID(),
+						ConnID:            it.Conn.ID(),
 						Schema:            table.Schema,
 						Table:             table.Table,
 						PrimaryKeyColumns: table.PrimaryKeyColumns,
@@ -109,7 +123,7 @@ func compareRows(
 				}
 
 				// Check the primary key.
-				targetVals := it.peek(ctx)
+				targetVals := it.Peek(ctx)
 				var compareVal int
 				for i := range table.PrimaryKeyColumns {
 					if compareVal = truthVals[i].Compare(cmpCtx, targetVals[i]); compareVal != 0 {
@@ -119,9 +133,9 @@ func compareRows(
 				switch compareVal {
 				case 1:
 					// Extraneous row. Log and continue.
-					it.next(ctx)
+					it.Next(ctx)
 					reporter.Report(ExtraneousRow{
-						ConnID:            it.conn.ID(),
+						ConnID:            it.Conn.ID(),
 						Schema:            table.Schema,
 						Table:             table.Table,
 						PrimaryKeyColumns: table.PrimaryKeyColumns,
@@ -130,9 +144,9 @@ func compareRows(
 					stats.numExtraneous++
 				case 0:
 					// Matching primary key. compare values and break loop.
-					targetVals = it.next(ctx)
+					targetVals = it.Next(ctx)
 					mismatches := MismatchingRow{
-						ConnID:            it.conn.ID(),
+						ConnID:            it.Conn.ID(),
 						Schema:            table.Schema,
 						Table:             table.Table,
 						PrimaryKeyColumns: table.PrimaryKeyColumns,
@@ -155,7 +169,7 @@ func compareRows(
 				case -1:
 					// Missing a row.
 					reporter.Report(MissingRow{
-						ConnID:            it.conn.ID(),
+						ConnID:            it.Conn.ID(),
 						Schema:            table.Schema,
 						Table:             table.Table,
 						PrimaryKeyColumns: table.PrimaryKeyColumns,
@@ -169,10 +183,10 @@ func compareRows(
 	}
 
 	for _, it := range iterators {
-		for it.hasNext(ctx) {
-			targetVals := it.next(ctx)
+		for it.HasNext(ctx) {
+			targetVals := it.Next(ctx)
 			reporter.Report(ExtraneousRow{
-				ConnID:            it.conn.ID(),
+				ConnID:            it.Conn.ID(),
 				Schema:            table.Schema,
 				Table:             table.Table,
 				PrimaryKeyColumns: table.PrimaryKeyColumns,
@@ -180,9 +194,9 @@ func compareRows(
 			})
 			stats.numExtraneous++
 		}
-		if err := it.error(); err != nil {
+		if err := it.Error(); err != nil {
 			reporter.Report(StatusReport{
-				Info: fmt.Sprintf("error validating %s.%s on %s: %v", table.Schema, table.Table, it.conn.ID(), err),
+				Info: fmt.Sprintf("error validating %s.%s on %s: %v", table.Schema, table.Table, it.Conn.ID(), err),
 			})
 		}
 	}

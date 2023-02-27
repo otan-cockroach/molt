@@ -9,6 +9,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/lib/pq/oid"
 	_ "github.com/pingcap/tidb/types/parser_driver"
 )
 
@@ -91,4 +92,24 @@ func TestOnlyCleanDatabase(ctx context.Context, id ID, url string, dbName string
 		return ConnectMySQL(ctx, c.id, cfgCopy)
 	}
 	return nil, errors.AssertionFailedf("clean database not supported for %T", c)
+}
+
+func GetDataType(ctx context.Context, inConn Conn, oid oid.Oid) (*pgtype.Type, error) {
+	if typ, ok := inConn.TypeMap().TypeForOID(uint32(oid)); ok {
+		return typ, nil
+	}
+	conn, ok := inConn.(*PGConn)
+	if !ok {
+		return nil, errors.AssertionFailedf("only postgres expected here")
+	}
+	var typName string
+	if err := conn.QueryRow(ctx, "SELECT $1::oid::regtype", oid).Scan(&typName); err != nil {
+		return nil, errors.Wrapf(err, "error getting data type info for oid %d", oid)
+	}
+	typ, err := conn.LoadType(ctx, typName)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error loading type %s", typName)
+	}
+	conn.TypeMap().RegisterType(typ)
+	return typ, nil
 }

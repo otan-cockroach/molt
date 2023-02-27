@@ -1,4 +1,4 @@
-package verification
+package rowiterator
 
 import (
 	"context"
@@ -14,12 +14,10 @@ import (
 	"github.com/lib/pq/oid"
 )
 
-type rowIterator struct {
-	conn         dbconn.Conn
-	table        rowVerifiableTableShard
+type Iterator struct {
+	Conn         dbconn.Conn
+	table        Table
 	rowBatchSize int
-	connIdx      int
-
 	isComplete   bool
 	pkCursor     tree.Datums
 	peekCache    tree.Datums
@@ -27,6 +25,16 @@ type rowIterator struct {
 	currRows     rows
 	currRowsRead int
 	queryCache   tree.Select
+}
+
+type Table struct {
+	Schema            tree.Name
+	Table             tree.Name
+	ColumnNames       []tree.Name
+	ColumnOIDs        []oid.Oid
+	PrimaryKeyColumns []tree.Name
+	StartPKVals       []tree.Datum
+	EndPKVals         []tree.Datum
 }
 
 type rows interface {
@@ -49,29 +57,24 @@ func (r *pgRows) Datums() (tree.Datums, error) {
 	return pgconv.ConvertRowValues(r.typMap, vals, r.typOIDs)
 }
 
-func newRowIterator(
-	ctx context.Context,
-	conn dbconn.Conn,
-	connIdx int,
-	table rowVerifiableTableShard,
-	rowBatchSize int,
-) (*rowIterator, error) {
+func NewIterator(
+	ctx context.Context, conn dbconn.Conn, table Table, rowBatchSize int,
+) (*Iterator, error) {
 	// Initialize the type map on the connection.
-	for _, typOID := range table.MatchingColumnTypeOIDs[connIdx] {
-		if _, err := getDataType(ctx, conn, typOID); err != nil {
-			return nil, errors.Wrapf(err, "error initializing type oid %d", typOID)
+	for _, typOID := range table.ColumnOIDs {
+		if _, err := dbconn.GetDataType(ctx, conn, typOID); err != nil {
+			return nil, errors.Wrapf(err, "Error initializing type oid %d", typOID)
 		}
 	}
-	return &rowIterator{
-		conn:         conn,
+	return &Iterator{
+		Conn:         conn,
 		table:        table,
 		rowBatchSize: rowBatchSize,
-		connIdx:      connIdx,
 		queryCache:   constructBaseSelectClause(table, rowBatchSize),
 	}, nil
 }
 
-func constructBaseSelectClause(table rowVerifiableTableShard, rowBatchSize int) tree.Select {
+func constructBaseSelectClause(table Table, rowBatchSize int) tree.Select {
 	tn := tree.MakeTableNameFromPrefix(
 		tree.ObjectNamePrefix{SchemaName: table.Schema, ExplicitSchema: true},
 		table.Table,
@@ -81,7 +84,7 @@ func constructBaseSelectClause(table rowVerifiableTableShard, rowBatchSize int) 
 			Tables: tree.TableExprs{&tn},
 		},
 	}
-	for _, col := range table.MatchingColumns {
+	for _, col := range table.ColumnNames {
 		selectClause.Exprs = append(
 			selectClause.Exprs,
 			tree.SelectExpr{
@@ -102,7 +105,7 @@ func constructBaseSelectClause(table rowVerifiableTableShard, rowBatchSize int) 
 	return baseSelectExpr
 }
 
-func (it *rowIterator) hasNext(ctx context.Context) bool {
+func (it *Iterator) HasNext(ctx context.Context) bool {
 	if it.isComplete || it.err != nil || (it.currRows != nil && it.currRows.Err() != nil) {
 		return false
 	}
@@ -126,7 +129,7 @@ func (it *rowIterator) hasNext(ctx context.Context) bool {
 			return false
 		}
 
-		// Otherwise, fetch the next page and restart.
+		// Otherwise, fetch the Next page and restart.
 		if err := it.nextPage(ctx); err != nil {
 			it.err = err
 			return false
@@ -134,7 +137,7 @@ func (it *rowIterator) hasNext(ctx context.Context) bool {
 	}
 }
 
-func (it *rowIterator) nextPage(ctx context.Context) error {
+func (it *Iterator) nextPage(ctx context.Context) error {
 	andClause := &tree.AndExpr{
 		Left:  tree.DBoolTrue,
 		Right: tree.DBoolTrue,
@@ -143,20 +146,20 @@ func (it *rowIterator) nextPage(ctx context.Context) error {
 	if len(it.pkCursor) > 0 {
 		andClause.Left = makeCompareExpr(
 			treecmp.MakeComparisonOperator(treecmp.GT),
-			it.table.MatchingColumns,
+			it.table.ColumnNames,
 			it.pkCursor,
 		)
 	} else if len(it.table.StartPKVals) > 0 {
 		andClause.Left = makeCompareExpr(
 			treecmp.MakeComparisonOperator(treecmp.GE),
-			it.table.MatchingColumns,
+			it.table.ColumnNames,
 			it.table.StartPKVals,
 		)
 	}
 	if len(it.table.EndPKVals) > 0 {
 		andClause.Right = makeCompareExpr(
 			treecmp.MakeComparisonOperator(treecmp.LT),
-			it.table.MatchingColumns,
+			it.table.ColumnNames,
 			it.table.EndPKVals,
 		)
 	}
@@ -167,15 +170,15 @@ func (it *rowIterator) nextPage(ctx context.Context) error {
 
 	f := tree.NewFmtCtx(tree.FmtParsableNumerics)
 	f.FormatNode(&it.queryCache)
-	rows, err := it.conn.(*dbconn.PGConn).Query(ctx, f.CloseAndGetString())
+	rows, err := it.Conn.(*dbconn.PGConn).Query(ctx, f.CloseAndGetString())
 	if err != nil {
-		return errors.Wrapf(err, "error getting rows for table %s.%s from %s", it.table.Schema, it.table.Table, it.conn.ID)
+		return errors.Wrapf(err, "error getting rows for table %s.%s from %s", it.table.Schema, it.table.Table, it.Conn.ID)
 	}
 
 	it.currRows = &pgRows{
 		Rows:    rows,
-		typMap:  it.conn.TypeMap(),
-		typOIDs: it.table.MatchingColumnTypeOIDs[it.connIdx],
+		typMap:  it.Conn.TypeMap(),
+		typOIDs: it.table.ColumnOIDs,
 	}
 	it.currRowsRead = 0
 	return nil
@@ -203,24 +206,24 @@ func makeCompareExpr(
 	return cmpExpr
 }
 
-func (it *rowIterator) peek(ctx context.Context) tree.Datums {
+func (it *Iterator) Peek(ctx context.Context) tree.Datums {
 	for {
 		if it.peekCache != nil {
 			return it.peekCache
 		}
-		if !it.hasNext(ctx) {
+		if !it.HasNext(ctx) {
 			return nil
 		}
 	}
 }
 
-func (it *rowIterator) next(ctx context.Context) tree.Datums {
-	ret := it.peek(ctx)
+func (it *Iterator) Next(ctx context.Context) tree.Datums {
+	ret := it.Peek(ctx)
 	it.peekCache = nil
 	return ret
 }
 
-func (it *rowIterator) error() error {
+func (it *Iterator) Error() error {
 	var err error
 	if it.currRows != nil {
 		err = it.currRows.Err()

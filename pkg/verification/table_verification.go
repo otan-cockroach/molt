@@ -8,7 +8,6 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/pkg/dbconn"
 	"github.com/cockroachdb/molt/pkg/mysqlconv"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
 )
 
@@ -244,11 +243,11 @@ func verifyCommonTables(
 						},
 					)
 				}
-				truthTyp, err := getDataType(ctx, truthConn, sourceCol.typeOID)
+				truthTyp, err := dbconn.GetDataType(ctx, truthConn, sourceCol.typeOID)
 				if err != nil {
 					return nil, err
 				}
-				compareTyp, err := getDataType(ctx, compareConn, targetCol.typeOID)
+				compareTyp, err := dbconn.GetDataType(ctx, compareConn, targetCol.typeOID)
 				if err != nil {
 					return nil, err
 				}
@@ -343,24 +342,4 @@ func verifyCommonTables(
 		ret = append(ret, res)
 	}
 	return ret, nil
-}
-
-func getDataType(ctx context.Context, inConn dbconn.Conn, oid oid.Oid) (*pgtype.Type, error) {
-	if typ, ok := inConn.TypeMap().TypeForOID(uint32(oid)); ok {
-		return typ, nil
-	}
-	conn, ok := inConn.(*dbconn.PGConn)
-	if !ok {
-		return nil, errors.AssertionFailedf("only postgres expected here")
-	}
-	var typName string
-	if err := conn.QueryRow(ctx, "SELECT $1::oid::regtype", oid).Scan(&typName); err != nil {
-		return nil, errors.Wrapf(err, "error getting data type info for oid %d", oid)
-	}
-	typ, err := conn.LoadType(ctx, typName)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error loading type %s", typName)
-	}
-	conn.TypeMap().RegisterType(typ)
-	return typ, nil
 }
