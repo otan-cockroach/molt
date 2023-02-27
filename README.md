@@ -4,3 +4,68 @@
 
 Migrate Off Legacy Things is CockroachDB's suite of tools to assist migrations.
 This repo contains any open-source MOLT tooling.
+
+Certain packages can be re-used by external tools and are subject to the
+[Apache License](LICENSE).
+
+## Tools
+
+All commands require `molt` to be built. Example:
+
+```shell
+# Build molt for the local machine (goes to artifacts/molt)
+go build -o artifacts/molt .
+
+# Cross compiling.
+GOOS=linux GOARCH=amd64 go build -v -o artifacts/molt .
+```
+
+### Verification Tooling
+
+`molt verify` compares results between databases. It takes in two or more JDBC
+connection strings as arguments. For names that are easy to read, append
+`name===` in front of the jdbc string.
+
+```shell
+# Compare two postgres instances, with simplified naming for both instances.
+molt verify \
+  'pg_truth===postgres://user:pass@url:5432/db' \
+  'crdb_compare===postgres://root@localhost:26257?sslmode=disable'
+
+# Compare mysql and postgres.
+molt verify \
+  'mysql===mysql://root@localhost:3306/defaultdb' \
+  'postgresql://root@127.0.0.1:26257/defaultdb?options=-ccluster%3Ddemo-tenant&sslmode=disable'
+```
+
+See `molt verify --help` for all available help options.
+
+#### Limitations
+* Splitting a table by shards not supported if the MySQL argument is first.
+* Splitting a table by shard only works for int, uuid and float types.
+* MySQL enums and set types are not supported.
+* Similar types (e.g. int2 / int4 / int8) cannot be compared.
+* MySQL TLS comparison not yet supported.
+* Geospatial types cannot yet be compared.
+
+## Local Setup
+
+### Running Tests
+* Ensure a local postgres instance is setup and can be logged in using
+  `postgres://postgres:postgres@localhost:5432/testdb` (this can be overriden with the
+  `POSTGRES_URL` env var):
+```sql
+CREATE USER 'postgres' PASSWORD 'postgres' ADMIN;
+CREATE DATABASE testdb;
+```
+* Ensure a local, insecure CockroachDB instance is setup
+  (this can be overriden with the `COCKROACH_URL` env var):
+  `cockroach demo --insecure --empty`.
+* Ensure a local MySQL is setup with username `root` and an empty password,
+  with a `defaultdb` database setup 
+  (this can be overriden with the `MYSQL_URL` env var):
+```
+CREATE DATABASE defaultdb;
+```
+* Run the tests: `go test ./...`.
+  * Data-driven tests can be run with `-rewrite`, e.g. `go test ./verification -rewrite`.
