@@ -10,6 +10,8 @@ import (
 	"github.com/cockroachdb/molt/pkg/dbconn"
 	"github.com/cockroachdb/molt/pkg/pgconv"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/lib/pq/oid"
 )
 
 type rowIterator struct {
@@ -22,9 +24,29 @@ type rowIterator struct {
 	pkCursor     tree.Datums
 	peekCache    tree.Datums
 	err          error
-	currRows     pgx.Rows
+	currRows     rows
 	currRowsRead int
 	queryCache   tree.Select
+}
+
+type rows interface {
+	Err() error
+	Next() bool
+	Datums() (tree.Datums, error)
+}
+
+type pgRows struct {
+	pgx.Rows
+	typMap  *pgtype.Map
+	typOIDs []oid.Oid
+}
+
+func (r *pgRows) Datums() (tree.Datums, error) {
+	vals, err := r.Values()
+	if err != nil {
+		return nil, err
+	}
+	return pgconv.ConvertRowValues(r.typMap, vals, r.typOIDs)
 }
 
 func newRowIterator(
@@ -90,14 +112,8 @@ func (it *rowIterator) hasNext(ctx context.Context) bool {
 	for {
 		if it.currRows != nil && it.currRows.Next() {
 			it.currRowsRead++
-			rows, err := it.currRows.Values()
-			if err != nil {
-				it.err = err
-				return false
-			}
-			it.peekCache, err = pgconv.ConvertRowValues(it.conn.TypeMap(), rows, it.table.MatchingColumnTypeOIDs[it.connIdx])
-			if err != nil {
-				it.err = err
+			it.peekCache, it.err = it.currRows.Datums()
+			if it.err != nil {
 				return false
 			}
 			it.pkCursor = it.peekCache[:len(it.table.PrimaryKeyColumns)]
@@ -156,7 +172,11 @@ func (it *rowIterator) nextPage(ctx context.Context) error {
 		return errors.Wrapf(err, "error getting rows for table %s.%s from %s", it.table.Schema, it.table.Table, it.conn.ID)
 	}
 
-	it.currRows = rows
+	it.currRows = &pgRows{
+		Rows:    rows,
+		typMap:  it.conn.TypeMap(),
+		typOIDs: it.table.MatchingColumnTypeOIDs[it.connIdx],
+	}
 	it.currRowsRead = 0
 	return nil
 }
