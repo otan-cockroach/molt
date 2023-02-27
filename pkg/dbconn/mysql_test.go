@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/datadriven"
-	"github.com/pkg/errors"
+	"github.com/cockroachdb/errors"
 )
 
 func TestMySQLURLToDSN(t *testing.T) {
@@ -17,7 +17,7 @@ func TestMySQLURLToDSN(t *testing.T) {
 				if err != nil {
 					t.Fatal(errors.Wrapf(err, "error converting %s to url", d.Input))
 				}
-				return mysqlURLToDSN(u)
+				return MySQLURLToDSN(u).FormatDSN()
 			}
 			t.Fatalf("unknown command %s", d.Cmd)
 			return ""

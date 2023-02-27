@@ -10,7 +10,6 @@ import (
 	"github.com/cockroachdb/datadriven"
 	"github.com/cockroachdb/molt/pkg/dbconn"
 	"github.com/cockroachdb/molt/pkg/testutils"
-	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,38 +25,18 @@ func TestDataDriven(t *testing.T) {
 func testDataDriven(t *testing.T, path string) {
 	ctx := context.Background()
 
-	const dbName = "_ddtest"
-
 	pgConnArgs := []connArg{
 		{id: "truth", connStr: testutils.PGConnStr()},
 		{id: "lie", connStr: testutils.CRDBConnStr()},
 	}
 
-	var cfgs []*pgx.ConnConfig
-	for _, pgArgs := range pgConnArgs {
-		func() {
-			conn, err := pgx.Connect(ctx, pgArgs.connStr)
-			require.NoError(t, err)
-			defer func() { _ = conn.Close(ctx) }()
-
-			_, err = conn.Exec(ctx, "DROP DATABASE IF EXISTS "+dbName)
-			require.NoError(t, err)
-			_, err = conn.Exec(ctx, "CREATE DATABASE "+dbName)
-			require.NoError(t, err)
-
-			cfgCopy := conn.Config().Copy()
-			cfgCopy.Database = dbName
-			cfgs = append(cfgs, cfgCopy)
-		}()
-	}
-
 	var conns []dbconn.Conn
-	for i, connArg := range pgConnArgs {
-		pgConn, err := pgx.ConnectConfig(ctx, cfgs[i])
+	for _, pgArgs := range pgConnArgs {
+		cleanConn, err := dbconn.TestOnlyCleanDatabase(ctx, pgArgs.id, pgArgs.connStr, "dd_test")
 		require.NoError(t, err)
-		conn := dbconn.NewPGConn(connArg.id, pgConn)
-		conns = append(conns, conn)
+		conns = append(conns, cleanConn)
 	}
+
 	defer func() {
 		for _, conn := range conns {
 			_ = conn.Close(ctx)

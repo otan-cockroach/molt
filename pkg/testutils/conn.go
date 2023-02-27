@@ -17,3 +17,11 @@ func CRDBConnStr() string {
 	}
 	return crdbInstanceURL
 }
+
+func MySQLConnStr() string {
+	mysqlInstanceURL := "mysql://root@localhost:3306/defaultdb"
+	if override, ok := os.LookupEnv("MYSQL_URL"); ok {
+		mysqlInstanceURL = override
+	}
+	return mysqlInstanceURL
+}

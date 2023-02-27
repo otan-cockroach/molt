@@ -11,35 +11,34 @@ import (
 )
 
 type MySQLConn struct {
-	id ID
-	u  *url.URL
+	id  ID
+	cfg *mysql.Config
 	*sql.DB
 	typeMap *pgtype.Map
 }
 
-func ConnectMySQL(ctx context.Context, id ID, u *url.URL) (*MySQLConn, error) {
-	db, err := sql.Open("mysql", mysqlURLToDSN(u))
+func ConnectMySQL(ctx context.Context, id ID, cfg *mysql.Config) (*MySQLConn, error) {
+	db, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
 		return nil, err
 	}
-	return &MySQLConn{id: id, u: u, DB: db, typeMap: pgtype.NewMap()}, nil
+	return &MySQLConn{id: id, cfg: cfg, DB: db, typeMap: pgtype.NewMap()}, nil
 }
 
-func mysqlURLToDSN(u *url.URL) string {
+func MySQLURLToDSN(u *url.URL) *mysql.Config {
 	// TODO: TLS and the like
-	dsn := &mysql.Config{
-		Addr:   u.Host,
-		Net:    "tcp",
-		User:   "root",
-		DBName: strings.TrimLeft(u.Path, "/"),
-	}
+	dsn := mysql.NewConfig()
+	dsn.Addr = u.Host
+	dsn.Net = "tcp"
+	dsn.User = "root"
+	dsn.DBName = strings.TrimLeft(u.Path, "/")
 	if uname := u.User; uname != nil {
 		dsn.User = uname.Username()
 		if p, ok := uname.Password(); ok {
 			dsn.Passwd = p
 		}
 	}
-	return dsn.FormatDSN()
+	return dsn
 }
 
 func (c *MySQLConn) ID() ID {
@@ -51,7 +50,7 @@ func (c *MySQLConn) Close(ctx context.Context) error {
 }
 
 func (c *MySQLConn) Clone(ctx context.Context) (Conn, error) {
-	ret, err := ConnectMySQL(ctx, c.id, c.u)
+	ret, err := ConnectMySQL(ctx, c.id, c.cfg)
 	if err != nil {
 		return nil, err
 	}

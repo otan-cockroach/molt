@@ -1,0 +1,30 @@
+from_create_table
+CREATE TABLE da_test_table (
+    tinyint_test TINYINT,
+    smallint_test SMALLINT,
+    int_test INTEGER,
+    largeint_test BIGINT,
+    datetime_test DATETIME,
+    timestamp_test TIMESTAMP,
+    date_test DATE,
+    bit_test BIT,
+    text_test TEXT,
+    varchar_test VARCHAR(20),
+    float_test FLOAT,
+    bigfloat_test DOUBLE,
+    numeric_test DECIMAL
+)
+----
+tinyint_test: int2
+smallint_test: int2
+int_test: int4
+largeint_test: int
+datetime_test: timestamp
+timestamp_test: timestamptz
+date_test: date
+bit_test: varbit
+text_test: string
+varchar_test: varchar
+float_test: float4
+bigfloat_test: float
+numeric_test: decimal
