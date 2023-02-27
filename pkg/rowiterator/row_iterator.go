@@ -2,29 +2,35 @@ package rowiterator
 
 import (
 	"context"
-	"go/constant"
+	"database/sql"
+	"strings"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree/treecmp"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/pkg/dbconn"
+	"github.com/cockroachdb/molt/pkg/mysqlconv"
 	"github.com/cockroachdb/molt/pkg/pgconv"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
+	"github.com/pingcap/tidb/parser/ast"
+	"github.com/pingcap/tidb/parser/format"
+	"github.com/pingcap/tidb/parser/opcode"
 )
 
 type Iterator struct {
 	Conn         dbconn.Conn
 	table        Table
 	rowBatchSize int
+
 	isComplete   bool
 	pkCursor     tree.Datums
 	peekCache    tree.Datums
 	err          error
 	currRows     rows
 	currRowsRead int
-	queryCache   tree.Select
+	queryCache   interface{}
 }
 
 type Table struct {
@@ -41,6 +47,31 @@ type rows interface {
 	Err() error
 	Next() bool
 	Datums() (tree.Datums, error)
+}
+
+type mysqlRows struct {
+	*sql.Rows
+	typMap  *pgtype.Map
+	typOIDs []oid.Oid
+}
+
+func (r *mysqlRows) Datums() (tree.Datums, error) {
+	typs, err := r.ColumnTypes()
+	if err != nil {
+		return nil, err
+	}
+	// Since we are passing in "valPtrs", golang doesn't like if we use
+	// anything other than []byte. This is extremely annoying and means
+	// we have to parse strings.
+	vals := make([][]byte, len(typs))
+	valPtrs := make([]any, len(typs))
+	for i := range typs {
+		valPtrs[i] = &vals[i]
+	}
+	if err := r.Scan(valPtrs...); err != nil {
+		return nil, errors.Wrap(err, "failed to scan row")
+	}
+	return mysqlconv.ConvertRowValues(r.typMap, vals, r.typOIDs)
 }
 
 type pgRows struct {
@@ -66,43 +97,20 @@ func NewIterator(
 			return nil, errors.Wrapf(err, "Error initializing type oid %d", typOID)
 		}
 	}
-	return &Iterator{
+	it := &Iterator{
 		Conn:         conn,
 		table:        table,
 		rowBatchSize: rowBatchSize,
-		queryCache:   constructBaseSelectClause(table, rowBatchSize),
-	}, nil
-}
-
-func constructBaseSelectClause(table Table, rowBatchSize int) tree.Select {
-	tn := tree.MakeTableNameFromPrefix(
-		tree.ObjectNamePrefix{SchemaName: table.Schema, ExplicitSchema: true},
-		table.Table,
-	)
-	selectClause := &tree.SelectClause{
-		From: tree.From{
-			Tables: tree.TableExprs{&tn},
-		},
 	}
-	for _, col := range table.ColumnNames {
-		selectClause.Exprs = append(
-			selectClause.Exprs,
-			tree.SelectExpr{
-				Expr: tree.NewUnresolvedName(string(col)),
-			},
-		)
+	switch conn := conn.(type) {
+	case *dbconn.PGConn:
+		it.queryCache = constructPGBaseSelectClause(table, rowBatchSize)
+	case *dbconn.MySQLConn:
+		it.queryCache = constructMySQLBaseSelectClause(table, rowBatchSize)
+	default:
+		return nil, errors.Newf("unsupported conn type %T", conn)
 	}
-	baseSelectExpr := tree.Select{
-		Select: selectClause,
-		Limit:  &tree.Limit{Count: tree.NewNumVal(constant.MakeUint64(uint64(rowBatchSize)), "", false)},
-	}
-	for _, pkCol := range table.PrimaryKeyColumns {
-		baseSelectExpr.OrderBy = append(
-			baseSelectExpr.OrderBy,
-			&tree.Order{Expr: tree.NewUnresolvedName(string(pkCol))},
-		)
-	}
-	return baseSelectExpr
+	return it, nil
 }
 
 func (it *Iterator) HasNext(ctx context.Context) bool {
@@ -138,72 +146,97 @@ func (it *Iterator) HasNext(ctx context.Context) bool {
 }
 
 func (it *Iterator) nextPage(ctx context.Context) error {
-	andClause := &tree.AndExpr{
-		Left:  tree.DBoolTrue,
-		Right: tree.DBoolTrue,
-	}
-	// Use the cursor if available, otherwise not.
-	if len(it.pkCursor) > 0 {
-		andClause.Left = makeCompareExpr(
-			treecmp.MakeComparisonOperator(treecmp.GT),
-			it.table.ColumnNames,
-			it.pkCursor,
-		)
-	} else if len(it.table.StartPKVals) > 0 {
-		andClause.Left = makeCompareExpr(
-			treecmp.MakeComparisonOperator(treecmp.GE),
-			it.table.ColumnNames,
-			it.table.StartPKVals,
-		)
-	}
-	if len(it.table.EndPKVals) > 0 {
-		andClause.Right = makeCompareExpr(
-			treecmp.MakeComparisonOperator(treecmp.LT),
-			it.table.ColumnNames,
-			it.table.EndPKVals,
-		)
-	}
-	it.queryCache.Select.(*tree.SelectClause).Where = &tree.Where{
-		Type: tree.AstWhere,
-		Expr: andClause,
+	switch conn := it.Conn.(type) {
+	case *dbconn.PGConn:
+		andClause := &tree.AndExpr{
+			Left:  tree.DBoolTrue,
+			Right: tree.DBoolTrue,
+		}
+		// Use the cursor if available, otherwise not.
+		if len(it.pkCursor) > 0 {
+			andClause.Left = makePGCompareExpr(
+				treecmp.MakeComparisonOperator(treecmp.GT),
+				it.table.ColumnNames,
+				it.pkCursor,
+			)
+		} else if len(it.table.StartPKVals) > 0 {
+			andClause.Left = makePGCompareExpr(
+				treecmp.MakeComparisonOperator(treecmp.GE),
+				it.table.ColumnNames,
+				it.table.StartPKVals,
+			)
+		}
+		if len(it.table.EndPKVals) > 0 {
+			andClause.Right = makePGCompareExpr(
+				treecmp.MakeComparisonOperator(treecmp.LT),
+				it.table.ColumnNames,
+				it.table.EndPKVals,
+			)
+		}
+		selectStmt := it.queryCache.(*tree.Select)
+		selectStmt.Select.(*tree.SelectClause).Where = &tree.Where{
+			Type: tree.AstWhere,
+			Expr: andClause,
+		}
+
+		f := tree.NewFmtCtx(tree.FmtParsableNumerics)
+		f.FormatNode(selectStmt)
+		newRows, err := conn.Query(ctx, f.CloseAndGetString())
+		if err != nil {
+			return errors.Wrapf(err, "error getting rows for table %s.%s from %s", it.table.Schema, it.table.Table, it.Conn.ID)
+		}
+		it.currRows = &pgRows{
+			Rows:    newRows,
+			typMap:  it.Conn.TypeMap(),
+			typOIDs: it.table.ColumnOIDs,
+		}
+	case *dbconn.MySQLConn:
+		andClause := &ast.BinaryOperationExpr{
+			Op: opcode.LogicAnd,
+			L:  ast.NewValueExpr(1, "", ""),
+			R:  ast.NewValueExpr(1, "", ""),
+		}
+		// Use the cursor if available, otherwise not.
+		if len(it.pkCursor) > 0 {
+			andClause.L = makeMySQLCompareExpr(
+				opcode.GT,
+				it.table.ColumnNames,
+				it.pkCursor,
+			)
+		} else if len(it.table.StartPKVals) > 0 {
+			andClause.L = makeMySQLCompareExpr(
+				opcode.GE,
+				it.table.ColumnNames,
+				it.table.StartPKVals,
+			)
+		}
+		if len(it.table.EndPKVals) > 0 {
+			andClause.R = makeMySQLCompareExpr(
+				opcode.LT,
+				it.table.ColumnNames,
+				it.table.EndPKVals,
+			)
+		}
+		selectStmt := it.queryCache.(*ast.SelectStmt)
+		var sb strings.Builder
+		if err := selectStmt.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb)); err != nil {
+			return errors.Wrap(err, "error generating MySQL statmeent")
+		}
+		newRows, err := conn.QueryContext(ctx, sb.String())
+		if err != nil {
+			return errors.Wrapf(err, "error getting rows for table %s in %s", it.table.Table, it.Conn.ID)
+		}
+		it.currRows = &mysqlRows{
+			Rows:    newRows,
+			typMap:  it.Conn.TypeMap(),
+			typOIDs: it.table.ColumnOIDs,
+		}
+	default:
+		return errors.AssertionFailedf("unhandled iterator type: %T\n", conn)
 	}
 
-	f := tree.NewFmtCtx(tree.FmtParsableNumerics)
-	f.FormatNode(&it.queryCache)
-	rows, err := it.Conn.(*dbconn.PGConn).Query(ctx, f.CloseAndGetString())
-	if err != nil {
-		return errors.Wrapf(err, "error getting rows for table %s.%s from %s", it.table.Schema, it.table.Table, it.Conn.ID)
-	}
-
-	it.currRows = &pgRows{
-		Rows:    rows,
-		typMap:  it.Conn.TypeMap(),
-		typOIDs: it.table.ColumnOIDs,
-	}
 	it.currRowsRead = 0
 	return nil
-}
-
-func makeCompareExpr(
-	op treecmp.ComparisonOperator, cols []tree.Name, vals tree.Datums,
-) *tree.ComparisonExpr {
-	cmpExpr := &tree.ComparisonExpr{
-		Operator: op,
-	}
-	if len(vals) > 1 {
-		colNames := &tree.Tuple{}
-		colVals := &tree.Tuple{}
-		for i := range vals {
-			colNames.Exprs = append(colNames.Exprs, tree.NewUnresolvedName(string(cols[i])))
-			colVals.Exprs = append(colVals.Exprs, vals[i])
-		}
-		cmpExpr.Left = colNames
-		cmpExpr.Right = colVals
-	} else {
-		cmpExpr.Left = tree.NewUnresolvedName(string(cols[0]))
-		cmpExpr.Right = vals[0]
-	}
-	return cmpExpr
 }
 
 func (it *Iterator) Peek(ctx context.Context) tree.Datums {
