@@ -26,11 +26,11 @@ func splitTable(
 	tbl verifyTableResult,
 	reporter Reporter,
 	numSplits int,
-) ([]rowVerifiableTableShard, error) {
+) ([]TableShard, error) {
 	if numSplits < 1 {
 		return nil, errors.AssertionFailedf("failed to split rows: %d\n", numSplits)
 	}
-	ret := make([]rowVerifiableTableShard, 0, numSplits)
+	ret := make([]TableShard, 0, numSplits)
 
 	// For now, be dumb and split only the first column.
 	min, err := getTableExtremes(ctx, truthConn, tbl, true)
@@ -87,7 +87,7 @@ func splitTable(
 					break splitLoop
 				}
 			}
-			ret = append(ret, rowVerifiableTableShard{
+			ret = append(ret, TableShard{
 				Table:                  tbl.Table,
 				Schema:                 tbl.Schema,
 				MatchingColumns:        tbl.MatchingColumns,
@@ -102,7 +102,7 @@ func splitTable(
 		}
 	}
 	if !splittable {
-		ret = []rowVerifiableTableShard{
+		ret = []TableShard{
 			{
 				Table:                  tbl.Table,
 				Schema:                 tbl.Schema,

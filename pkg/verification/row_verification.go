@@ -50,7 +50,7 @@ func (c *compareContext) MustGetPlaceholderValue(p *tree.Placeholder) tree.Datum
 	return p
 }
 
-type rowVerifiableTableShard struct {
+type TableShard struct {
 	Schema                 tree.Name
 	Table                  tree.Name
 	MatchingColumns        []tree.Name
@@ -63,12 +63,8 @@ type rowVerifiableTableShard struct {
 	TotalShards int
 }
 
-func compareRows(
-	ctx context.Context,
-	conns []dbconn.Conn,
-	table rowVerifiableTableShard,
-	rowBatchSize int,
-	reporter Reporter,
+func CompareRows(
+	ctx context.Context, conns []dbconn.Conn, table TableShard, rowBatchSize int, reporter Reporter,
 ) error {
 	iterators := make([]*rowiterator.Iterator, len(conns))
 	for i, conn := range conns {

@@ -36,10 +36,20 @@ const DefaultTableSplits = 8
 
 type VerifyOpt func(*verifyOpts)
 
+type WorkFunc func(
+	ctx context.Context,
+	conns []dbconn.Conn,
+	table TableShard,
+	rowBatchSize int,
+	reporter Reporter,
+) error
+
 type verifyOpts struct {
 	concurrency  int
 	rowBatchSize int
 	tableSplits  int
+	// TODO: better abstraction for this.
+	workFunc WorkFunc
 }
 
 func WithConcurrency(c int) VerifyOpt {
@@ -60,6 +70,12 @@ func WithTableSplits(c int) VerifyOpt {
 	}
 }
 
+func WithWorkFunc(c WorkFunc) VerifyOpt {
+	return func(o *verifyOpts) {
+		o.workFunc = c
+	}
+}
+
 // Verify verifies the given connections have matching tables and contents.
 func Verify(
 	ctx context.Context, conns []dbconn.Conn, reporter Reporter, inOpts ...VerifyOpt,
@@ -68,6 +84,7 @@ func Verify(
 		concurrency:  DefaultConcurrency,
 		rowBatchSize: DefaultRowBatchSize,
 		tableSplits:  DefaultTableSplits,
+		workFunc:     CompareRows,
 	}
 	for _, applyOpt := range inOpts {
 		applyOpt(&opts)
@@ -100,7 +117,7 @@ func Verify(
 
 	// Compare rows up to the concurrency specified.
 	g := ctxgroup.WithContext(ctx)
-	workQueue := make(chan rowVerifiableTableShard)
+	workQueue := make(chan TableShard)
 	for it := 0; it < opts.concurrency; it++ {
 		g.GoCtx(func(ctx context.Context) error {
 			for {
@@ -143,7 +160,7 @@ func Verify(
 				reporter.Report(StatusReport{
 					Info: msg,
 				})
-				if err := verifyDataWorker(ctx, conns, reporter, opts.rowBatchSize, splitTable); err != nil {
+				if err := verifyDataWorker(ctx, conns, reporter, opts.rowBatchSize, splitTable, opts.workFunc); err != nil {
 					log.Printf("[ERROR] error comparing rows on %s.%s: %v", splitTable.Schema, splitTable.Table, err)
 				}
 			}
@@ -173,7 +190,8 @@ func verifyDataWorker(
 	conns []dbconn.Conn,
 	reporter Reporter,
 	rowBatchSize int,
-	tbl rowVerifiableTableShard,
+	tbl TableShard,
+	workFunc WorkFunc,
 ) error {
 	// Copy connections over naming wise, but initialize a new pgx connection
 	// for each table.
@@ -190,5 +208,5 @@ func verifyDataWorker(
 			_ = workerConns[i].Close(ctx)
 		}()
 	}
-	return compareRows(ctx, workerConns, tbl, rowBatchSize, reporter)
+	return workFunc(ctx, workerConns, tbl, rowBatchSize, reporter)
 }
