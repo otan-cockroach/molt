@@ -8,6 +8,7 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree/treecmp"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/pkg/dbconn"
+	"github.com/cockroachdb/molt/pkg/pgconv"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -94,7 +95,7 @@ func (it *rowIterator) hasNext(ctx context.Context) bool {
 				it.err = err
 				return false
 			}
-			it.peekCache, err = convertRowValues(it.conn.TypeMap(), rows, it.table.MatchingColumnTypeOIDs[it.connIdx])
+			it.peekCache, err = pgconv.ConvertRowValues(it.conn.TypeMap(), rows, it.table.MatchingColumnTypeOIDs[it.connIdx])
 			if err != nil {
 				it.err = err
 				return false

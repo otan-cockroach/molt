@@ -12,6 +12,7 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/uuid"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/pkg/dbconn"
+	"github.com/cockroachdb/molt/pkg/pgconv"
 )
 
 func splitTable(
@@ -141,7 +142,7 @@ func getTableExtremes(
 		if err != nil {
 			return nil, err
 		}
-		rowVals, err := convertRowValues(truthConn.(*dbconn.PGConn).TypeMap(), vals, tbl.ColumnTypeOIDs[0][:len(tbl.PrimaryKeyColumns)])
+		rowVals, err := pgconv.ConvertRowValues(truthConn.(*dbconn.PGConn).TypeMap(), vals, tbl.ColumnTypeOIDs[0][:len(tbl.PrimaryKeyColumns)])
 		if err != nil {
 			return nil, err
 		}

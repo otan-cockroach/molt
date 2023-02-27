@@ -1,4 +1,4 @@
-package verification
+package pgconv
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/datadriven"
+	"github.com/cockroachdb/molt/pkg/testutils"
 	"github.com/jackc/pgx/v5"
 	"github.com/lib/pq/oid"
 	"github.com/stretchr/testify/require"
@@ -14,7 +15,7 @@ import (
 
 func TestConvertRowValue(t *testing.T) {
 	ctx := context.Background()
-	conn, err := pgx.Connect(ctx, pgConnArgs()[0].connStr)
+	conn, err := pgx.Connect(ctx, testutils.PGConnStr())
 	require.NoError(t, err)
 	defer func() { _ = conn.Close(ctx) }()
 
@@ -31,7 +32,7 @@ func TestConvertRowValue(t *testing.T) {
 					require.NoError(t, err)
 
 					for i, val := range vals {
-						converted, err := convertRowValue(conn.TypeMap(), val, oid.Oid(rows.FieldDescriptions()[i].DataTypeOID))
+						converted, err := ConvertRowValue(conn.TypeMap(), val, oid.Oid(rows.FieldDescriptions()[i].DataTypeOID))
 						require.NoError(t, err)
 
 						extra := ""

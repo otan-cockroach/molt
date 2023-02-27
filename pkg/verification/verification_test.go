@@ -3,13 +3,13 @@ package verification
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/cockroachdb/datadriven"
 	"github.com/cockroachdb/molt/pkg/dbconn"
+	"github.com/cockroachdb/molt/pkg/testutils"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 )
@@ -17,21 +17,6 @@ import (
 type connArg struct {
 	id      dbconn.ID
 	connStr string
-}
-
-func pgConnArgs() []connArg {
-	pgInstanceURL := "postgres://postgres:postgres@localhost:5432/testdb"
-	if override, ok := os.LookupEnv("POSTGRES_URL"); ok {
-		pgInstanceURL = override
-	}
-	crdbInstanceURL := "postgres://root@127.0.0.1:26257/defaultdb?sslmode=disable"
-	if override, ok := os.LookupEnv("COCKROACH_URL"); ok {
-		crdbInstanceURL = override
-	}
-	return []connArg{
-		{id: "truth", connStr: pgInstanceURL},
-		{id: "lie", connStr: crdbInstanceURL},
-	}
 }
 
 func TestDataDriven(t *testing.T) {
@@ -43,8 +28,13 @@ func testDataDriven(t *testing.T, path string) {
 
 	const dbName = "_ddtest"
 
+	pgConnArgs := []connArg{
+		{id: "truth", connStr: testutils.PGConnStr()},
+		{id: "lie", connStr: testutils.CRDBConnStr()},
+	}
+
 	var cfgs []*pgx.ConnConfig
-	for _, pgArgs := range pgConnArgs() {
+	for _, pgArgs := range pgConnArgs {
 		func() {
 			conn, err := pgx.Connect(ctx, pgArgs.connStr)
 			require.NoError(t, err)
@@ -62,7 +52,7 @@ func testDataDriven(t *testing.T, path string) {
 	}
 
 	var conns []dbconn.Conn
-	for i, connArg := range pgConnArgs() {
+	for i, connArg := range pgConnArgs {
 		pgConn, err := pgx.ConnectConfig(ctx, cfgs[i])
 		require.NoError(t, err)
 		conn := dbconn.NewPGConn(connArg.id, pgConn)

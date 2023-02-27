@@ -1,4 +1,4 @@
-package verification
+package pgconv
 
 import (
 	"fmt"
@@ -35,13 +35,13 @@ func (p parseTimeContext) GetDateStyle() pgdate.DateStyle {
 
 var timeCtx = &parseTimeContext{}
 
-func convertRowValue(typMap *pgtype.Map, val any, typOID oid.Oid) (tree.Datum, error) {
+func ConvertRowValue(typMap *pgtype.Map, val any, typOID oid.Oid) (tree.Datum, error) {
 	if _, isArray := types.ArrayOids[typOID]; isArray {
 		arrayType := types.OidToType[typOID]
 		ret := tree.NewDArray(arrayType.ArrayContents())
 		// Only worry about 1D arrays for now.
 		for arrIdx, arr := range val.([]interface{}) {
-			elem, err := convertRowValue(typMap, arr, arrayType.ArrayContents().Oid())
+			elem, err := ConvertRowValue(typMap, arr, arrayType.ArrayContents().Oid())
 			if err != nil {
 				return nil, errors.Wrapf(err, "error converting array element %d", arrIdx)
 			}
@@ -145,14 +145,14 @@ func convertNumeric(val pgtype.Numeric) (*tree.DDecimal, error) {
 	return &tree.DDecimal{Decimal: *apd.New(val.Int.Int64(), val.Exp)}, nil
 }
 
-func convertRowValues(typMap *pgtype.Map, vals []any, typOIDs []oid.Oid) (tree.Datums, error) {
+func ConvertRowValues(typMap *pgtype.Map, vals []any, typOIDs []oid.Oid) (tree.Datums, error) {
 	ret := make(tree.Datums, len(vals))
 	if len(vals) != len(typOIDs) {
 		return nil, errors.AssertionFailedf("val length != oid length: %v vs %v", vals, typOIDs)
 	}
 	for i := range vals {
 		var err error
-		if ret[i], err = convertRowValue(typMap, vals[i], typOIDs[i]); err != nil {
+		if ret[i], err = ConvertRowValue(typMap, vals[i], typOIDs[i]); err != nil {
 			return nil, err
 		}
 	}
