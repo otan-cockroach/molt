@@ -9,6 +9,11 @@ CREATE TABLE test_table (
     int2_test INT2 DEFAULT 1,
     int4_test INT4 DEFAULT 1,
     int8_test INT8 DEFAULT -1,
+    float4_test FLOAT4 DEFAULT -1.5,
+    float8_test FLOAT8 DEFAULT 434343,
+    date_test DATE DEFAULT '2020-09-11',
+    text_test TEXT,
+    varchar_test VARCHAR(3) DEFAULT 'e',
     PRIMARY KEY (id, id_b)
 )
 ----
