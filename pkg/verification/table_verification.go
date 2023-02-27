@@ -7,6 +7,7 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/pkg/dbconn"
+	"github.com/cockroachdb/molt/pkg/mysqlconv"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
 )
@@ -19,37 +20,74 @@ type columnMetadata struct {
 	notNull bool
 }
 
-func getColumns(ctx context.Context, conn dbconn.Conn, tableOID oid.Oid) ([]columnMetadata, error) {
+func getColumns(
+	ctx context.Context, conn dbconn.Conn, table TableMetadata,
+) ([]columnMetadata, error) {
 	var ret []columnMetadata
 
-	rows, err := conn.(*dbconn.PGConn).Query(
-		ctx,
-		`SELECT attname, atttypid, attnotnull FROM pg_attribute WHERE attrelid = $1 AND attnum > 0`,
-		tableOID,
-	)
-	if err != nil {
-		return ret, err
-	}
-
-	for rows.Next() {
-		var cm columnMetadata
-		if err := rows.Scan(&cm.columnName, &cm.typeOID, &cm.notNull); err != nil {
-			return ret, errors.Wrap(err, "error decoding column metadata")
+	switch conn := conn.(type) {
+	case *dbconn.PGConn:
+		rows, err := conn.Query(
+			ctx,
+			`SELECT attname, atttypid, attnotnull FROM pg_attribute WHERE attrelid = $1 AND attnum > 0`,
+			table.OID,
+		)
+		if err != nil {
+			return ret, err
 		}
-		ret = append(ret, cm)
-	}
-	if rows.Err() != nil {
-		return ret, errors.Wrap(err, "error collecting column metadata")
+
+		for rows.Next() {
+			var cm columnMetadata
+			if err := rows.Scan(&cm.columnName, &cm.typeOID, &cm.notNull); err != nil {
+				return ret, errors.Wrap(err, "error decoding column metadata")
+			}
+			ret = append(ret, cm)
+		}
+		if rows.Err() != nil {
+			return ret, errors.Wrap(err, "error collecting column metadata")
+		}
+	case *dbconn.MySQLConn:
+		rows, err := conn.QueryContext(
+			ctx,
+			`SELECT column_name, data_type, column_type, is_nullable FROM information_schema.columns
+WHERE table_schema = database() AND table_name = ?`,
+			string(table.Table),
+		)
+		if err != nil {
+			return ret, err
+		}
+
+		for rows.Next() {
+			var cm columnMetadata
+			var ct string
+			var dt string
+			var isNullable string
+			if err := rows.Scan(&cm.columnName, &dt, &ct, &isNullable); err != nil {
+				return ret, errors.Wrap(err, "error decoding column metadata")
+			}
+			cm.typeOID = mysqlconv.DataTypeToOID(dt, ct)
+			cm.notNull = isNullable == "NO"
+			ret = append(ret, cm)
+		}
+		if rows.Err() != nil {
+			return ret, errors.Wrap(err, "error collecting column metadata")
+		}
+	default:
+		return nil, errors.Newf("connection %T not supported", conn)
 	}
 	return ret, nil
 }
 
-func getPrimaryKey(ctx context.Context, conn dbconn.Conn, tableOID oid.Oid) ([]tree.Name, error) {
+func getPrimaryKey(
+	ctx context.Context, conn dbconn.Conn, table TableMetadata,
+) ([]tree.Name, error) {
 	var ret []tree.Name
 
-	rows, err := conn.(*dbconn.PGConn).Query(
-		ctx,
-		`
+	switch conn := conn.(type) {
+	case *dbconn.PGConn:
+		rows, err := conn.Query(
+			ctx,
+			`
 select
     a.attname as column_name
 from
@@ -60,21 +98,48 @@ from
 where
     t.oid = $1 AND indisprimary;
 `,
-		tableOID,
-	)
-	if err != nil {
-		return ret, err
-	}
-
-	for rows.Next() {
-		var c tree.Name
-		if err := rows.Scan(&c); err != nil {
-			return ret, errors.Wrap(err, "error decoding column name")
+			table.OID,
+		)
+		if err != nil {
+			return ret, err
 		}
-		ret = append(ret, c)
-	}
-	if rows.Err() != nil {
-		return ret, errors.Wrap(err, "error collecting primary key")
+
+		for rows.Next() {
+			var c tree.Name
+			if err := rows.Scan(&c); err != nil {
+				return ret, errors.Wrap(err, "error decoding column name")
+			}
+			ret = append(ret, c)
+		}
+		if rows.Err() != nil {
+			return ret, errors.Wrap(err, "error collecting primary key")
+		}
+	case *dbconn.MySQLConn:
+		rows, err := conn.QueryContext(
+			ctx,
+			`SELECT k.column_name
+FROM information_schema.table_constraints t
+JOIN information_schema.key_column_usage k
+USING(constraint_name,table_schema,table_name)
+WHERE t.constraint_type = 'PRIMARY KEY'
+  AND t.table_schema = database()
+  AND t.table_name= ?`,
+			string(table.Table),
+		)
+		if err != nil {
+			return ret, err
+		}
+
+		for rows.Next() {
+			var c tree.Name
+			if err := rows.Scan(&c); err != nil {
+				return ret, errors.Wrap(err, "error decoding column name")
+			}
+			ret = append(ret, c)
+		}
+		if rows.Err() != nil {
+			return ret, errors.Wrap(err, "error collecting primary key")
+		}
 	}
 	return ret, nil
 }
@@ -110,7 +175,7 @@ func verifyCommonTables(
 			Schema: truthTbl.Schema,
 			Table:  truthTbl.Table,
 		}
-		truthCols, err := getColumns(ctx, truthConn, truthTbl.OID)
+		truthCols, err := getColumns(ctx, truthConn, truthTbl)
 		if err != nil {
 			return nil, errors.Wrap(err, "error getting columns for table")
 		}
@@ -120,7 +185,7 @@ func verifyCommonTables(
 		}
 
 		pkSame := true
-		truthPKCols, err := getPrimaryKey(ctx, truthConn, truthTbl.OID)
+		truthPKCols, err := getPrimaryKey(ctx, truthConn, truthTbl)
 		if err != nil {
 			return nil, errors.Wrap(err, "error getting primary key")
 		}
@@ -140,7 +205,7 @@ func verifyCommonTables(
 			compareConn := conns[i]
 			truthMappedCols := mapColumns(truthCols)
 			targetTbl := tables[compareConn.ID()][tblIdx]
-			compareColumns, err := getColumns(ctx, conns[i], targetTbl.OID)
+			compareColumns, err := getColumns(ctx, conns[i], targetTbl)
 			if err != nil {
 				return nil, errors.Wrap(err, "error getting columns for table")
 			}
@@ -222,7 +287,7 @@ func verifyCommonTables(
 				delete(comparableColumns, colName)
 			}
 
-			targetPKCols, err := getPrimaryKey(ctx, compareConn, targetTbl.OID)
+			targetPKCols, err := getPrimaryKey(ctx, compareConn, targetTbl)
 			if err != nil {
 				return nil, errors.Wrap(err, "error getting primary key")
 			}
@@ -281,9 +346,12 @@ func verifyCommonTables(
 }
 
 func getDataType(ctx context.Context, inConn dbconn.Conn, oid oid.Oid) (*pgtype.Type, error) {
-	conn := inConn.(*dbconn.PGConn)
-	if typ, ok := conn.TypeMap().TypeForOID(uint32(oid)); ok {
+	if typ, ok := inConn.TypeMap().TypeForOID(uint32(oid)); ok {
 		return typ, nil
+	}
+	conn, ok := inConn.(*dbconn.PGConn)
+	if !ok {
+		return nil, errors.AssertionFailedf("only postgres expected here")
 	}
 	var typName string
 	if err := conn.QueryRow(ctx, "SELECT $1::oid::regtype", oid).Scan(&typName); err != nil {

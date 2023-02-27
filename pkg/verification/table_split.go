@@ -26,73 +26,77 @@ func splitTable(
 	}
 	ret := make([]rowVerifiableTableShard, 0, numSplits)
 
-	// For now, be dumb and split only the first column.
-	min, err := getTableExtremes(ctx, truthConn, tbl, true)
-	if err != nil {
-		return nil, errors.Wrapf(err, "cannot get minimum of %s.%s", tbl.Schema, tbl.Table)
-	}
-	max, err := getTableExtremes(ctx, truthConn, tbl, false)
-	if err != nil {
-		return nil, errors.Wrapf(err, "cannot get maximum of %s.%s", tbl.Schema, tbl.Table)
-	}
-
-	splittable := !(numSplits == 1 || len(min) == 0 || len(max) == 0 || len(min) != len(max))
-	var nextMin tree.Datums
+	// TODO: support splitting for other data sources.
+	_, splittable := truthConn.(*dbconn.PGConn)
 	if splittable {
-	splitLoop:
-		for splitNum := 1; splitNum <= numSplits; splitNum++ {
-			var nextMax tree.Datums
-			if splitNum < numSplits {
-				// For now, split by only first column of PK.
-				switch min[0].ResolvedType().Family() {
-				case types.IntFamily:
-					minVal := int64(*min[0].(*tree.DInt))
-					maxVal := int64(*max[0].(*tree.DInt))
-					valRange := maxVal - minVal
-					if valRange <= 0 {
+		// For now, be dumb and split only the first column.
+		min, err := getTableExtremes(ctx, truthConn, tbl, true)
+		if err != nil {
+			return nil, errors.Wrapf(err, "cannot get minimum of %s.%s", tbl.Schema, tbl.Table)
+		}
+		max, err := getTableExtremes(ctx, truthConn, tbl, false)
+		if err != nil {
+			return nil, errors.Wrapf(err, "cannot get maximum of %s.%s", tbl.Schema, tbl.Table)
+		}
+
+		splittable = !(numSplits == 1 || len(min) == 0 || len(max) == 0 || len(min) != len(max))
+		var nextMin tree.Datums
+		if splittable {
+		splitLoop:
+			for splitNum := 1; splitNum <= numSplits; splitNum++ {
+				var nextMax tree.Datums
+				if splitNum < numSplits {
+					// For now, split by only first column of PK.
+					switch min[0].ResolvedType().Family() {
+					case types.IntFamily:
+						minVal := int64(*min[0].(*tree.DInt))
+						maxVal := int64(*max[0].(*tree.DInt))
+						valRange := maxVal - minVal
+						if valRange <= 0 {
+							splittable = false
+							break splitLoop
+						}
+						splitVal := minVal + ((valRange / int64(numSplits)) * int64(splitNum))
+						nextMax = append(nextMax, tree.NewDInt(tree.DInt(splitVal)))
+					case types.FloatFamily:
+						minVal := float64(*min[0].(*tree.DFloat))
+						maxVal := float64(*max[0].(*tree.DFloat))
+						valRange := maxVal - minVal
+						if valRange <= 0 || math.IsNaN(valRange) || math.IsInf(valRange, 0) {
+							splittable = false
+							break splitLoop
+						}
+						splitVal := minVal + ((valRange / float64(numSplits)) * float64(splitNum))
+						nextMax = append(nextMax, tree.NewDFloat(tree.DFloat(splitVal)))
+					case types.UuidFamily:
+						// Use the high ranges to divide.
+						minVal := min[0].(*tree.DUuid).UUID.ToUint128().Hi
+						maxVal := max[0].(*tree.DUuid).UUID.ToUint128().Hi
+						valRange := maxVal - minVal
+						if valRange <= 0 {
+							splittable = false
+							break splitLoop
+						}
+						splitVal := minVal + ((valRange / uint64(numSplits)) * uint64(splitNum))
+						nextMax = append(nextMax, &tree.DUuid{UUID: uuid.FromUint128(uint128.Uint128{Hi: splitVal})})
+					default:
 						splittable = false
 						break splitLoop
 					}
-					splitVal := minVal + ((valRange / int64(numSplits)) * int64(splitNum))
-					nextMax = append(nextMax, tree.NewDInt(tree.DInt(splitVal)))
-				case types.FloatFamily:
-					minVal := float64(*min[0].(*tree.DFloat))
-					maxVal := float64(*max[0].(*tree.DFloat))
-					valRange := maxVal - minVal
-					if valRange <= 0 || math.IsNaN(valRange) || math.IsInf(valRange, 0) {
-						splittable = false
-						break splitLoop
-					}
-					splitVal := minVal + ((valRange / float64(numSplits)) * float64(splitNum))
-					nextMax = append(nextMax, tree.NewDFloat(tree.DFloat(splitVal)))
-				case types.UuidFamily:
-					// Use the high ranges to divide.
-					minVal := min[0].(*tree.DUuid).UUID.ToUint128().Hi
-					maxVal := max[0].(*tree.DUuid).UUID.ToUint128().Hi
-					valRange := maxVal - minVal
-					if valRange <= 0 {
-						splittable = false
-						break splitLoop
-					}
-					splitVal := minVal + ((valRange / uint64(numSplits)) * uint64(splitNum))
-					nextMax = append(nextMax, &tree.DUuid{UUID: uuid.FromUint128(uint128.Uint128{Hi: splitVal})})
-				default:
-					splittable = false
-					break splitLoop
 				}
+				ret = append(ret, rowVerifiableTableShard{
+					Table:                  tbl.Table,
+					Schema:                 tbl.Schema,
+					MatchingColumns:        tbl.MatchingColumns,
+					MatchingColumnTypeOIDs: tbl.ColumnTypeOIDs,
+					PrimaryKeyColumns:      tbl.PrimaryKeyColumns,
+					StartPKVals:            nextMin,
+					EndPKVals:              nextMax,
+					ShardNum:               splitNum,
+					TotalShards:            numSplits,
+				})
+				nextMin = nextMax
 			}
-			ret = append(ret, rowVerifiableTableShard{
-				Table:                  tbl.Table,
-				Schema:                 tbl.Schema,
-				MatchingColumns:        tbl.MatchingColumns,
-				MatchingColumnTypeOIDs: tbl.ColumnTypeOIDs,
-				PrimaryKeyColumns:      tbl.PrimaryKeyColumns,
-				StartPKVals:            nextMin,
-				EndPKVals:              nextMax,
-				ShardNum:               splitNum,
-				TotalShards:            numSplits,
-			})
-			nextMin = nextMax
 		}
 	}
 	if !splittable {

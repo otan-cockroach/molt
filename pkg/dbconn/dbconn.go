@@ -7,6 +7,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type ID string
@@ -17,6 +18,9 @@ type Conn interface {
 	Close(ctx context.Context) error
 	// Clone creates a new Conn with the same underlying connections arguments.
 	Clone(ctx context.Context) (Conn, error)
+	// TypeMap returns a pgx typemap.
+	// TODO: consider whether this is the right abstraction.
+	TypeMap() *pgtype.Map
 }
 
 func Connect(ctx context.Context, preferredID ID, connStr string) (Conn, error) {

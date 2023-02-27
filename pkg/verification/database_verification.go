@@ -105,6 +105,8 @@ ORDER BY 3, 2`,
 			if rows.Err() != nil {
 				return ret, errors.Wrap(err, "error collecting table metadata")
 			}
+		default:
+			return ret, errors.Newf("connection %T not supported", conn)
 		}
 
 		// Sort tables by schemas and names.

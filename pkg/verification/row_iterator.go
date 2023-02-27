@@ -35,7 +35,7 @@ func newRowIterator(
 ) (*rowIterator, error) {
 	// Initialize the type map on the connection.
 	for _, typOID := range table.MatchingColumnTypeOIDs[connIdx] {
-		if _, err := getDataType(ctx, conn.(*dbconn.PGConn), typOID); err != nil {
+		if _, err := getDataType(ctx, conn, typOID); err != nil {
 			return nil, errors.Wrapf(err, "error initializing type oid %d", typOID)
 		}
 	}
@@ -94,7 +94,7 @@ func (it *rowIterator) hasNext(ctx context.Context) bool {
 				it.err = err
 				return false
 			}
-			it.peekCache, err = convertRowValues(it.conn.(*dbconn.PGConn).TypeMap(), rows, it.table.MatchingColumnTypeOIDs[it.connIdx])
+			it.peekCache, err = convertRowValues(it.conn.TypeMap(), rows, it.table.MatchingColumnTypeOIDs[it.connIdx])
 			if err != nil {
 				it.err = err
 				return false
