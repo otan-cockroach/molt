@@ -61,7 +61,11 @@ func Snapshot(inOpts ...SnapshotOpt) WorkFunc {
 		}
 
 		numAdded := 0
-		rows := make([][]any, 0, opts.writeBatchSize)
+		origRows := make([][]any, opts.writeBatchSize)
+		for i := range origRows {
+			origRows[i] = make([]any, len(table.MatchingColumns))
+		}
+		rows := origRows[:0]
 		flush := func() error {
 			if len(rows) == 0 {
 				return nil
@@ -85,6 +89,7 @@ func Snapshot(inOpts ...SnapshotOpt) WorkFunc {
 								reporter.Report(StatusReport{
 									Info: fmt.Sprintf("retry on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, err.Error()),
 								})
+								continue
 							}
 							return err
 						}
@@ -107,14 +112,13 @@ func Snapshot(inOpts ...SnapshotOpt) WorkFunc {
 			}
 			numSeen++
 			vals := it.Next(ctx)
-			toAppend := make([]any, len(table.MatchingColumns))
 			// For now, always include the string value.
 			for i, val := range vals {
 				f := tree.NewFmtCtx(tree.FmtBareStrings | tree.FmtParsableNumerics)
 				f.FormatNode(val)
-				toAppend[i] = f.CloseAndGetString()
+				origRows[len(rows)][i] = f.CloseAndGetString()
 			}
-			rows = append(rows, toAppend)
+			rows = origRows[:len(rows)+1]
 
 			if len(rows) == opts.writeBatchSize {
 				if err := flush(); err != nil {
