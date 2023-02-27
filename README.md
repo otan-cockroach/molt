@@ -47,6 +47,7 @@ See `molt verify --help` for all available help options.
 * Similar types (e.g. int2 / int4 / int8) cannot be compared.
 * MySQL TLS comparison not yet supported.
 * Geospatial types cannot yet be compared.
+* We do not handle schema changes between commands well.
 
 ## Local Setup
 
