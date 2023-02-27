@@ -3,42 +3,23 @@ package dbconn
 import (
 	"context"
 	"database/sql"
-	"net/url"
-	"strings"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type MySQLConn struct {
 	id  ID
-	cfg *mysql.Config
+	url string
 	*sql.DB
 	typeMap *pgtype.Map
 }
 
-func ConnectMySQL(ctx context.Context, id ID, cfg *mysql.Config) (*MySQLConn, error) {
-	db, err := sql.Open("mysql", cfg.FormatDSN())
+func ConnectMySQL(ctx context.Context, id ID, url string) (*MySQLConn, error) {
+	db, err := sql.Open("mysql", url)
 	if err != nil {
 		return nil, err
 	}
-	return &MySQLConn{id: id, cfg: cfg, DB: db, typeMap: pgtype.NewMap()}, nil
-}
-
-func MySQLURLToDSN(u *url.URL) *mysql.Config {
-	// TODO: TLS and the like
-	dsn := mysql.NewConfig()
-	dsn.Addr = u.Host
-	dsn.Net = "tcp"
-	dsn.User = "root"
-	dsn.DBName = strings.TrimLeft(u.Path, "/")
-	if uname := u.User; uname != nil {
-		dsn.User = uname.Username()
-		if p, ok := uname.Password(); ok {
-			dsn.Passwd = p
-		}
-	}
-	return dsn
+	return &MySQLConn{id: id, url: url, DB: db, typeMap: pgtype.NewMap()}, nil
 }
 
 func (c *MySQLConn) ID() ID {
@@ -50,7 +31,7 @@ func (c *MySQLConn) Close(ctx context.Context) error {
 }
 
 func (c *MySQLConn) Clone(ctx context.Context) (Conn, error) {
-	ret, err := ConnectMySQL(ctx, c.id, c.cfg)
+	ret, err := ConnectMySQL(ctx, c.id, c.url)
 	if err != nil {
 		return nil, err
 	}

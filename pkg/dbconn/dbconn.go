@@ -7,6 +7,7 @@ import (
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/lexbase"
 	"github.com/cockroachdb/errors"
+	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
@@ -31,27 +32,28 @@ func Connect(ctx context.Context, preferredID ID, connStr string) (Conn, error) 
 	if len(connStr) == 0 {
 		return nil, errors.Newf("empty connection string")
 	}
-	u, err := url.Parse(connStr)
-	if err != nil {
-		return nil, errors.Wrapf(err, "unable to parse url: %s", connStr)
-	}
 
-	if id == "" {
-		id = ID(u.Hostname() + ":" + u.Port())
-	}
+	before := strings.SplitN(connStr, "://", 2)
 
 	switch {
-	case strings.Contains(u.Scheme, "postgres"):
+	case strings.Contains(before[0], "postgres"):
+		u, err := url.Parse(connStr)
+		if err != nil {
+			return nil, errors.Wrapf(err, "unable to parse url: %s", connStr)
+		}
+
+		if id == "" {
+			id = ID(u.Hostname() + ":" + u.Port())
+		}
 		conn, err := pgx.Connect(ctx, connStr)
 		if err != nil {
 			return nil, errors.Wrapf(err, "error connecting to %s", connStr)
 		}
 		return NewPGConn(id, conn), nil
-	case strings.Contains(u.Scheme, "mysql"):
-		cfg := MySQLURLToDSN(u)
-		return ConnectMySQL(ctx, id, cfg)
+	case strings.Contains(before[0], "mysql"):
+		return ConnectMySQL(ctx, id, before[len(before)-1])
 	}
-	return nil, errors.Newf("unrecognised scheme %s from %s", u.Scheme, connStr)
+	return nil, errors.Newf("unrecognised scheme %s from %s", before[0], connStr)
 }
 
 // TestOnlyCleanDatabase returns a connection to a clean database.
@@ -87,9 +89,12 @@ func TestOnlyCleanDatabase(ctx context.Context, id ID, url string, dbName string
 		if _, err := c.ExecContext(ctx, "CREATE DATABASE "+dbName); err != nil {
 			return nil, err
 		}
-		cfgCopy := c.cfg.Clone()
+		cfgCopy, err := mysql.ParseDSN(c.url)
+		if err != nil {
+			return nil, errors.Wrapf(err, "error parsing dsn", url)
+		}
 		cfgCopy.DBName = dbName
-		return ConnectMySQL(ctx, c.id, cfgCopy)
+		return ConnectMySQL(ctx, c.id, cfgCopy.FormatDSN())
 	}
 	return nil, errors.AssertionFailedf("clean database not supported for %T", c)
 }

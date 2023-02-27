@@ -34,7 +34,7 @@ molt verify \
 
 # Compare mysql and postgres.
 molt verify \
-  'mysql===mysql://root@localhost:3306/defaultdb' \
+  'mysql===jdbc:mysql://root@tcp(localhost:3306)/defaultdb' \
   'postgresql://root@127.0.0.1:26257/defaultdb?options=-ccluster%3Ddemo-tenant&sslmode=disable'
 ```
 
@@ -44,7 +44,6 @@ See `molt verify --help` for all available help options.
 * Splitting a table by shards not supported if the MySQL argument is first.
 * Splitting a table by shard only works for int, uuid and float types.
 * MySQL enums and set types are not supported.
-* MySQL TLS comparison not yet supported.
 * Geospatial types cannot yet be compared.
 * We do not handle schema changes between commands well.
 
