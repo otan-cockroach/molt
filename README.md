@@ -22,9 +22,16 @@ GOOS=linux GOARCH=amd64 go build -v -o artifacts/molt .
 
 ### Verification Tooling
 
-`molt verify` compares results between databases. It takes in two or more JDBC
-connection strings as arguments. For names that are easy to read, append
-`name===` in front of the jdbc string.
+`molt verify` does the following:
+* Verifies that tables between the two data sources are the same.
+* Verifies that table column definitions between the two data sources are the same.
+* Verifies that tables contain the row values between data sources.
+
+It currently supports PostgreSQL and MySQL comparisons with CockroachDB.
+
+It takes in two or more JDBC connection strings as arguments.
+For names that are easy to read, append `<name>===` in front of the jdbc string.
+The first argument is optimised to be read as the "source of truth".∞
 
 ```shell
 # Compare two postgres instances, with simplified naming for both instances.
@@ -42,7 +49,10 @@ See `molt verify --help` for all available help options.
 
 #### Limitations
 * Splitting a table by shard only works for int, uuid and float types.
+* We page 20000 rows at a time, but row values can change in between. Temporary
+  blips in data consistency can be expected.
 * MySQL enums and set types are not supported.
+* Supports only comparing one MySQL database vs a whole CRDB schema.
 * Geospatial types cannot yet be compared.
 * We do not handle schema changes between commands well.
 
