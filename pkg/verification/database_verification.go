@@ -56,27 +56,55 @@ func verifyDatabaseTables(
 	// Grab all tables and verify them.
 	var in []connWithTables
 	for _, conn := range conns {
-		rows, err := conn.(*dbconn.PGConn).Query(
-			ctx,
-			`SELECT pg_class.oid, pg_class.relname, pg_namespace.nspname
+		var tms []TableMetadata
+		switch conn := conn.(type) {
+		case *dbconn.MySQLConn:
+			rows, err := conn.QueryContext(
+				ctx,
+				`SELECT table_name FROM information_schema.tables
+WHERE table_schema = database() AND table_type = "BASE TABLE"
+ORDER BY table_name`,
+			)
+			if err != nil {
+				return ret, err
+			}
+
+			for rows.Next() {
+				// Fake the public schema for now.
+				tm := TableMetadata{
+					Schema: "public",
+				}
+				if err := rows.Scan(&tm.Table); err != nil {
+					return ret, errors.Wrap(err, "error decoding table metadata")
+				}
+				tms = append(tms, tm)
+			}
+			if rows.Err() != nil {
+				return ret, errors.Wrap(err, "error collecting table metadata")
+			}
+		case *dbconn.PGConn:
+			rows, err := conn.Query(
+				ctx,
+				`SELECT pg_class.oid, pg_class.relname, pg_namespace.nspname
 FROM pg_class
 JOIN pg_namespace on (pg_class.relnamespace = pg_namespace.oid)
-WHERE relkind = 'r' AND pg_namespace.nspname NOT IN ('pg_catalog', 'information_schema', 'crdb_internal', 'pg_extension')`,
-		)
-		if err != nil {
-			return ret, err
-		}
-
-		var tms []TableMetadata
-		for rows.Next() {
-			var tm TableMetadata
-			if err := rows.Scan(&tm.OID, &tm.Table, &tm.Schema); err != nil {
-				return ret, errors.Wrap(err, "error decoding table metadata")
+WHERE relkind = 'r' AND pg_namespace.nspname NOT IN ('pg_catalog', 'information_schema', 'crdb_internal', 'pg_extension')
+ORDER BY 3, 2`,
+			)
+			if err != nil {
+				return ret, err
 			}
-			tms = append(tms, tm)
-		}
-		if rows.Err() != nil {
-			return ret, errors.Wrap(err, "error collecting table metadata")
+
+			for rows.Next() {
+				var tm TableMetadata
+				if err := rows.Scan(&tm.OID, &tm.Table, &tm.Schema); err != nil {
+					return ret, errors.Wrap(err, "error decoding table metadata")
+				}
+				tms = append(tms, tm)
+			}
+			if rows.Err() != nil {
+				return ret, errors.Wrap(err, "error collecting table metadata")
+			}
 		}
 
 		// Sort tables by schemas and names.

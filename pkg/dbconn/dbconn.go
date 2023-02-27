@@ -30,7 +30,7 @@ func Connect(ctx context.Context, preferredID ID, connStr string) (Conn, error) 
 	}
 
 	if id == "" {
-		id = ID(u.Hostname())
+		id = ID(u.Hostname() + ":" + u.Port())
 	}
 
 	switch {
@@ -40,33 +40,8 @@ func Connect(ctx context.Context, preferredID ID, connStr string) (Conn, error) 
 			return nil, errors.Wrapf(err, "error connecting to %s", connStr)
 		}
 		return NewPGConn(id, conn), nil
+	case strings.Contains(u.Scheme, "mysql"):
+		return ConnectMySQL(ctx, id, u)
 	}
 	return nil, errors.Newf("unrecognised scheme %s from %s", u.Scheme, connStr)
 }
-
-type PGConn struct {
-	id ID
-	*pgx.Conn
-}
-
-func NewPGConn(id ID, conn *pgx.Conn) *PGConn {
-	return &PGConn{id: id, Conn: conn}
-}
-
-func (c *PGConn) ID() ID {
-	return c.id
-}
-
-func (c *PGConn) SQLDriver() interface{} {
-	return c.Conn
-}
-
-func (c *PGConn) Clone(ctx context.Context) (Conn, error) {
-	conn, err := pgx.ConnectConfig(ctx, c.Config())
-	if err != nil {
-		return nil, err
-	}
-	return NewPGConn(c.id, conn), nil
-}
-
-var _ Conn = (*PGConn)(nil)
