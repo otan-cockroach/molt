@@ -49,7 +49,8 @@ func getColumns(
 		rows, err := conn.QueryContext(
 			ctx,
 			`SELECT column_name, data_type, column_type, is_nullable FROM information_schema.columns
-WHERE table_schema = database() AND table_name = ?`,
+WHERE table_schema = database() AND table_name = ?
+ORDER BY ordinal_position`,
 			string(table.Table),
 		)
 		if err != nil {
@@ -122,7 +123,8 @@ JOIN information_schema.key_column_usage k
 USING(constraint_name,table_schema,table_name)
 WHERE t.constraint_type = 'PRIMARY KEY'
   AND t.table_schema = database()
-  AND t.table_name= ?`,
+  AND t.table_name= ?
+  ORDER BY k.ordinal_position`,
 			string(table.Table),
 		)
 		if err != nil {
@@ -320,7 +322,7 @@ func verifyCommonTables(
 		res.ColumnTypeOIDs = make([][]oid.Oid, len(conns))
 		// Place PK columns first.
 		for _, col := range truthPKCols {
-			if _, ok := comparableColumns[col]; !ok {
+			if _, ok := comparableColumns[col]; ok {
 				res.MatchingColumns = append(res.MatchingColumns, col)
 				for i := range conns {
 					res.ColumnTypeOIDs[i] = append(res.ColumnTypeOIDs[i], columnOIDMap[i][col])
@@ -328,7 +330,7 @@ func verifyCommonTables(
 				delete(comparableColumns, col)
 			}
 		}
-		// Then every other row.
+		// Then every other column.
 		for _, col := range truthCols {
 			if _, ok := comparableColumns[col.columnName]; ok {
 				res.MatchingColumns = append(res.MatchingColumns, col.columnName)

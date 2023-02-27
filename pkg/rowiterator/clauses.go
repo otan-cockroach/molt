@@ -65,7 +65,7 @@ func makeMySQLCompareExpr(
 	if len(vals) > 1 {
 		for i := range vals {
 			colNames[i] = mysqlColumnField(cols[i])
-			f := tree.NewFmtCtx(tree.FmtParsableNumerics)
+			f := tree.NewFmtCtx(tree.FmtParsableNumerics | tree.FmtBareStrings)
 			f.FormatNode(vals[i])
 			// TODO: this is not correct for all types.
 			// We shouldn't cast everything to string at the very least.
@@ -75,7 +75,9 @@ func makeMySQLCompareExpr(
 		cmpExpr.R = &ast.RowExpr{Values: colVals}
 	} else {
 		cmpExpr.L = mysqlColumnField(cols[0])
-		cmpExpr.R = ast.NewValueExpr(vals[0].String(), "", "")
+		f := tree.NewFmtCtx(tree.FmtParsableNumerics | tree.FmtBareStrings)
+		f.FormatNode(vals[0])
+		cmpExpr.R = ast.NewValueExpr(f.CloseAndGetString(), "", "")
 	}
 	return cmpExpr
 }

@@ -40,7 +40,7 @@ func TestDataType(t *testing.T) {
 				rows, err := conn.QueryContext(
 					ctx,
 					`SELECT column_name, data_type, column_type FROM information_schema.columns
-WHERE table_schema = database() AND table_name = ?`,
+WHERE table_schema = database() AND table_name = ? ORDER BY ORDINAL_POSITION`,
 					stmt.Table.Name.String(),
 				)
 				require.NoError(t, err)

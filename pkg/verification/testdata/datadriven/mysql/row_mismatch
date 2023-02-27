@@ -31,10 +31,10 @@ DROP TABLE test_table
 # All the slightly differently named tables.
 exec source_of_truth
 CREATE TABLE test_table (
-    id INT4 PRIMARY KEY,
     tinyint_test INT1 DEFAULT 1,
-    ts_table TIMESTAMP DEFAULT '2020-01-02 19:18:17',
-    dt_table DATETIME DEFAULT '2020-01-02 19:18:17'
+    id INT4 PRIMARY KEY,
+    ts_table TIMESTAMP NOT NULL DEFAULT '2020-01-02 19:18:17',
+    dt_table DATETIME NOT NULL DEFAULT '2020-01-02 19:18:17'
 )
 ----
 [truth] 0 rows affected
@@ -43,8 +43,8 @@ exec non_source_of_truth
 CREATE TABLE test_table (
     id INT8 PRIMARY KEY,
     tinyint_test INT4 DEFAULT 1,
-    ts_table TIMESTAMPTZ DEFAULT '2020-01-02 19:18:17',
-    dt_table TIMESTAMP DEFAULT '2020-01-02 19:18:17'
+    ts_table TIMESTAMPTZ NOT NULL DEFAULT '2020-01-02 19:18:17',
+    dt_table TIMESTAMP NOT NULL DEFAULT '2020-01-02 19:18:17'
 )
 ----
 [lie] CREATE TABLE
@@ -59,9 +59,6 @@ verify
 ----
 [STATUS] starting verify on public.test_table, shard 1/1
 [STATUS] finished row verification on public.test_table (shard 1/1): truth rows seen: 10, success: 10, missing: 0, mismatch: 0, extraneous: 0
-
-verify
-----
 
 exec all
 DROP TABLE test_table

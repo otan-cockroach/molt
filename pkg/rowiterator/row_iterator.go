@@ -221,11 +221,11 @@ func (it *Iterator) nextPage(ctx context.Context) error {
 		selectStmt.Where = andClause
 		var sb strings.Builder
 		if err := selectStmt.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb)); err != nil {
-			return errors.Wrap(err, "error generating MySQL statmeent")
+			return errors.Wrap(err, "error generating MySQL statement")
 		}
 		newRows, err := conn.QueryContext(ctx, sb.String())
 		if err != nil {
-			return errors.Wrapf(err, "error getting rows for table %s in %s", it.table.Table, it.Conn.ID)
+			return errors.Wrapf(err, "error getting rows for table %s in %s", it.table.Table, it.Conn.ID())
 		}
 		it.currRows = &mysqlRows{
 			Rows:    newRows,
