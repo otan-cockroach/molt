@@ -6,7 +6,9 @@ exec all
 CREATE TYPE test_enum AS ENUM('a', 'bbb', 'c');
 CREATE TABLE test_table (
     bool_test BOOL DEFAULT true,
-    id INT4 PRIMARY KEY,
+    id INT4,
+    id_b INT4 DEFAULT 0,
+    PRIMARY KEY (id, id_b),
     char_test "char" DEFAULT 'abc',
     bpchar_test CHAR DEFAULT 'a',
     varchar_test VARCHAR DEFAULT 'abcd',
