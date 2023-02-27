@@ -6,10 +6,18 @@ import (
 	"log"
 	"strings"
 
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/pkg/ctxgroup"
 	"github.com/cockroachdb/molt/pkg/dbconn"
+	"github.com/lib/pq/oid"
 )
+
+func init() {
+	// Inject JSON as a OidToType.
+	types.OidToType[oid.T_json] = types.Jsonb
+	types.OidToType[oid.T__json] = types.MakeArray(types.Jsonb)
+}
 
 func (tm TableMetadata) Compare(o TableMetadata) int {
 	if c := strings.Compare(string(tm.Schema), string(o.Schema)); c != 0 {

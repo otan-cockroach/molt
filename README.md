@@ -44,7 +44,6 @@ See `molt verify --help` for all available help options.
 * Splitting a table by shards not supported if the MySQL argument is first.
 * Splitting a table by shard only works for int, uuid and float types.
 * MySQL enums and set types are not supported.
-* Similar types (e.g. int2 / int4 / int8) cannot be compared.
 * MySQL TLS comparison not yet supported.
 * Geospatial types cannot yet be compared.
 * We do not handle schema changes between commands well.

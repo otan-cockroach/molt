@@ -5,18 +5,18 @@ import (
 	"fmt"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/pkg/dbconn"
 	"github.com/cockroachdb/molt/pkg/mysqlconv"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
 )
 
 type columnMetadata struct {
 	columnName tree.Name
-	// TODO: account for geospatial, enums, user defined types.
-	// TODO: compare typMod, which CRDB does not really support.
-	typeOID oid.Oid
-	notNull bool
+	typeOID    oid.Oid
+	notNull    bool
 }
 
 func getColumns(
@@ -251,8 +251,7 @@ func verifyCommonTables(
 				if err != nil {
 					return nil, err
 				}
-				if truthTyp.Name != compareTyp.Name {
-					// TODO(otan): allow similar types to be compared anyway, e.g. int/int, float/float, json/jsonb.
+				if !comparableType(truthTyp, compareTyp) {
 					res.MismatchingTableDefinitions = append(
 						res.MismatchingTableDefinitions,
 						MismatchingTableDefinition{
@@ -342,4 +341,19 @@ func verifyCommonTables(
 		ret = append(ret, res)
 	}
 	return ret, nil
+}
+
+func comparableType(a, b *pgtype.Type) bool {
+	if a.Name == b.Name {
+		return true
+	}
+	aTyp, ok := types.OidToType[oid.Oid(a.OID)]
+	if !ok {
+		return false
+	}
+	bTyp, ok := types.OidToType[oid.Oid(b.OID)]
+	if !ok {
+		return false
+	}
+	return aTyp.Equivalent(bTyp)
 }

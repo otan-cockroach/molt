@@ -123,6 +123,12 @@ verify
 [ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=400)
 [STATUS] finished row verification on public.common_table (shard 1/1): truth rows seen: 7, success: 3, missing: 3, mismatch: 1, extraneous: 2
 
+exec all
+DROP TABLE common_table
+----
+[truth] DROP TABLE
+[lie] DROP TABLE
+
 # Test two tables, but mismatching columns.
 exec source_of_truth
 CREATE TABLE table_misaligned_columns (
@@ -152,14 +158,6 @@ verify
 ----
 [TABLE MISMATCH] table public.table_misaligned_columns on lie has an issue: extraneous column not_common_b found
 [TABLE MISMATCH] table public.table_misaligned_columns on lie has an issue: missing column not_common_a
-[STATUS] starting verify on public.common_table, shard 1/1
-[ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=50)
-[ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=125)
-[ROW MISMATCH] table public.common_table on lie has a mismatching row on (id=150): column str: NULL vs 'different value'
-[ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=250)
-[ROW MISMATCH] table public.common_table on lie has an extraneous row with PK (id=300)
-[ROW MISMATCH] table public.common_table on lie is missing a row with PK (id=400)
-[STATUS] finished row verification on public.common_table (shard 1/1): truth rows seen: 7, success: 3, missing: 3, mismatch: 1, extraneous: 2
 [STATUS] starting verify on public.table_misaligned_columns, shard 1/1
 [ROW MISMATCH] table public.table_misaligned_columns on lie has a mismatching row on (id=2): column a: 4 vs 3
 [STATUS] finished row verification on public.table_misaligned_columns (shard 1/1): truth rows seen: 2, success: 1, missing: 0, mismatch: 1, extraneous: 0
@@ -169,3 +167,34 @@ DROP TABLE table_misaligned_columns
 ----
 [truth] DROP TABLE
 [lie] DROP TABLE
+
+# Test two tables with comparable types that are not the same.
+exec source_of_truth
+CREATE TABLE comparable_type (
+    id INT4 PRIMARY KEY,
+    f FLOAT4,
+    j JSON
+);
+INSERT INTO comparable_type VALUES
+    (1, 1.5, '[]'::jsonb),
+    (3, 4, '["mismatch"]'::jsonb);
+----
+[truth] INSERT 0 2
+
+exec non_source_of_truth
+CREATE TABLE comparable_type (
+    id INT8 PRIMARY KEY,
+    f FLOAT8,
+    j JSONB
+);
+INSERT INTO comparable_type VALUES
+    (1, 1.5, '[]'::jsonb),
+    (3, 4, '["big mismatch"]'::jsonb);
+----
+[lie] INSERT 0 2
+
+verify
+----
+[STATUS] starting verify on public.comparable_type, shard 1/1
+[ROW MISMATCH] table public.comparable_type on lie has a mismatching row on (id=3): column j: '["big mismatch"]' vs '["mismatch"]'
+[STATUS] finished row verification on public.comparable_type (shard 1/1): truth rows seen: 2, success: 1, missing: 0, mismatch: 1, extraneous: 0
