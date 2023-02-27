@@ -218,6 +218,7 @@ func (it *Iterator) nextPage(ctx context.Context) error {
 			)
 		}
 		selectStmt := it.queryCache.(*ast.SelectStmt)
+		selectStmt.Where = andClause
 		var sb strings.Builder
 		if err := selectStmt.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb)); err != nil {
 			return errors.Wrap(err, "error generating MySQL statmeent")
@@ -234,7 +235,6 @@ func (it *Iterator) nextPage(ctx context.Context) error {
 	default:
 		return errors.AssertionFailedf("unhandled iterator type: %T\n", conn)
 	}
-
 	it.currRowsRead = 0
 	return nil
 }

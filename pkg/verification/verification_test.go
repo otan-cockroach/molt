@@ -18,21 +18,38 @@ type connArg struct {
 	connStr string
 }
 
-func TestDataDriven(t *testing.T) {
-	datadriven.Walk(t, "testdata/datadriven", testDataDriven)
+func TestDataDrivenPG(t *testing.T) {
+	datadriven.Walk(
+		t,
+		"testdata/datadriven/pg",
+		func(t *testing.T, path string) {
+			testDataDriven(t, path, []connArg{
+				{id: "truth", connStr: testutils.PGConnStr()},
+				{id: "lie", connStr: testutils.CRDBConnStr()},
+			})
+		},
+	)
 }
 
-func testDataDriven(t *testing.T, path string) {
+func TestDataDrivenMySQL(t *testing.T) {
+	datadriven.Walk(
+		t,
+		"testdata/datadriven/mysql",
+		func(t *testing.T, path string) {
+			testDataDriven(t, path, []connArg{
+				{id: "truth", connStr: testutils.MySQLConnStr()},
+				{id: "lie", connStr: testutils.CRDBConnStr()},
+			})
+		},
+	)
+}
+
+func testDataDriven(t *testing.T, path string, connArgs []connArg) {
 	ctx := context.Background()
 
-	pgConnArgs := []connArg{
-		{id: "truth", connStr: testutils.PGConnStr()},
-		{id: "lie", connStr: testutils.CRDBConnStr()},
-	}
-
 	var conns []dbconn.Conn
-	for _, pgArgs := range pgConnArgs {
-		cleanConn, err := dbconn.TestOnlyCleanDatabase(ctx, pgArgs.id, pgArgs.connStr, "dd_test")
+	for _, args := range connArgs {
+		cleanConn, err := dbconn.TestOnlyCleanDatabase(ctx, args.id, args.connStr, "dd_test")
 		require.NoError(t, err)
 		conns = append(conns, cleanConn)
 	}
@@ -62,17 +79,37 @@ func testDataDriven(t *testing.T, path string) {
 			}
 			require.NotEmpty(t, connIdxs, "destination sql must be defined")
 			for _, connIdx := range connIdxs {
-				tag, err := conns[connIdx].(*dbconn.PGConn).Exec(ctx, d.Input)
-				if err != nil {
-					sb.WriteString(fmt.Sprintf("[%s] error: %s\n", conns[connIdx].ID(), err.Error()))
-					continue
+				switch conn := conns[connIdx].(type) {
+				case *dbconn.PGConn:
+					tag, err := conn.Exec(ctx, d.Input)
+					if err != nil {
+						sb.WriteString(fmt.Sprintf("[%s] error: %s\n", conn.ID(), err.Error()))
+						continue
+					}
+					sb.WriteString(fmt.Sprintf("[%s] %s\n", conn.ID(), tag.String()))
+				case *dbconn.MySQLConn:
+					tag, err := conn.ExecContext(ctx, d.Input)
+					if err != nil {
+						sb.WriteString(fmt.Sprintf("[%s] error: %s\n", conn.ID(), err.Error()))
+						continue
+					}
+					r, err := tag.RowsAffected()
+					if err != nil {
+						sb.WriteString(fmt.Sprintf("[%s] error getting rows affected: %s\n", conn.ID(), err.Error()))
+						continue
+					}
+					sb.WriteString(fmt.Sprintf("[%s] %d rows affected\n", conn.ID(), r))
+				default:
+					t.Fatalf("unhandled conn type: %T", conn)
 				}
-				sb.WriteString(fmt.Sprintf("[%s] %s\n", conns[connIdx].ID(), tag.String()))
 			}
 
 			// Deallocate caches - otherwise the plans may stick around.
 			for _, conn := range conns {
-				require.NoError(t, conn.(*dbconn.PGConn).DeallocateAll(ctx))
+				switch conn := conn.(type) {
+				case *dbconn.PGConn:
+					require.NoError(t, conn.DeallocateAll(ctx))
+				}
 			}
 		case "verify":
 			numSplits := 1

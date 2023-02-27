@@ -1,0 +1,70 @@
+#
+# Throw in all the common types and compare them.
+#
+
+exec all
+CREATE TABLE test_table (
+    id INT4 PRIMARY KEY,
+    int2_test INT2 DEFAULT 1
+)
+----
+[truth] 0 rows affected
+[lie] CREATE TABLE
+
+exec all
+INSERT INTO test_table (id) VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10);
+----
+[truth] 10 rows affected
+[lie] INSERT 0 10
+
+verify
+----
+[STATUS] starting verify on public.test_table, shard 1/1
+[STATUS] finished row verification on public.test_table (shard 1/1): truth rows seen: 10, success: 10, missing: 0, mismatch: 0, extraneous: 0
+
+exec all
+DROP TABLE test_table
+----
+[truth] 0 rows affected
+[lie] DROP TABLE
+
+# All the slightly differently named tables.
+exec source_of_truth
+CREATE TABLE test_table (
+    id INT4 PRIMARY KEY,
+    tinyint_test INT1 DEFAULT 1,
+    ts_table TIMESTAMP DEFAULT '2020-01-02 19:18:17',
+    dt_table DATETIME DEFAULT '2020-01-02 19:18:17'
+)
+----
+[truth] 0 rows affected
+
+exec non_source_of_truth
+CREATE TABLE test_table (
+    id INT8 PRIMARY KEY,
+    tinyint_test INT4 DEFAULT 1,
+    ts_table TIMESTAMPTZ DEFAULT '2020-01-02 19:18:17',
+    dt_table TIMESTAMP DEFAULT '2020-01-02 19:18:17'
+)
+----
+[lie] CREATE TABLE
+
+exec all
+INSERT INTO test_table (id) VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10);
+----
+[truth] 10 rows affected
+[lie] INSERT 0 10
+
+verify
+----
+[STATUS] starting verify on public.test_table, shard 1/1
+[STATUS] finished row verification on public.test_table (shard 1/1): truth rows seen: 10, success: 10, missing: 0, mismatch: 0, extraneous: 0
+
+verify
+----
+
+exec all
+DROP TABLE test_table
+----
+[truth] 0 rows affected
+[lie] DROP TABLE
