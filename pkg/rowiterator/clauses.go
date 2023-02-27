@@ -5,18 +5,11 @@ import (
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree/treecmp"
+	"github.com/cockroachdb/molt/pkg/mysqlconv"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/model"
 	"github.com/pingcap/tidb/parser/opcode"
 )
-
-func mysqlColumnField(name tree.Name) *ast.ColumnNameExpr {
-	return &ast.ColumnNameExpr{
-		Name: &ast.ColumnName{
-			Name: model.NewCIStr(string(name)),
-		},
-	}
-}
 
 func constructMySQLBaseSelectClause(table Table, rowBatchSize int) *ast.SelectStmt {
 	fields := &ast.FieldList{
@@ -24,7 +17,7 @@ func constructMySQLBaseSelectClause(table Table, rowBatchSize int) *ast.SelectSt
 	}
 	for i, col := range table.ColumnNames {
 		fields.Fields[i] = &ast.SelectField{
-			Expr: mysqlColumnField(col),
+			Expr: mysqlconv.MySQLASTColumnField(col),
 		}
 	}
 	orderBy := &ast.OrderByClause{
@@ -32,7 +25,7 @@ func constructMySQLBaseSelectClause(table Table, rowBatchSize int) *ast.SelectSt
 	}
 	for i, pkCol := range table.PrimaryKeyColumns {
 		orderBy.Items[i] = &ast.ByItem{
-			Expr: mysqlColumnField(pkCol),
+			Expr: mysqlconv.MySQLASTColumnField(pkCol),
 		}
 	}
 	return &ast.SelectStmt{
@@ -64,7 +57,7 @@ func makeMySQLCompareExpr(
 
 	if len(vals) > 1 {
 		for i := range vals {
-			colNames[i] = mysqlColumnField(cols[i])
+			colNames[i] = mysqlconv.MySQLASTColumnField(cols[i])
 			f := tree.NewFmtCtx(tree.FmtParsableNumerics | tree.FmtBareStrings)
 			f.FormatNode(vals[i])
 			// TODO: this is not correct for all types.
@@ -74,7 +67,7 @@ func makeMySQLCompareExpr(
 		cmpExpr.L = &ast.RowExpr{Values: colNames}
 		cmpExpr.R = &ast.RowExpr{Values: colVals}
 	} else {
-		cmpExpr.L = mysqlColumnField(cols[0])
+		cmpExpr.L = mysqlconv.MySQLASTColumnField(cols[0])
 		f := tree.NewFmtCtx(tree.FmtParsableNumerics | tree.FmtBareStrings)
 		f.FormatNode(vals[0])
 		cmpExpr.R = ast.NewValueExpr(f.CloseAndGetString(), "", "")

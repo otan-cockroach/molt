@@ -69,6 +69,15 @@ verify
 [STATUS] starting verify on public.test_table, shard 1/1
 [STATUS] finished row verification on public.test_table (shard 1/1): truth rows seen: 10, success: 10, missing: 0, mismatch: 0, extraneous: 0
 
+verify splits=3
+----
+[STATUS] starting verify on public.test_table, shard 1/3, range: [<beginning> - 4)
+[STATUS] finished row verification on public.test_table (shard 1/3): truth rows seen: 3, success: 3, missing: 0, mismatch: 0, extraneous: 0
+[STATUS] starting verify on public.test_table, shard 2/3, range: [4 - 7)
+[STATUS] finished row verification on public.test_table (shard 2/3): truth rows seen: 3, success: 3, missing: 0, mismatch: 0, extraneous: 0
+[STATUS] starting verify on public.test_table, shard 3/3, range: [7 - <end>]
+[STATUS] finished row verification on public.test_table (shard 3/3): truth rows seen: 4, success: 4, missing: 0, mismatch: 0, extraneous: 0
+
 exec all
 DROP TABLE test_table
 ----

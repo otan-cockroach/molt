@@ -56,22 +56,7 @@ type mysqlRows struct {
 }
 
 func (r *mysqlRows) Datums() (tree.Datums, error) {
-	typs, err := r.ColumnTypes()
-	if err != nil {
-		return nil, err
-	}
-	// Since we are passing in "valPtrs", golang doesn't like if we use
-	// anything other than []byte. This is extremely annoying and means
-	// we have to parse strings.
-	vals := make([][]byte, len(typs))
-	valPtrs := make([]any, len(typs))
-	for i := range typs {
-		valPtrs[i] = &vals[i]
-	}
-	if err := r.Scan(valPtrs...); err != nil {
-		return nil, errors.Wrap(err, "failed to scan row")
-	}
-	return mysqlconv.ConvertRowValues(r.typMap, vals, r.typOIDs)
+	return mysqlconv.ScanRowDynamicTypes(r.Rows, r.typMap, r.typOIDs)
 }
 
 type pgRows struct {

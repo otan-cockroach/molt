@@ -41,7 +41,6 @@ molt verify \
 See `molt verify --help` for all available help options.
 
 #### Limitations
-* Splitting a table by shards not supported if the MySQL argument is first.
 * Splitting a table by shard only works for int, uuid and float types.
 * MySQL enums and set types are not supported.
 * Geospatial types cannot yet be compared.
