@@ -24,13 +24,17 @@ type Iterator struct {
 	table        Table
 	rowBatchSize int
 
-	isComplete   bool
-	pkCursor     tree.Datums
-	peekCache    tree.Datums
-	err          error
-	currRows     rows
-	currRowsRead int
-	queryCache   interface{}
+	waitCh        chan itResult
+	cache         []tree.Datums
+	pkCursor      tree.Datums
+	currCacheSize int
+	err           error
+	queryCache    interface{}
+}
+
+type itResult struct {
+	r   []tree.Datums
+	err error
 }
 
 type Table struct {
@@ -83,9 +87,11 @@ func NewIterator(
 		}
 	}
 	it := &Iterator{
-		Conn:         conn,
-		table:        table,
-		rowBatchSize: rowBatchSize,
+		Conn:          conn,
+		table:         table,
+		rowBatchSize:  rowBatchSize,
+		currCacheSize: rowBatchSize,
+		waitCh:        make(chan itResult, 1),
 	}
 	switch conn := conn.(type) {
 	case *dbconn.PGConn:
@@ -95,156 +101,165 @@ func NewIterator(
 	default:
 		return nil, errors.Newf("unsupported conn type %T", conn)
 	}
+	it.nextPage(ctx)
 	return it, nil
 }
 
 func (it *Iterator) HasNext(ctx context.Context) bool {
-	if it.isComplete || it.err != nil || (it.currRows != nil && it.currRows.Err() != nil) {
-		return false
-	}
-	if it.peekCache != nil {
-		return true
-	}
 	for {
-		if it.currRows != nil && it.currRows.Next() {
-			it.currRowsRead++
-			it.peekCache, it.err = it.currRows.Datums()
-			if it.err != nil {
-				return false
-			}
-			it.pkCursor = it.peekCache[:len(it.table.PrimaryKeyColumns)]
+		if it.err != nil {
+			return false
+		}
+
+		if len(it.cache) > 0 {
 			return true
 		}
 
-		// If we have read rows less than the limit, we are done.
-		if it.currRows != nil && it.currRowsRead < it.rowBatchSize {
-			it.isComplete = true
+		// If the last cache size was less than the row size, we're done
+		// reading all the results.
+		if it.currCacheSize < it.rowBatchSize {
 			return false
 		}
 
-		// Otherwise, fetch the Next page and restart.
-		if err := it.nextPage(ctx); err != nil {
-			it.err = err
+		// Wait for more results.
+		res := <-it.waitCh
+		if res.err != nil {
+			it.err = errors.Wrap(res.err, "error getting result")
 			return false
 		}
+		it.cache = res.r
+		it.currCacheSize = len(it.cache)
+
+		// Queue the next page immediately.
+		it.nextPage(ctx)
 	}
 }
 
-func (it *Iterator) nextPage(ctx context.Context) error {
-	switch conn := it.Conn.(type) {
-	case *dbconn.PGConn:
-		andClause := &tree.AndExpr{
-			Left:  tree.DBoolTrue,
-			Right: tree.DBoolTrue,
-		}
-		// Use the cursor if available, otherwise not.
-		if len(it.pkCursor) > 0 {
-			andClause.Left = makePGCompareExpr(
-				treecmp.MakeComparisonOperator(treecmp.GT),
-				it.table.ColumnNames,
-				it.pkCursor,
-			)
-		} else if len(it.table.StartPKVals) > 0 {
-			andClause.Left = makePGCompareExpr(
-				treecmp.MakeComparisonOperator(treecmp.GE),
-				it.table.ColumnNames,
-				it.table.StartPKVals,
-			)
-		}
-		if len(it.table.EndPKVals) > 0 {
-			andClause.Right = makePGCompareExpr(
-				treecmp.MakeComparisonOperator(treecmp.LT),
-				it.table.ColumnNames,
-				it.table.EndPKVals,
-			)
-		}
-		selectStmt := it.queryCache.(*tree.Select)
-		selectStmt.Select.(*tree.SelectClause).Where = &tree.Where{
-			Type: tree.AstWhere,
-			Expr: andClause,
-		}
+// nextPage fetches rows asynchronously.
+func (it *Iterator) nextPage(ctx context.Context) {
+	go func() {
+		datums, err := func() ([]tree.Datums, error) {
+			var currRows rows
+			switch conn := it.Conn.(type) {
+			case *dbconn.PGConn:
+				andClause := &tree.AndExpr{
+					Left:  tree.DBoolTrue,
+					Right: tree.DBoolTrue,
+				}
+				// Use the cursor if available, otherwise not.
+				if len(it.pkCursor) > 0 {
+					andClause.Left = makePGCompareExpr(
+						treecmp.MakeComparisonOperator(treecmp.GT),
+						it.table.ColumnNames,
+						it.pkCursor,
+					)
+				} else if len(it.table.StartPKVals) > 0 {
+					andClause.Left = makePGCompareExpr(
+						treecmp.MakeComparisonOperator(treecmp.GE),
+						it.table.ColumnNames,
+						it.table.StartPKVals,
+					)
+				}
+				if len(it.table.EndPKVals) > 0 {
+					andClause.Right = makePGCompareExpr(
+						treecmp.MakeComparisonOperator(treecmp.LT),
+						it.table.ColumnNames,
+						it.table.EndPKVals,
+					)
+				}
+				selectStmt := it.queryCache.(*tree.Select)
+				selectStmt.Select.(*tree.SelectClause).Where = &tree.Where{
+					Type: tree.AstWhere,
+					Expr: andClause,
+				}
 
-		f := tree.NewFmtCtx(tree.FmtParsableNumerics)
-		f.FormatNode(selectStmt)
-		newRows, err := conn.Query(ctx, f.CloseAndGetString())
-		if err != nil {
-			return errors.Wrapf(err, "error getting rows for table %s.%s from %s", it.table.Schema, it.table.Table, it.Conn.ID)
-		}
-		it.currRows = &pgRows{
-			Rows:    newRows,
-			typMap:  it.Conn.TypeMap(),
-			typOIDs: it.table.ColumnOIDs,
-		}
-	case *dbconn.MySQLConn:
-		andClause := &ast.BinaryOperationExpr{
-			Op: opcode.LogicAnd,
-			L:  ast.NewValueExpr(1, "", ""),
-			R:  ast.NewValueExpr(1, "", ""),
-		}
-		// Use the cursor if available, otherwise not.
-		if len(it.pkCursor) > 0 {
-			andClause.L = makeMySQLCompareExpr(
-				opcode.GT,
-				it.table.ColumnNames,
-				it.pkCursor,
-			)
-		} else if len(it.table.StartPKVals) > 0 {
-			andClause.L = makeMySQLCompareExpr(
-				opcode.GE,
-				it.table.ColumnNames,
-				it.table.StartPKVals,
-			)
-		}
-		if len(it.table.EndPKVals) > 0 {
-			andClause.R = makeMySQLCompareExpr(
-				opcode.LT,
-				it.table.ColumnNames,
-				it.table.EndPKVals,
-			)
-		}
-		selectStmt := it.queryCache.(*ast.SelectStmt)
-		selectStmt.Where = andClause
-		var sb strings.Builder
-		if err := selectStmt.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb)); err != nil {
-			return errors.Wrap(err, "error generating MySQL statement")
-		}
-		newRows, err := conn.QueryContext(ctx, sb.String())
-		if err != nil {
-			return errors.Wrapf(err, "error getting rows for table %s in %s", it.table.Table, it.Conn.ID())
-		}
-		it.currRows = &mysqlRows{
-			Rows:    newRows,
-			typMap:  it.Conn.TypeMap(),
-			typOIDs: it.table.ColumnOIDs,
-		}
-	default:
-		return errors.AssertionFailedf("unhandled iterator type: %T\n", conn)
-	}
-	it.currRowsRead = 0
-	return nil
+				f := tree.NewFmtCtx(tree.FmtParsableNumerics)
+				f.FormatNode(selectStmt)
+				newRows, err := conn.Query(ctx, f.CloseAndGetString())
+				if err != nil {
+					return nil, errors.Wrapf(err, "error getting rows for table %s.%s from %s", it.table.Schema, it.table.Table, it.Conn.ID)
+				}
+				currRows = &pgRows{
+					Rows:    newRows,
+					typMap:  it.Conn.TypeMap(),
+					typOIDs: it.table.ColumnOIDs,
+				}
+			case *dbconn.MySQLConn:
+				andClause := &ast.BinaryOperationExpr{
+					Op: opcode.LogicAnd,
+					L:  ast.NewValueExpr(1, "", ""),
+					R:  ast.NewValueExpr(1, "", ""),
+				}
+				// Use the cursor if available, otherwise not.
+				if len(it.pkCursor) > 0 {
+					andClause.L = makeMySQLCompareExpr(
+						opcode.GT,
+						it.table.ColumnNames,
+						it.pkCursor,
+					)
+				} else if len(it.table.StartPKVals) > 0 {
+					andClause.L = makeMySQLCompareExpr(
+						opcode.GE,
+						it.table.ColumnNames,
+						it.table.StartPKVals,
+					)
+				}
+				if len(it.table.EndPKVals) > 0 {
+					andClause.R = makeMySQLCompareExpr(
+						opcode.LT,
+						it.table.ColumnNames,
+						it.table.EndPKVals,
+					)
+				}
+				selectStmt := it.queryCache.(*ast.SelectStmt)
+				selectStmt.Where = andClause
+				var sb strings.Builder
+				if err := selectStmt.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb)); err != nil {
+					return nil, errors.Wrap(err, "error generating MySQL statement")
+				}
+				newRows, err := conn.QueryContext(ctx, sb.String())
+				if err != nil {
+					return nil, errors.Wrapf(err, "error getting rows for table %s in %s", it.table.Table, it.Conn.ID())
+				}
+				currRows = &mysqlRows{
+					Rows:    newRows,
+					typMap:  it.Conn.TypeMap(),
+					typOIDs: it.table.ColumnOIDs,
+				}
+			default:
+				return nil, errors.AssertionFailedf("unhandled iterator type: %T\n", conn)
+			}
+			datums := make([]tree.Datums, 0, it.rowBatchSize)
+			for currRows.Next() {
+				d, err := currRows.Datums()
+				if err != nil {
+					return nil, errors.Wrapf(err, "error getting datums")
+				}
+				it.pkCursor = d[:len(it.table.PrimaryKeyColumns)]
+				datums = append(datums, d)
+			}
+			return datums, currRows.Err()
+		}()
+		it.waitCh <- itResult{r: datums, err: err}
+	}()
 }
 
 func (it *Iterator) Peek(ctx context.Context) tree.Datums {
-	for {
-		if it.peekCache != nil {
-			return it.peekCache
-		}
-		if !it.HasNext(ctx) {
-			return nil
-		}
+	if it.HasNext(ctx) {
+		return it.cache[0]
 	}
+	return nil
 }
 
 func (it *Iterator) Next(ctx context.Context) tree.Datums {
-	ret := it.Peek(ctx)
-	it.peekCache = nil
-	return ret
+	if it.HasNext(ctx) {
+		ret := it.cache[0]
+		it.cache = it.cache[1:]
+		return ret
+	}
+	return nil
 }
 
 func (it *Iterator) Error() error {
-	var err error
-	if it.currRows != nil {
-		err = it.currRows.Err()
-	}
-	return errors.CombineErrors(it.err, err)
+	return it.err
 }

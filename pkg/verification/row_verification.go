@@ -179,6 +179,13 @@ func CompareRows(
 	}
 
 	for _, it := range iterators {
+		if err := it.Error(); err != nil {
+			reporter.Report(StatusReport{
+				Info: fmt.Sprintf("error validating %s.%s on %s: %v", table.Schema, table.Table, it.Conn.ID(), err),
+			})
+			return err
+		}
+
 		for it.HasNext(ctx) {
 			targetVals := it.Next(ctx)
 			reporter.Report(ExtraneousRow{
@@ -190,12 +197,8 @@ func CompareRows(
 			})
 			stats.numExtraneous++
 		}
-		if err := it.Error(); err != nil {
-			reporter.Report(StatusReport{
-				Info: fmt.Sprintf("error validating %s.%s on %s: %v", table.Schema, table.Table, it.Conn.ID(), err),
-			})
-		}
 	}
+
 	reporter.Report(StatusReport{
 		Info: fmt.Sprintf("finished row verification on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, stats.String()),
 	})
