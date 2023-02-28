@@ -91,7 +91,6 @@ func Snapshot(inOpts ...SnapshotOpt) WorkFunc {
 								})
 								continue
 							}
-							return err
 						}
 						return err
 					}
@@ -107,16 +106,20 @@ func Snapshot(inOpts ...SnapshotOpt) WorkFunc {
 		for it.HasNext(ctx) {
 			if numSeen%10000 == 0 && numSeen > 0 {
 				reporter.Report(StatusReport{
-					Info: fmt.Sprintf("progress on %s.%s (shard %d/%d): %d rows seen", table.Schema, table.Table, table.ShardNum, table.TotalShards, numSeen),
+					Info: fmt.Sprintf("progress on %s.%s (shard %d/%d): %d rows seen, %d added", table.Schema, table.Table, table.ShardNum, table.TotalShards, numSeen, numAdded),
 				})
 			}
 			numSeen++
 			vals := it.Next(ctx)
 			// For now, always include the string value.
 			for i, val := range vals {
-				f := tree.NewFmtCtx(tree.FmtBareStrings | tree.FmtParsableNumerics)
-				f.FormatNode(val)
-				origRows[len(rows)][i] = f.CloseAndGetString()
+				if val == tree.DNull {
+					origRows[len(rows)][i] = nil
+				} else {
+					f := tree.NewFmtCtx(tree.FmtBareStrings | tree.FmtParsableNumerics)
+					f.FormatNode(val)
+					origRows[len(rows)][i] = f.CloseAndGetString()
+				}
 			}
 			rows = origRows[:len(rows)+1]
 
@@ -127,13 +130,13 @@ func Snapshot(inOpts ...SnapshotOpt) WorkFunc {
 			}
 		}
 		if it.Error() != nil {
-			return errors.Wrapf(err, "error during iteration")
+			return errors.Wrapf(it.Error(), "error during iteration")
 		}
 		if err := flush(); err != nil {
 			return errors.Wrapf(err, "error flushing results")
 		}
 		reporter.Report(StatusReport{
-			Info: fmt.Sprintf("finished snapshot on %s.%s (shard %d/%d): %d rows", table.Schema, table.Table, table.ShardNum, table.TotalShards, numAdded),
+			Info: fmt.Sprintf("finished snapshot on %s.%s (shard %d/%d): %d rows seen, %d rows added", table.Schema, table.Table, table.ShardNum, table.TotalShards, numSeen, numAdded),
 		})
 
 		return nil
