@@ -31,7 +31,7 @@ It currently supports PostgreSQL and MySQL comparisons with CockroachDB.
 
 It takes in two or more JDBC connection strings as arguments.
 For names that are easy to read, append `<name>===` in front of the jdbc string.
-The first argument is optimised to be read as the "source of truth".∞
+The first argument is optimised to be read as the "source of truth".
 
 ```shell
 # Compare two postgres instances, with simplified naming for both instances.
@@ -45,14 +45,14 @@ molt verify \
   'postgresql://root@127.0.0.1:26257/defaultdb?options=-ccluster%3Ddemo-tenant&sslmode=disable'
 ```
 
-See `molt verify --help` for all available help options.
+See `molt verify --help` for all available parameters.
 
 #### Limitations
 * Splitting a table by shard only works for int, uuid and float types.
 * We page 20000 rows at a time, but row values can change in between. Temporary
   blips in data consistency can be expected.
 * MySQL enums and set types are not supported.
-* Supports only comparing one MySQL database vs a whole CRDB schema.
+* Supports only comparing one MySQL database vs a whole CRDB schema (which is assumed to be "public").
 * Geospatial types cannot yet be compared.
 * We do not handle schema changes between commands well.
 
