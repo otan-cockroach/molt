@@ -51,6 +51,7 @@ type rows interface {
 	Err() error
 	Next() bool
 	Datums() (tree.Datums, error)
+	Close()
 }
 
 type mysqlRows struct {
@@ -61,6 +62,10 @@ type mysqlRows struct {
 
 func (r *mysqlRows) Datums() (tree.Datums, error) {
 	return mysqlconv.ScanRowDynamicTypes(r.Rows, r.typMap, r.typOIDs)
+}
+
+func (r *mysqlRows) Close() {
+	_ = r.Rows.Close()
 }
 
 type pgRows struct {
@@ -131,7 +136,9 @@ func (it *Iterator) HasNext(ctx context.Context) bool {
 		it.currCacheSize = len(it.cache)
 
 		// Queue the next page immediately.
-		it.nextPage(ctx)
+		if it.currCacheSize == it.rowBatchSize {
+			it.nextPage(ctx)
+		}
 	}
 }
 
@@ -229,6 +236,7 @@ func (it *Iterator) nextPage(ctx context.Context) {
 			default:
 				return nil, errors.AssertionFailedf("unhandled iterator type: %T\n", conn)
 			}
+			defer func() { currRows.Close() }()
 			datums := make([]tree.Datums, 0, it.rowBatchSize)
 			for currRows.Next() {
 				d, err := currRows.Datums()
