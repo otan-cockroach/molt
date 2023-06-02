@@ -2,9 +2,9 @@ package verification
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
+	"github.com/rs/zerolog"
 )
 
 type Reporter interface {
@@ -30,46 +30,76 @@ func (c CombinedReporter) Close() {
 
 // LogReporter reports to `log`.
 type LogReporter struct {
-	Printf func(fmt string, args ...any)
+	zerolog.Logger
 }
 
 func (l LogReporter) Report(obj ReportableObject) {
 	switch obj := obj.(type) {
 	case MissingTable:
-		l.Printf("[DATABASE MISMATCH] %s is missing table %s.%s", obj.ConnID, obj.Schema, obj.Table)
+		l.Warn().
+			Str("culprit", string(obj.ConnID)).
+			Str("table_schema", string(obj.Schema)).
+			Str("table_name", string(obj.Table)).
+			Msgf("missing table detected")
 	case ExtraneousTable:
-		l.Printf("[DATABASE MISMATCH] %s has an extraneous table %s.%s", obj.ConnID, obj.Schema, obj.Table)
+		l.Warn().
+			Str("culprit", string(obj.ConnID)).
+			Str("table_schema", string(obj.Schema)).
+			Str("table_name", string(obj.Table)).
+			Msgf("extraneous table detected")
 	case MismatchingTableDefinition:
-		l.Printf("[TABLE MISMATCH] table %s.%s on %s has an issue: %s", obj.Schema, obj.Table, obj.ConnID, obj.Info)
+		l.Warn().
+			Str("culprit", string(obj.ConnID)).
+			Str("table_schema", string(obj.Schema)).
+			Str("table_name", string(obj.Table)).
+			Str("mismatch_info", obj.Info).
+			Msgf("mismatching table definition")
 	case StatusReport:
-		l.Printf("[STATUS] %s", obj.Info)
+		l.Info().
+			Msg(obj.Info)
 	case MismatchingRow:
-		f := fmt.Sprintf("[ROW MISMATCH] table %s.%s on %s has a mismatching row on (%s): ", obj.Schema, obj.Table, obj.ConnID, zipPrimaryKeysForReporting(obj.PrimaryKeyColumns, obj.PrimaryKeyValues))
+		falseValues := zerolog.Dict()
+		truthVals := zerolog.Dict()
 		for i, col := range obj.MismatchingColumns {
-			if i > 0 {
-				f += ", "
-			}
-			f += fmt.Sprintf("column %s: %s vs %s", col, obj.TargetVals[i].String(), obj.TruthVals[i].String())
+			// TODO: differentiate nulls
+			truthVals = truthVals.Str(string(col), obj.TruthVals[i].String())
+			falseValues = falseValues.Str(string(col), obj.TargetVals[i].String())
 		}
-		l.Printf(f)
+		l.Warn().
+			Str("culprit", string(obj.ConnID)).
+			Str("table_schema", string(obj.Schema)).
+			Str("table_name", string(obj.Table)).
+			Dict("truth_values", truthVals).
+			Dict("compare_values", falseValues).
+			Strs("primary_key", zipPrimaryKeysForReporting(obj.PrimaryKeyValues)).
+			Msgf("mismatching row value")
 	case MissingRow:
-		l.Printf("[ROW MISMATCH] table %s.%s on %s is missing a row with PK (%s)", obj.Schema, obj.Table, obj.ConnID, zipPrimaryKeysForReporting(obj.PrimaryKeyColumns, obj.PrimaryKeyValues))
+		l.Warn().
+			Str("culprit", string(obj.ConnID)).
+			Str("table_schema", string(obj.Schema)).
+			Str("table_name", string(obj.Table)).
+			Strs("primary_key", zipPrimaryKeysForReporting(obj.PrimaryKeyValues)).
+			Msgf("missing row")
 	case ExtraneousRow:
-		l.Printf("[ROW MISMATCH] table %s.%s on %s has an extraneous row with PK (%s)", obj.Schema, obj.Table, obj.ConnID, zipPrimaryKeysForReporting(obj.PrimaryKeyColumns, obj.PrimaryKeyValues))
+		l.Warn().
+			Str("culprit", string(obj.ConnID)).
+			Str("table_schema", string(obj.Schema)).
+			Str("table_name", string(obj.Table)).
+			Strs("primary_key", zipPrimaryKeysForReporting(obj.PrimaryKeyValues)).
+			Msgf("extraneous row")
 	default:
-		l.Printf("[ERROR] unable to process %#v", obj)
+		l.Error().
+			Str("type", fmt.Sprintf("%T", obj)).
+			Msgf("unknown object type")
 	}
 }
 
-func zipPrimaryKeysForReporting(columnNames []tree.Name, columnVals tree.Datums) string {
-	var sb strings.Builder
-	for i := range columnNames {
-		if i > 0 {
-			sb.WriteString(",")
-		}
-		sb.WriteString(fmt.Sprintf("%s=%s", columnNames[i], columnVals[i].String()))
+func zipPrimaryKeysForReporting(columnVals tree.Datums) []string {
+	ret := make([]string, len(columnVals))
+	for i := range columnVals {
+		ret[i] = columnVals[i].String()
 	}
-	return sb.String()
+	return ret
 }
 
 func (l LogReporter) Close() {

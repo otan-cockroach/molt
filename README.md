@@ -20,7 +20,7 @@ go build -o artifacts/molt .
 GOOS=linux GOARCH=amd64 go build -v -o artifacts/molt .
 ```
 
-### Verification Tooling
+### Verification
 
 `molt verify` does the following:
 * Verifies that tables between the two data sources are the same.

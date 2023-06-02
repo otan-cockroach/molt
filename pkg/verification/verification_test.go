@@ -10,6 +10,7 @@ import (
 	"github.com/cockroachdb/datadriven"
 	"github.com/cockroachdb/molt/pkg/dbconn"
 	"github.com/cockroachdb/molt/pkg/testutils"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -122,10 +123,7 @@ func testDataDriven(t *testing.T, path string, connArgs []connArg) {
 				}
 			}
 			reporter := &LogReporter{
-				Printf: func(f string, args ...any) {
-					sb.WriteString(fmt.Sprintf(f, args...))
-					sb.WriteRune('\n')
-				},
+				Logger: zerolog.New(&sb),
 			}
 			// Use 1 concurrency / splitting to ensure deterministic results.
 			err := Verify(ctx, conns, reporter, WithConcurrency(1), WithRowBatchSize(2), WithTableSplits(numSplits))

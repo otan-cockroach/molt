@@ -3,12 +3,12 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/pkg/dbconn"
 	"github.com/cockroachdb/molt/pkg/verification"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +24,8 @@ var (
 		Short: "Snapshots a table and it's rows.",
 		Long:  "Snapshots a table and it's rows.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			reporter := &verification.LogReporter{Printf: log.Printf}
+			cw := zerolog.NewConsoleWriter()
+			reporter := &verification.LogReporter{Logger: zerolog.New(cw)}
 			defer reporter.Close()
 
 			ctx := context.Background()

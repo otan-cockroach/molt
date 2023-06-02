@@ -8,9 +8,9 @@ CREATE TABLE test_table (id INT4 PRIMARY KEY)
 
 verify splits=4
 ----
-[STATUS] unable to identify a split for primary key public.test_table, defaulting to a full scan
-[STATUS] starting verify on public.test_table, shard 1/1
-[STATUS] finished row verification on public.test_table (shard 1/1): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0
+{"level":"info","message":"unable to identify a split for primary key public.test_table, defaulting to a full scan"}
+{"level":"info","message":"starting verify on public.test_table, shard 1/1"}
+{"level":"info","message":"finished row verification on public.test_table (shard 1/1): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0"}
 
 exec all
 INSERT INTO test_table VALUES (1)
@@ -20,9 +20,9 @@ INSERT INTO test_table VALUES (1)
 
 verify splits=4
 ----
-[STATUS] unable to identify a split for primary key public.test_table, defaulting to a full scan
-[STATUS] starting verify on public.test_table, shard 1/1
-[STATUS] finished row verification on public.test_table (shard 1/1): truth rows seen: 1, success: 1, missing: 0, mismatch: 0, extraneous: 0
+{"level":"info","message":"unable to identify a split for primary key public.test_table, defaulting to a full scan"}
+{"level":"info","message":"starting verify on public.test_table, shard 1/1"}
+{"level":"info","message":"finished row verification on public.test_table (shard 1/1): truth rows seen: 1, success: 1, missing: 0, mismatch: 0, extraneous: 0"}
 
 # 2 rows table can be split, but ranges may be jank.
 
@@ -34,14 +34,14 @@ INSERT INTO test_table VALUES (2)
 
 verify splits=4
 ----
-[STATUS] starting verify on public.test_table, shard 1/4, range: [<beginning> - 1)
-[STATUS] finished row verification on public.test_table (shard 1/4): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0
-[STATUS] starting verify on public.test_table, shard 2/4, range: [1 - 1)
-[STATUS] finished row verification on public.test_table (shard 2/4): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0
-[STATUS] starting verify on public.test_table, shard 3/4, range: [1 - 1)
-[STATUS] finished row verification on public.test_table (shard 3/4): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0
-[STATUS] starting verify on public.test_table, shard 4/4, range: [1 - <end>]
-[STATUS] finished row verification on public.test_table (shard 4/4): truth rows seen: 2, success: 2, missing: 0, mismatch: 0, extraneous: 0
+{"level":"info","message":"starting verify on public.test_table, shard 1/4, range: [<beginning> - 1)"}
+{"level":"info","message":"finished row verification on public.test_table (shard 1/4): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0"}
+{"level":"info","message":"starting verify on public.test_table, shard 2/4, range: [1 - 1)"}
+{"level":"info","message":"finished row verification on public.test_table (shard 2/4): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0"}
+{"level":"info","message":"starting verify on public.test_table, shard 3/4, range: [1 - 1)"}
+{"level":"info","message":"finished row verification on public.test_table (shard 3/4): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0"}
+{"level":"info","message":"starting verify on public.test_table, shard 4/4, range: [1 - <end>]"}
+{"level":"info","message":"finished row verification on public.test_table (shard 4/4): truth rows seen: 2, success: 2, missing: 0, mismatch: 0, extraneous: 0"}
 
 # UUIDs
 exec all
@@ -56,14 +56,14 @@ INSERT INTO test_table VALUES
 
 verify splits=4
 ----
-[STATUS] starting verify on public.test_table, shard 1/4, range: [<beginning> - '3d15fb6c-2682-4991-0000-000000000000')
-[STATUS] finished row verification on public.test_table (shard 1/4): truth rows seen: 1, success: 1, missing: 0, mismatch: 0, extraneous: 0
-[STATUS] starting verify on public.test_table, shard 2/4, range: ['3d15fb6c-2682-4991-0000-000000000000' - '59cbf92e-d230-4b9f-0000-000000000000')
-[STATUS] finished row verification on public.test_table (shard 2/4): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0
-[STATUS] starting verify on public.test_table, shard 3/4, range: ['59cbf92e-d230-4b9f-0000-000000000000' - '7681f6f1-7dde-4dad-0000-000000000000')
-[STATUS] finished row verification on public.test_table (shard 3/4): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0
-[STATUS] starting verify on public.test_table, shard 4/4, range: ['7681f6f1-7dde-4dad-0000-000000000000' - <end>]
-[STATUS] finished row verification on public.test_table (shard 4/4): truth rows seen: 1, success: 1, missing: 0, mismatch: 0, extraneous: 0
+{"level":"info","message":"starting verify on public.test_table, shard 1/4, range: [<beginning> - '3d15fb6c-2682-4991-0000-000000000000')"}
+{"level":"info","message":"finished row verification on public.test_table (shard 1/4): truth rows seen: 1, success: 1, missing: 0, mismatch: 0, extraneous: 0"}
+{"level":"info","message":"starting verify on public.test_table, shard 2/4, range: ['3d15fb6c-2682-4991-0000-000000000000' - '59cbf92e-d230-4b9f-0000-000000000000')"}
+{"level":"info","message":"finished row verification on public.test_table (shard 2/4): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0"}
+{"level":"info","message":"starting verify on public.test_table, shard 3/4, range: ['59cbf92e-d230-4b9f-0000-000000000000' - '7681f6f1-7dde-4dad-0000-000000000000')"}
+{"level":"info","message":"finished row verification on public.test_table (shard 3/4): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0"}
+{"level":"info","message":"starting verify on public.test_table, shard 4/4, range: ['7681f6f1-7dde-4dad-0000-000000000000' - <end>]"}
+{"level":"info","message":"finished row verification on public.test_table (shard 4/4): truth rows seen: 1, success: 1, missing: 0, mismatch: 0, extraneous: 0"}
 
 # Floats
 exec all
@@ -78,14 +78,14 @@ INSERT INTO test_table VALUES
 
 verify splits=4
 ----
-[STATUS] starting verify on public.test_table, shard 1/4, range: [<beginning> - -1.446650225e+07)
-[STATUS] finished row verification on public.test_table (shard 1/4): truth rows seen: 1, success: 1, missing: 0, mismatch: 0, extraneous: 0
-[STATUS] starting verify on public.test_table, shard 2/4, range: [-1.446650225e+07 - -8.9335605e+06)
-[STATUS] finished row verification on public.test_table (shard 2/4): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0
-[STATUS] starting verify on public.test_table, shard 3/4, range: [-8.9335605e+06 - -3.40061875e+06)
-[STATUS] finished row verification on public.test_table (shard 3/4): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0
-[STATUS] starting verify on public.test_table, shard 4/4, range: [-3.40061875e+06 - <end>]
-[STATUS] finished row verification on public.test_table (shard 4/4): truth rows seen: 1, success: 1, missing: 0, mismatch: 0, extraneous: 0
+{"level":"info","message":"starting verify on public.test_table, shard 1/4, range: [<beginning> - -1.446650225e+07)"}
+{"level":"info","message":"finished row verification on public.test_table (shard 1/4): truth rows seen: 1, success: 1, missing: 0, mismatch: 0, extraneous: 0"}
+{"level":"info","message":"starting verify on public.test_table, shard 2/4, range: [-1.446650225e+07 - -8.9335605e+06)"}
+{"level":"info","message":"finished row verification on public.test_table (shard 2/4): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0"}
+{"level":"info","message":"starting verify on public.test_table, shard 3/4, range: [-8.9335605e+06 - -3.40061875e+06)"}
+{"level":"info","message":"finished row verification on public.test_table (shard 3/4): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0"}
+{"level":"info","message":"starting verify on public.test_table, shard 4/4, range: [-3.40061875e+06 - <end>]"}
+{"level":"info","message":"finished row verification on public.test_table (shard 4/4): truth rows seen: 1, success: 1, missing: 0, mismatch: 0, extraneous: 0"}
 
 exec all
 INSERT INTO test_table VALUES
@@ -96,7 +96,7 @@ INSERT INTO test_table VALUES
 
 verify splits=4
 ----
-[STATUS] unable to identify a split for primary key public.test_table, defaulting to a full scan
-[STATUS] starting verify on public.test_table, shard 1/1
-[ROW MISMATCH] table public.test_table on crdb has an extraneous row with PK (id=-1.9999444e+07)
-[STATUS] finished row verification on public.test_table (shard 1/1): truth rows seen: 3, success: 3, missing: 0, mismatch: 0, extraneous: 1
+{"level":"info","message":"unable to identify a split for primary key public.test_table, defaulting to a full scan"}
+{"level":"info","message":"starting verify on public.test_table, shard 1/1"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"test_table","primary_key":["-1.9999444e+07"],"message":"extraneous row"}
+{"level":"info","message":"finished row verification on public.test_table (shard 1/1): truth rows seen: 3, success: 3, missing: 0, mismatch: 0, extraneous: 1"}

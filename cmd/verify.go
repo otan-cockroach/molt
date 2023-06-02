@@ -3,12 +3,12 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/pkg/dbconn"
 	"github.com/cockroachdb/molt/pkg/verification"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +23,8 @@ var (
 		Short: "Verify table schemas and row data align.",
 		Long:  `verify ensure table schemas and row data between the two databases are aligned.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			reporter := &verification.LogReporter{Printf: log.Printf}
+			cw := zerolog.NewConsoleWriter()
+			reporter := &verification.LogReporter{Logger: zerolog.New(cw)}
 			defer reporter.Close()
 
 			ctx := context.Background()

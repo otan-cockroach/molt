@@ -28,8 +28,8 @@ INSERT INTO test_table (id) VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), 
 
 verify
 ----
-[STATUS] starting verify on public.test_table, shard 1/1
-[STATUS] finished row verification on public.test_table (shard 1/1): truth rows seen: 10, success: 10, missing: 0, mismatch: 0, extraneous: 0
+{"level":"info","message":"starting verify on public.test_table, shard 1/1"}
+{"level":"info","message":"finished row verification on public.test_table (shard 1/1): truth rows seen: 10, success: 10, missing: 0, mismatch: 0, extraneous: 0"}
 
 exec all
 DROP TABLE test_table
@@ -66,17 +66,17 @@ INSERT INTO test_table (id) VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), 
 
 verify
 ----
-[STATUS] starting verify on public.test_table, shard 1/1
-[STATUS] finished row verification on public.test_table (shard 1/1): truth rows seen: 10, success: 10, missing: 0, mismatch: 0, extraneous: 0
+{"level":"info","message":"starting verify on public.test_table, shard 1/1"}
+{"level":"info","message":"finished row verification on public.test_table (shard 1/1): truth rows seen: 10, success: 10, missing: 0, mismatch: 0, extraneous: 0"}
 
 verify splits=3
 ----
-[STATUS] starting verify on public.test_table, shard 1/3, range: [<beginning> - 4)
-[STATUS] finished row verification on public.test_table (shard 1/3): truth rows seen: 3, success: 3, missing: 0, mismatch: 0, extraneous: 0
-[STATUS] starting verify on public.test_table, shard 2/3, range: [4 - 7)
-[STATUS] finished row verification on public.test_table (shard 2/3): truth rows seen: 3, success: 3, missing: 0, mismatch: 0, extraneous: 0
-[STATUS] starting verify on public.test_table, shard 3/3, range: [7 - <end>]
-[STATUS] finished row verification on public.test_table (shard 3/3): truth rows seen: 4, success: 4, missing: 0, mismatch: 0, extraneous: 0
+{"level":"info","message":"starting verify on public.test_table, shard 1/3, range: [<beginning> - 4)"}
+{"level":"info","message":"finished row verification on public.test_table (shard 1/3): truth rows seen: 3, success: 3, missing: 0, mismatch: 0, extraneous: 0"}
+{"level":"info","message":"starting verify on public.test_table, shard 2/3, range: [4 - 7)"}
+{"level":"info","message":"finished row verification on public.test_table (shard 2/3): truth rows seen: 3, success: 3, missing: 0, mismatch: 0, extraneous: 0"}
+{"level":"info","message":"starting verify on public.test_table, shard 3/3, range: [7 - <end>]"}
+{"level":"info","message":"finished row verification on public.test_table (shard 3/3): truth rows seen: 4, success: 4, missing: 0, mismatch: 0, extraneous: 0"}
 
 exec all
 DROP TABLE test_table
@@ -120,13 +120,13 @@ INSERT INTO common_table VALUES
 # Verify with extraneous rows on non source of truth.
 verify
 ----
-[STATUS] starting verify on public.common_table, shard 1/1
-[ROW MISMATCH] table public.common_table on crdb has an extraneous row with PK (id=50)
-[ROW MISMATCH] table public.common_table on crdb is missing a row with PK (id=125)
-[ROW MISMATCH] table public.common_table on crdb has a mismatching row on (id=150): column str: NULL vs 'different value'
-[ROW MISMATCH] table public.common_table on crdb is missing a row with PK (id=250)
-[ROW MISMATCH] table public.common_table on crdb has an extraneous row with PK (id=300)
-[STATUS] finished row verification on public.common_table (shard 1/1): truth rows seen: 6, success: 3, missing: 2, mismatch: 1, extraneous: 2
+{"level":"info","message":"starting verify on public.common_table, shard 1/1"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"common_table","primary_key":["50"],"message":"extraneous row"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"common_table","primary_key":["125"],"message":"missing row"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"common_table","truth_values":{"str":"'different value'"},"compare_values":{"str":"NULL"},"primary_key":["150"],"message":"mismatching row value"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"common_table","primary_key":["250"],"message":"missing row"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"common_table","primary_key":["300"],"message":"extraneous row"}
+{"level":"info","message":"finished row verification on public.common_table (shard 1/1): truth rows seen: 6, success: 3, missing: 2, mismatch: 1, extraneous: 2"}
 
 # Verify with extraneous rows on source of truth.
 exec source_of_truth
@@ -137,14 +137,14 @@ INSERT INTO common_table VALUES
 
 verify
 ----
-[STATUS] starting verify on public.common_table, shard 1/1
-[ROW MISMATCH] table public.common_table on crdb has an extraneous row with PK (id=50)
-[ROW MISMATCH] table public.common_table on crdb is missing a row with PK (id=125)
-[ROW MISMATCH] table public.common_table on crdb has a mismatching row on (id=150): column str: NULL vs 'different value'
-[ROW MISMATCH] table public.common_table on crdb is missing a row with PK (id=250)
-[ROW MISMATCH] table public.common_table on crdb has an extraneous row with PK (id=300)
-[ROW MISMATCH] table public.common_table on crdb is missing a row with PK (id=400)
-[STATUS] finished row verification on public.common_table (shard 1/1): truth rows seen: 7, success: 3, missing: 3, mismatch: 1, extraneous: 2
+{"level":"info","message":"starting verify on public.common_table, shard 1/1"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"common_table","primary_key":["50"],"message":"extraneous row"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"common_table","primary_key":["125"],"message":"missing row"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"common_table","truth_values":{"str":"'different value'"},"compare_values":{"str":"NULL"},"primary_key":["150"],"message":"mismatching row value"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"common_table","primary_key":["250"],"message":"missing row"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"common_table","primary_key":["300"],"message":"extraneous row"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"common_table","primary_key":["400"],"message":"missing row"}
+{"level":"info","message":"finished row verification on public.common_table (shard 1/1): truth rows seen: 7, success: 3, missing: 3, mismatch: 1, extraneous: 2"}
 
 exec all
 DROP TABLE common_table

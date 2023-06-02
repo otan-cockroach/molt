@@ -12,7 +12,7 @@ CREATE TABLE t (id INT4 PRIMARY KEY)
 
 verify
 ----
-[TABLE MISMATCH] table public.t on pg has an issue: missing a PRIMARY KEY - results cannot be compared
+{"level":"warn","culprit":"pg","table_schema":"public","table_name":"t","mismatch_info":"missing a PRIMARY KEY - results cannot be compared","message":"mismatching table definition"}
 
 exec all
 DROP TABLE t
@@ -51,10 +51,10 @@ CREATE TABLE different_pk_type (
 
 verify
 ----
-[TABLE MISMATCH] table public.different_pk_type on crdb has an issue: column type mismatch on id: pg=int8 vs crdb=float8
-[TABLE MISMATCH] table public.different_pk_type on crdb has an issue: PRIMARY KEY does not match source of truth (columns and types must match)
-[TABLE MISMATCH] table public.t on crdb has an issue: extraneous column mismatching_pk found
-[TABLE MISMATCH] table public.t on crdb has an issue: extraneous column extra_col found
-[TABLE MISMATCH] table public.t on crdb has an issue: column type mismatch on mismatching_type: pg=int4 vs crdb=text
-[TABLE MISMATCH] table public.t on crdb has an issue: missing column missing_in_lie_col
-[TABLE MISMATCH] table public.t on crdb has an issue: PRIMARY KEY does not match source of truth (columns and types must match)
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"different_pk_type","mismatch_info":"column type mismatch on id: pg=int8 vs crdb=float8","message":"mismatching table definition"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"different_pk_type","mismatch_info":"PRIMARY KEY does not match source of truth (columns and types must match)","message":"mismatching table definition"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"t","mismatch_info":"extraneous column mismatching_pk found","message":"mismatching table definition"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"t","mismatch_info":"extraneous column extra_col found","message":"mismatching table definition"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"t","mismatch_info":"column type mismatch on mismatching_type: pg=int4 vs crdb=text","message":"mismatching table definition"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"t","mismatch_info":"missing column missing_in_lie_col","message":"mismatching table definition"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"t","mismatch_info":"PRIMARY KEY does not match source of truth (columns and types must match)","message":"mismatching table definition"}
