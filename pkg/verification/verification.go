@@ -8,9 +8,9 @@ import (
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
 	"github.com/cockroachdb/errors"
-	"github.com/cockroachdb/molt/pkg/ctxgroup"
 	"github.com/cockroachdb/molt/pkg/dbconn"
 	"github.com/lib/pq/oid"
+	"golang.org/x/sync/errgroup"
 )
 
 func init() {
@@ -116,10 +116,10 @@ func Verify(
 	}
 
 	// Compare rows up to the concurrency specified.
-	g := ctxgroup.WithContext(ctx)
+	g, _ := errgroup.WithContext(ctx)
 	workQueue := make(chan TableShard)
 	for it := 0; it < opts.concurrency; it++ {
-		g.GoCtx(func(ctx context.Context) error {
+		g.Go(func() error {
 			for {
 				splitTable, ok := <-workQueue
 				if !ok {
