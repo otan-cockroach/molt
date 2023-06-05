@@ -30,6 +30,8 @@ type MissingRow struct {
 
 	PrimaryKeyColumns []tree.Name
 	PrimaryKeyValues  tree.Datums
+	Columns           []tree.Name
+	Values            tree.Datums
 }
 
 type ExtraneousRow struct {

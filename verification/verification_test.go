@@ -101,7 +101,7 @@ func testDataDriven(t *testing.T, path string, connArgs []connArg) {
 					}
 					sb.WriteString(fmt.Sprintf("[%s] %d rows affected\n", conn.ID(), r))
 				default:
-					t.Fatalf("unhandled conn type: %T", conn)
+					t.Fatalf("unhandled Conn type: %T", conn)
 				}
 			}
 

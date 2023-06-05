@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
 	"github.com/cockroachdb/errors"
@@ -49,7 +50,8 @@ type verifyOpts struct {
 	rowBatchSize int
 	tableSplits  int
 	// TODO: better abstraction for this.
-	workFunc WorkFunc
+	workFunc   WorkFunc
+	continuous bool
 }
 
 func WithConcurrency(c int) VerifyOpt {
@@ -73,6 +75,12 @@ func WithTableSplits(c int) VerifyOpt {
 func WithWorkFunc(c WorkFunc) VerifyOpt {
 	return func(o *verifyOpts) {
 		o.workFunc = c
+	}
+}
+
+func WithContinuous(c bool) VerifyOpt {
+	return func(o *verifyOpts) {
+		o.continuous = c
 	}
 }
 
@@ -115,74 +123,83 @@ func Verify(
 		}
 	}
 
-	// Compare rows up to the concurrency specified.
-	g, _ := errgroup.WithContext(ctx)
-	workQueue := make(chan TableShard)
-	for it := 0; it < opts.concurrency; it++ {
-		g.Go(func() error {
-			for {
-				splitTable, ok := <-workQueue
-				if !ok {
-					return nil
-				}
-				msg := fmt.Sprintf(
-					"starting verify on %s.%s, shard %d/%d",
-					splitTable.Schema,
-					splitTable.Table,
-					splitTable.ShardNum,
-					splitTable.TotalShards,
-				)
-				if splitTable.TotalShards > 1 {
-					msg += ", range: ["
-					if len(splitTable.StartPKVals) > 0 {
-						for i, val := range splitTable.StartPKVals {
-							if i > 0 {
-								msg += ","
-							}
-							msg += val.String()
-						}
-					} else {
-						msg += "<beginning>"
+	for {
+		// Compare rows up to the concurrency specified.
+		g, _ := errgroup.WithContext(ctx)
+		workQueue := make(chan TableShard)
+		for it := 0; it < opts.concurrency; it++ {
+			g.Go(func() error {
+				for {
+					splitTable, ok := <-workQueue
+					if !ok {
+						return nil
 					}
-					msg += " - "
-					if len(splitTable.EndPKVals) > 0 {
-						for i, val := range splitTable.EndPKVals {
-							if i > 0 {
-								msg += ", "
+					msg := fmt.Sprintf(
+						"starting verify on %s.%s, shard %d/%d",
+						splitTable.Schema,
+						splitTable.Table,
+						splitTable.ShardNum,
+						splitTable.TotalShards,
+					)
+					if splitTable.TotalShards > 1 {
+						msg += ", range: ["
+						if len(splitTable.StartPKVals) > 0 {
+							for i, val := range splitTable.StartPKVals {
+								if i > 0 {
+									msg += ","
+								}
+								msg += val.String()
 							}
-							msg += val.String()
+						} else {
+							msg += "<beginning>"
 						}
-						msg += ")"
-					} else {
-						msg += "<end>]"
+						msg += " - "
+						if len(splitTable.EndPKVals) > 0 {
+							for i, val := range splitTable.EndPKVals {
+								if i > 0 {
+									msg += ", "
+								}
+								msg += val.String()
+							}
+							msg += ")"
+						} else {
+							msg += "<end>]"
+						}
+					}
+					reporter.Report(StatusReport{
+						Info: msg,
+					})
+					if err := verifyDataWorker(ctx, conns, reporter, opts.rowBatchSize, splitTable, opts.workFunc); err != nil {
+						log.Printf("[ERROR] error comparing rows on %s.%s: %v", splitTable.Schema, splitTable.Table, err)
 					}
 				}
-				reporter.Report(StatusReport{
-					Info: msg,
-				})
-				if err := verifyDataWorker(ctx, conns, reporter, opts.rowBatchSize, splitTable, opts.workFunc); err != nil {
-					log.Printf("[ERROR] error comparing rows on %s.%s: %v", splitTable.Schema, splitTable.Table, err)
-				}
+			})
+		}
+		for _, tbl := range tbls {
+			// Ignore tables which cannot be verified.
+			if !tbl.RowVerifiable {
+				continue
 			}
-		})
-	}
-	for _, tbl := range tbls {
-		// Ignore tables which cannot be verified.
-		if !tbl.RowVerifiable {
-			continue
-		}
 
-		// Get and first and last of each PK.
-		splitTables, err := splitTable(ctx, conns[0], tbl, reporter, opts.tableSplits)
-		if err != nil {
-			return errors.Wrapf(err, "error splitting tables")
+			// Get and first and last of each PK.
+			splitTables, err := splitTable(ctx, conns[0], tbl, reporter, opts.tableSplits)
+			if err != nil {
+				return errors.Wrapf(err, "error splitting tables")
+			}
+			for _, splitTable := range splitTables {
+				workQueue <- splitTable
+			}
 		}
-		for _, splitTable := range splitTables {
-			workQueue <- splitTable
+		close(workQueue)
+		if err := g.Wait(); err != nil {
+			return err
 		}
+		// TODO: make continuous per shard, instead of global wait.
+		if !opts.continuous {
+			return nil
+		}
+		time.Sleep(time.Second * 5)
 	}
-	close(workQueue)
-	return g.Wait()
 }
 
 func verifyDataWorker(

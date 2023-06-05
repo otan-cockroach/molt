@@ -17,6 +17,8 @@ var (
 	flagVerifyConcurrency  int
 	flagVerifyTableSplits  int
 	flagVerifyRowBatchSize int
+	flagVerifyFixup        bool
+	flagVerifyContinuous   bool
 
 	verifyCmd = &cobra.Command{
 		Use:   "verify",
@@ -24,7 +26,10 @@ var (
 		Long:  `verify ensure table schemas and row data between the two databases are aligned.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cw := zerolog.NewConsoleWriter()
-			reporter := &verification.LogReporter{Logger: zerolog.New(cw)}
+			logger := zerolog.New(cw)
+
+			reporter := verification.CombinedReporter{}
+			reporter.Reporters = append(reporter.Reporters, &verification.LogReporter{Logger: logger})
 			defer reporter.Close()
 
 			ctx := context.Background()
@@ -44,6 +49,12 @@ var (
 				conns = append(conns, conn)
 				reporter.Report(verification.StatusReport{Info: fmt.Sprintf("connected to %s as %s", connStr, conn.ID())})
 			}
+			if flagVerifyFixup {
+				reporter.Reporters = append(reporter.Reporters, &verification.FixReporter{
+					Conn:   conns[1],
+					Logger: logger,
+				})
+			}
 
 			reporter.Report(verification.StatusReport{Info: "verification in progress"})
 			if err := verification.Verify(
@@ -53,6 +64,7 @@ var (
 				verification.WithConcurrency(flagVerifyConcurrency),
 				verification.WithTableSplits(flagVerifyTableSplits),
 				verification.WithRowBatchSize(flagVerifyRowBatchSize),
+				verification.WithContinuous(flagVerifyContinuous),
 			); err != nil {
 				return errors.Wrapf(err, "error verifying")
 			}
@@ -80,6 +92,18 @@ func init() {
 		"row_batch_size",
 		20000,
 		"number of rows to get from a table at a time",
+	)
+	verifyCmd.PersistentFlags().BoolVar(
+		&flagVerifyFixup,
+		"fixup",
+		false,
+		"whether to fix up any rows",
+	)
+	verifyCmd.PersistentFlags().BoolVar(
+		&flagVerifyContinuous,
+		"continuous",
+		false,
+		"whether verification should continuously run",
 	)
 	rootCmd.AddCommand(verifyCmd)
 }

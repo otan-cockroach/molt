@@ -114,6 +114,8 @@ func CompareRows(
 						Table:             table.Table,
 						PrimaryKeyColumns: table.PrimaryKeyColumns,
 						PrimaryKeyValues:  truthVals[:len(table.PrimaryKeyColumns)],
+						Columns:           table.MatchingColumns,
+						Values:            truthVals,
 					})
 					break
 				}
@@ -170,6 +172,8 @@ func CompareRows(
 						Table:             table.Table,
 						PrimaryKeyColumns: table.PrimaryKeyColumns,
 						PrimaryKeyValues:  truthVals[:len(table.PrimaryKeyColumns)],
+						Columns:           table.MatchingColumns,
+						Values:            truthVals,
 					})
 					stats.numMissing++
 					break itLoop
