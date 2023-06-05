@@ -123,7 +123,7 @@ func (l FixReporter) Report(obj ReportableObject) {
 			Msgf("fixing mismatching row")
 		switch conn := l.Conn.(type) {
 		case *dbconn.PGConn:
-			updateClause := tree.Update{
+			updateClause := &tree.Update{
 				Table:     tree.NewUnqualifiedTableName(obj.Table),
 				Where:     buildWhereClause(obj.PrimaryKeyColumns, obj.PrimaryKeyValues),
 				Returning: &tree.NoReturningClause{},
@@ -135,7 +135,9 @@ func (l FixReporter) Report(obj ReportableObject) {
 					Expr:  obj.TruthVals[i],
 				}
 			}
-			_, err := conn.Exec(context.Background(), updateClause.String())
+			fmtCtx := tree.NewFmtCtx(tree.FmtSimple)
+			fmtCtx.FormatNode(updateClause)
+			_, err := conn.Exec(context.Background(), fmtCtx.CloseAndGetString())
 			if err != nil {
 				panic(err)
 			}
@@ -154,7 +156,7 @@ func (l FixReporter) Report(obj ReportableObject) {
 					make([]tree.Expr, len(obj.Columns)),
 				},
 			}
-			insertClause := tree.Insert{
+			insertClause := &tree.Insert{
 				Table:     tree.NewUnqualifiedTableName(obj.Table),
 				Returning: &tree.NoReturningClause{},
 				Columns:   make([]tree.Name, len(obj.Columns)),
@@ -165,7 +167,9 @@ func (l FixReporter) Report(obj ReportableObject) {
 				insertClause.Columns[i] = obj.Columns[i]
 				valuesClause.Rows[0][i] = obj.Values[i]
 			}
-			_, err := conn.Exec(context.Background(), insertClause.String())
+			fmtCtx := tree.NewFmtCtx(tree.FmtSimple)
+			fmtCtx.FormatNode(insertClause)
+			_, err := conn.Exec(context.Background(), fmtCtx.CloseAndGetString())
 			if err != nil {
 				panic(err)
 			}
@@ -178,12 +182,14 @@ func (l FixReporter) Report(obj ReportableObject) {
 			Msgf("deleting extraneous row")
 		switch conn := l.Conn.(type) {
 		case *dbconn.PGConn:
-			deleteClause := tree.Delete{
+			deleteClause := &tree.Delete{
 				Table:     tree.NewUnqualifiedTableName(obj.Table),
 				Where:     buildWhereClause(obj.PrimaryKeyColumns, obj.PrimaryKeyValues),
 				Returning: &tree.NoReturningClause{},
 			}
-			_, err := conn.Exec(context.Background(), deleteClause.String())
+			fmtCtx := tree.NewFmtCtx(tree.FmtSimple)
+			fmtCtx.FormatNode(deleteClause)
+			_, err := conn.Exec(context.Background(), fmtCtx.CloseAndGetString())
 			if err != nil {
 				panic(err)
 			}
