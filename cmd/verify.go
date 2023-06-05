@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/cockroachdb/errors"
-	"github.com/cockroachdb/molt/pkg/dbconn"
-	"github.com/cockroachdb/molt/pkg/verification"
+	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/verification"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )

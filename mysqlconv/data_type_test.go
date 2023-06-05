@@ -8,8 +8,8 @@ import (
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
 	"github.com/cockroachdb/datadriven"
-	"github.com/cockroachdb/molt/pkg/dbconn"
-	"github.com/cockroachdb/molt/pkg/testutils"
+	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/testutils"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/stretchr/testify/require"

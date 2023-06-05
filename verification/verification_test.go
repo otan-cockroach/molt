@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/datadriven"
-	"github.com/cockroachdb/molt/pkg/dbconn"
-	"github.com/cockroachdb/molt/pkg/testutils"
+	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/testutils"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )

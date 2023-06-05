@@ -5,7 +5,7 @@ import (
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree/treecmp"
-	"github.com/cockroachdb/molt/pkg/mysqlconv"
+	"github.com/cockroachdb/molt/mysqlconv"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/model"
 	"github.com/pingcap/tidb/parser/opcode"

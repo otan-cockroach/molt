@@ -7,8 +7,8 @@ import (
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
-	"github.com/cockroachdb/molt/pkg/dbconn"
-	"github.com/cockroachdb/molt/pkg/rowiterator"
+	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/rowiterator"
 	"github.com/lib/pq/oid"
 )
 

@@ -7,8 +7,8 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
 	"github.com/cockroachdb/errors"
-	"github.com/cockroachdb/molt/pkg/dbconn"
-	"github.com/cockroachdb/molt/pkg/mysqlconv"
+	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/mysqlconv"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
 )

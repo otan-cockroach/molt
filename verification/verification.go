@@ -8,7 +8,7 @@ import (
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
 	"github.com/cockroachdb/errors"
-	"github.com/cockroachdb/molt/pkg/dbconn"
+	"github.com/cockroachdb/molt/dbconn"
 	"github.com/lib/pq/oid"
 	"golang.org/x/sync/errgroup"
 )

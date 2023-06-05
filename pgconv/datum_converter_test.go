@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/datadriven"
-	"github.com/cockroachdb/molt/pkg/testutils"
+	"github.com/cockroachdb/molt/testutils"
 	"github.com/jackc/pgx/v5"
 	"github.com/lib/pq/oid"
 	"github.com/stretchr/testify/require"
