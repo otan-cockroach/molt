@@ -85,7 +85,7 @@ func init() {
 		&flagVerifyTableSplits,
 		"table_splits",
 		16,
-		"number of ways to break down a table",
+		"number of shards to break down each table into whilst doing row-based verification",
 	)
 	verifyCmd.PersistentFlags().IntVar(
 		&flagVerifyRowBatchSize,
@@ -99,11 +99,17 @@ func init() {
 		false,
 		"whether to fix up any rows",
 	)
+	if err := verifyCmd.PersistentFlags().MarkHidden("fixup"); err != nil {
+		panic(err)
+	}
 	verifyCmd.PersistentFlags().BoolVar(
 		&flagVerifyContinuous,
 		"continuous",
 		false,
 		"whether verification should continuously run",
 	)
+	if err := verifyCmd.PersistentFlags().MarkHidden("continuous"); err != nil {
+		panic(err)
+	}
 	rootCmd.AddCommand(verifyCmd)
 }
