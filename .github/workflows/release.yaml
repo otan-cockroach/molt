@@ -1,0 +1,57 @@
+name: release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  release-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    - name: Setup Golang
+      uses: actions/setup-go@v3
+    - name: Create release directory
+      run: mkdir -p artifacts
+    - name: Build Linux AMD64
+      run: GOOS=linux GOARCH=amd64 go build -v -o artifacts/molt.linux.amd64 .
+    - name: Publish to release
+      uses: AButler/upload-release-assets@v2.0
+      with:
+        files: 'artifacts/*'
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+  release-windows:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Setup Golang
+        uses: actions/setup-go@v3
+      - name: Create release directory
+        run: mkdir -p artifacts
+      - name: Build Linux AMD64
+        run: GOOS=windows GOARCH=amd64 go build -v -o artifacts/molt.amd64.exe .
+      - name: Publish to release
+        uses: AButler/upload-release-assets@v2.0
+        with:
+          files: 'artifacts/*'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+  release-osx:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Setup Golang
+        uses: actions/setup-go@v3
+      - name: Create release directory
+        run: mkdir -p artifacts
+      - name: Build OSX
+        run: GOOS=darwin GOARCH=amd64 go build -v -o artifacts/molt.darwin.amd64 .
+      - name: Build OSX ARM
+        run: GOOS=darwin GOARCH=arm64 go build -v -o artifacts/molt.darwin.arm64 .
+      - name: Publish to release
+        uses: AButler/upload-release-assets@v2.0
+        with:
+          files: 'artifacts/*'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
