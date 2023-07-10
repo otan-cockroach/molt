@@ -56,6 +56,7 @@ var (
 				})
 			}
 
+			verification.TimingEnabled = true
 			reporter.Report(verification.StatusReport{Info: "verification in progress"})
 			if err := verification.Verify(
 				ctx,

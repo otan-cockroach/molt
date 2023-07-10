@@ -60,6 +60,7 @@ var (
 			); err != nil {
 				return errors.Wrapf(err, "error snapshotting")
 			}
+			verification.TimingEnabled = true
 			reporter.Report(verification.StatusReport{Info: "snapshot complete"})
 			return nil
 		},

@@ -63,9 +63,12 @@ type TableShard struct {
 	TotalShards int
 }
 
+var TimingEnabled = false
+
 func CompareRows(
 	ctx context.Context, conns []dbconn.Conn, table TableShard, rowBatchSize int, reporter Reporter,
 ) error {
+	startTime := time.Now()
 	iterators := make([]*rowiterator.Iterator, len(conns))
 	for i, conn := range conns {
 		var err error
@@ -97,6 +100,13 @@ func CompareRows(
 			reporter.Report(StatusReport{
 				Info: fmt.Sprintf("progress on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, stats.String()),
 			})
+			if TimingEnabled {
+				endTime := time.Now()
+				duration := endTime.Sub(startTime)
+				reporter.Report(StatusReport{
+					Info: fmt.Sprintf("scanned %d rows in %s (%.2f rows/sec)", stats.numVerified, duration, float64(stats.numVerified)/(float64(duration)/float64(time.Second))),
+				})
+			}
 		}
 		stats.numVerified++
 
@@ -206,6 +216,13 @@ func CompareRows(
 	reporter.Report(StatusReport{
 		Info: fmt.Sprintf("finished row verification on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, stats.String()),
 	})
+	if TimingEnabled {
+		endTime := time.Now()
+		duration := endTime.Sub(startTime)
+		reporter.Report(StatusReport{
+			Info: fmt.Sprintf("scanned %d rows in %s (%.2f rows/sec)", stats.numVerified, duration, float64(stats.numVerified)/(float64(duration)/float64(time.Second))),
+		})
+	}
 
 	return nil
 }
