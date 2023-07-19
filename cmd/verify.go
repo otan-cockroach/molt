@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
@@ -14,11 +15,12 @@ import (
 
 var (
 	// TODO: sanity check bounds.
-	flagVerifyConcurrency  int
-	flagVerifyTableSplits  int
-	flagVerifyRowBatchSize int
-	flagVerifyFixup        bool
-	flagVerifyContinuous   bool
+	flagVerifyConcurrency     int
+	flagVerifyTableSplits     int
+	flagVerifyRowBatchSize    int
+	flagVerifyFixup           bool
+	flagVerifyContinuousPause time.Duration
+	flagVerifyContinuous      bool
 
 	verifyCmd = &cobra.Command{
 		Use:   "verify",
@@ -65,7 +67,7 @@ var (
 				verification.WithConcurrency(flagVerifyConcurrency),
 				verification.WithTableSplits(flagVerifyTableSplits),
 				verification.WithRowBatchSize(flagVerifyRowBatchSize),
-				verification.WithContinuous(flagVerifyContinuous),
+				verification.WithContinuous(flagVerifyContinuous, flagVerifyContinuousPause),
 			); err != nil {
 				return errors.Wrapf(err, "error verifying")
 			}
@@ -101,6 +103,15 @@ func init() {
 		"whether to fix up any rows",
 	)
 	if err := verifyCmd.PersistentFlags().MarkHidden("fixup"); err != nil {
+		panic(err)
+	}
+	verifyCmd.PersistentFlags().DurationVar(
+		&flagVerifyContinuousPause,
+		"continuous-pause",
+		0,
+		"pause between continuous modes",
+	)
+	if err := verifyCmd.PersistentFlags().MarkHidden("continuous-pause"); err != nil {
 		panic(err)
 	}
 	verifyCmd.PersistentFlags().BoolVar(

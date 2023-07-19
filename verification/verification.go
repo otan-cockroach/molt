@@ -50,8 +50,9 @@ type verifyOpts struct {
 	rowBatchSize int
 	tableSplits  int
 	// TODO: better abstraction for this.
-	workFunc   WorkFunc
-	continuous bool
+	workFunc        WorkFunc
+	continuous      bool
+	continuousPause time.Duration
 }
 
 func WithConcurrency(c int) VerifyOpt {
@@ -78,9 +79,10 @@ func WithWorkFunc(c WorkFunc) VerifyOpt {
 	}
 }
 
-func WithContinuous(c bool) VerifyOpt {
+func WithContinuous(c bool, pauseLength time.Duration) VerifyOpt {
 	return func(o *verifyOpts) {
 		o.continuous = c
+		o.continuousPause = pauseLength
 	}
 }
 
@@ -198,7 +200,7 @@ func Verify(
 		if !opts.continuous {
 			return nil
 		}
-		time.Sleep(time.Second * 5)
+		time.Sleep(opts.continuousPause)
 	}
 }
 
