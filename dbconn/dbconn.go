@@ -16,6 +16,8 @@ import (
 
 type ID string
 
+type OrderedConns [2]Conn
+
 type Conn interface {
 	ID() ID
 	// Close closes the connection.

@@ -25,7 +25,7 @@ var (
 	verifyCmd = &cobra.Command{
 		Use:   "verify",
 		Short: "Verify table schemas and row data align.",
-		Long:  `verify ensure table schemas and row data between the two databases are aligned.`,
+		Long:  `Verify ensure table schemas and row data between the two databases are aligned.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cw := zerolog.NewConsoleWriter()
 			logger := zerolog.New(cw)
@@ -35,8 +35,11 @@ var (
 			defer reporter.Close()
 
 			ctx := context.Background()
-			var conns []dbconn.Conn
-			for _, arg := range args {
+			var conns dbconn.OrderedConns
+			if len(args) != 2 {
+				return errors.Newf("expected two connections")
+			}
+			for i, arg := range args {
 				var preferredID dbconn.ID
 				connStr := arg
 				splitArgs := strings.SplitN(arg, "===", 2)
@@ -47,7 +50,7 @@ var (
 				if err != nil {
 					return err
 				}
-				conns = append(conns, conn)
+				conns[i] = conn
 				reporter.Report(verification.StatusReport{Info: fmt.Sprintf("connected to %s", conn.ID())})
 			}
 			if flagVerifyFixup {

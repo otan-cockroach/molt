@@ -22,7 +22,7 @@ type connWithTables struct {
 }
 
 type databaseTableVerificationResult struct {
-	verified map[dbconn.ID][]TableMetadata
+	verified [2][]TableMetadata
 
 	missingTables    []MissingTable
 	extraneousTables []ExtraneousTable
@@ -47,11 +47,9 @@ func (c *tableVerificationIterator) curr() TableMetadata {
 
 // verifyDatabaseTables verifies tables exist in all databases.
 func verifyDatabaseTables(
-	ctx context.Context, conns []dbconn.Conn,
+	ctx context.Context, conns dbconn.OrderedConns,
 ) (databaseTableVerificationResult, error) {
-	ret := databaseTableVerificationResult{
-		verified: make(map[dbconn.ID][]TableMetadata),
-	}
+	ret := databaseTableVerificationResult{}
 
 	// Grab all tables and verify them.
 	var in []connWithTables
@@ -119,7 +117,7 @@ ORDER BY 3, 2`,
 		})
 	}
 
-	iterators := make([]tableVerificationIterator, len(in))
+	var iterators [2]tableVerificationIterator
 	for i := range in {
 		iterators[i] = tableVerificationIterator{
 			table: in[i],
@@ -129,75 +127,45 @@ ORDER BY 3, 2`,
 	// Iterate through all tables in source of truthIterator, moving iterators
 	// across
 	truthIterator := &iterators[0]
+	nonTruthIterator := &iterators[1]
 	for !truthIterator.done() {
-		truthNext := true
-		commonOnAll := true
-
-		var inCommon []int
-		for i := 1; i < len(iterators); i++ {
-			it := &iterators[i]
-
-			// If the iterator is done, that means we are missing tables
-			// from the truth value. Mark it as 1 to signify it as a missing
-			// table.
-			compareVal := 1
-			if !it.done() {
-				compareVal = it.curr().Compare(truthIterator.curr())
-			}
-			switch compareVal {
-			case -1:
-				// Extraneous row compared to source of truthIterator.
-				ret.extraneousTables = append(
-					ret.extraneousTables,
-					ExtraneousTable{ConnID: it.table.ID(), TableMetadata: it.curr()},
-				)
-				// Move the curr table over.
-				commonOnAll = false
-				it.next()
-				truthNext = false
-			case 0:
-				// Found on this it.
-				inCommon = append(inCommon, i)
-			case 1:
-				// Missing a row from source of truthIterator.
-				ret.missingTables = append(
-					ret.missingTables,
-					MissingTable{ConnID: it.table.ID(), TableMetadata: truthIterator.curr()},
-				)
-				commonOnAll = false
-			}
+		// If the iterator is done, that means we are missing tables
+		// from the truth value. Mark nonTruthIterator as 1 to signify nonTruthIterator as a missing
+		// table.
+		compareVal := 1
+		if !nonTruthIterator.done() {
+			compareVal = nonTruthIterator.curr().Compare(truthIterator.curr())
 		}
-
-		// If the state is common, add the table metadata attributed to the current state.
-		if commonOnAll {
-			for i, it := range iterators {
-				ret.verified[conns[i].ID()] = append(
-					ret.verified[conns[i].ID()],
-					it.curr(),
-				)
+		switch compareVal {
+		case -1:
+			// Extraneous row compared to source of truthIterator.
+			ret.extraneousTables = append(
+				ret.extraneousTables,
+				ExtraneousTable{ConnID: nonTruthIterator.table.ID(), TableMetadata: nonTruthIterator.curr()},
+			)
+			nonTruthIterator.next()
+		case 0:
+			for i := range iterators {
+				ret.verified[i] = append(ret.verified[i], iterators[i].curr())
 			}
-		}
-
-		// Continue if available.
-		if truthNext {
+			nonTruthIterator.next()
 			truthIterator.next()
-			// Also advance all connections which are in common.
-			for _, idx := range inCommon {
-				iterators[idx].next()
-			}
+		case 1:
+			// Missing a row from source of truth.
+			ret.missingTables = append(
+				ret.missingTables,
+				MissingTable{ConnID: nonTruthIterator.table.ID(), TableMetadata: truthIterator.curr()},
+			)
+			truthIterator.next()
 		}
 	}
 
-	// There may still be extraneous tables from the remaining iterators.
-	for i := 1; i < len(iterators); i++ {
-		it := &iterators[i]
-		for !it.done() {
-			ret.extraneousTables = append(
-				ret.extraneousTables,
-				ExtraneousTable{ConnID: it.table.ID(), TableMetadata: it.curr()},
-			)
-			it.next()
-		}
+	for !nonTruthIterator.done() {
+		ret.extraneousTables = append(
+			ret.extraneousTables,
+			ExtraneousTable{ConnID: nonTruthIterator.table.ID(), TableMetadata: nonTruthIterator.curr()},
+		)
+		nonTruthIterator.next()
 	}
 	return ret, nil
 }

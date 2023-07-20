@@ -54,7 +54,7 @@ type TableShard struct {
 	Schema                 tree.Name
 	Table                  tree.Name
 	MatchingColumns        []tree.Name
-	MatchingColumnTypeOIDs [][]oid.Oid
+	MatchingColumnTypeOIDs [2][]oid.Oid
 	PrimaryKeyColumns      []tree.Name
 	StartPKVals            []tree.Datum
 	EndPKVals              []tree.Datum
@@ -66,10 +66,14 @@ type TableShard struct {
 var TimingEnabled = false
 
 func CompareRows(
-	ctx context.Context, conns []dbconn.Conn, table TableShard, rowBatchSize int, reporter Reporter,
+	ctx context.Context,
+	conns dbconn.OrderedConns,
+	table TableShard,
+	rowBatchSize int,
+	reporter Reporter,
 ) error {
 	startTime := time.Now()
-	iterators := make([]*rowiterator.Iterator, len(conns))
+	var iterators [2]*rowiterator.Iterator
 	for i, conn := range conns {
 		var err error
 		iterators[i], err = rowiterator.NewIterator(

@@ -29,8 +29,8 @@ var (
 			defer reporter.Close()
 
 			ctx := context.Background()
-			var conns []dbconn.Conn
-			for _, arg := range args {
+			var conns dbconn.OrderedConns
+			for i, arg := range args {
 				var preferredID dbconn.ID
 				connStr := arg
 				splitArgs := strings.SplitN(arg, "===", 2)
@@ -42,7 +42,7 @@ var (
 				if err != nil {
 					return err
 				}
-				conns = append(conns, conn)
+				conns[i] = conn
 				reporter.Report(verification.StatusReport{Info: fmt.Sprintf("connected to %s as %s", connStr, conn.ID())})
 			}
 

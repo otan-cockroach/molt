@@ -31,7 +31,7 @@ type VerifyOpt func(*verifyOpts)
 
 type WorkFunc func(
 	ctx context.Context,
-	conns []dbconn.Conn,
+	conns dbconn.OrderedConns,
 	table TableShard,
 	rowBatchSize int,
 	reporter Reporter,
@@ -79,7 +79,7 @@ func WithContinuous(c bool, pauseLength time.Duration) VerifyOpt {
 
 // Verify verifies the given connections have matching tables and contents.
 func Verify(
-	ctx context.Context, conns []dbconn.Conn, reporter Reporter, inOpts ...VerifyOpt,
+	ctx context.Context, conns dbconn.OrderedConns, reporter Reporter, inOpts ...VerifyOpt,
 ) error {
 	opts := verifyOpts{
 		concurrency:  DefaultConcurrency,
@@ -197,7 +197,7 @@ func Verify(
 
 func verifyDataWorker(
 	ctx context.Context,
-	conns []dbconn.Conn,
+	conns dbconn.OrderedConns,
 	reporter Reporter,
 	rowBatchSize int,
 	tbl TableShard,
@@ -205,7 +205,7 @@ func verifyDataWorker(
 ) error {
 	// Copy connections over naming wise, but initialize a new pgx connection
 	// for each table.
-	workerConns := make([]dbconn.Conn, len(conns))
+	var workerConns dbconn.OrderedConns
 	for i := range workerConns {
 		// Make a copy of i so the worker closes correctly.
 		i := i

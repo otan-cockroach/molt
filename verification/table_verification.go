@@ -158,20 +158,20 @@ type verifyTableResult struct {
 	Table                       tree.Name
 	RowVerifiable               bool
 	MatchingColumns             []tree.Name
-	ColumnTypeOIDs              [][]oid.Oid
+	ColumnTypeOIDs              [2][]oid.Oid
 	PrimaryKeyColumns           []tree.Name
 	MismatchingTableDefinitions []MismatchingTableDefinition
 }
 
 func verifyCommonTables(
-	ctx context.Context, conns []dbconn.Conn, tables map[dbconn.ID][]TableMetadata,
+	ctx context.Context, conns dbconn.OrderedConns, tables [2][]TableMetadata,
 ) ([]verifyTableResult, error) {
 	var ret []verifyTableResult
 
 	columnOIDMap := make(map[int]map[tree.Name]oid.Oid)
 
 	truthConn := conns[0]
-	for tblIdx, truthTbl := range tables[truthConn.ID()] {
+	for tblIdx, truthTbl := range tables[0] {
 		res := verifyTableResult{
 			Schema: truthTbl.Schema,
 			Table:  truthTbl.Table,
@@ -205,7 +205,7 @@ func verifyCommonTables(
 		for i := 1; i < len(conns); i++ {
 			compareConn := conns[i]
 			truthMappedCols := mapColumns(truthCols)
-			targetTbl := tables[compareConn.ID()][tblIdx]
+			targetTbl := tables[i][tblIdx]
 			compareColumns, err := getColumns(ctx, conns[i], targetTbl)
 			if err != nil {
 				return nil, errors.Wrap(err, "error getting columns for table")
@@ -319,7 +319,6 @@ func verifyCommonTables(
 		}
 
 		res.PrimaryKeyColumns = truthPKCols
-		res.ColumnTypeOIDs = make([][]oid.Oid, len(conns))
 		// Place PK columns first.
 		for _, col := range truthPKCols {
 			if _, ok := comparableColumns[col]; ok {

@@ -48,11 +48,11 @@ func TestDataDrivenMySQL(t *testing.T) {
 func testDataDriven(t *testing.T, path string, connArgs []connArg) {
 	ctx := context.Background()
 
-	var conns []dbconn.Conn
-	for _, args := range connArgs {
+	var conns dbconn.OrderedConns
+	for i, args := range connArgs {
 		cleanConn, err := dbconn.TestOnlyCleanDatabase(ctx, args.id, args.connStr, "dd_test")
 		require.NoError(t, err)
-		conns = append(conns, cleanConn)
+		conns[i] = cleanConn
 	}
 
 	defer func() {

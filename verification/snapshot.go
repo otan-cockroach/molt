@@ -34,7 +34,7 @@ func Snapshot(inOpts ...SnapshotOpt) WorkFunc {
 		applyOpt(&opts)
 	}
 	return func(
-		ctx context.Context, conns []dbconn.Conn, table TableShard, rowBatchSize int, reporter Reporter,
+		ctx context.Context, conns dbconn.OrderedConns, table TableShard, rowBatchSize int, reporter Reporter,
 	) error {
 		truthConn := conns[0]
 		it, err := rowiterator.NewIterator(
