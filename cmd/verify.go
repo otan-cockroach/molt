@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"strings"
 	"time"
 
@@ -85,8 +84,8 @@ func init() {
 	verifyCmd.PersistentFlags().IntVar(
 		&flagVerifyConcurrency,
 		"concurrency",
-		runtime.NumCPU(),
-		"number of shards to process at a time",
+		0,
+		"number of tables to process at a time (defaults to number of CPUs)",
 	)
 	verifyCmd.PersistentFlags().IntVar(
 		&flagVerifyTableSplits,

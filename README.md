@@ -29,28 +29,26 @@ GOOS=linux GOARCH=amd64 go build -v -o artifacts/molt .
 
 It currently supports PostgreSQL and MySQL comparisons with CockroachDB.
 
-It takes in two or more JDBC connection strings as arguments.
-For names that are easy to read, append `<name>===` in front of the jdbc string.
-The first argument is optimised to be read as the "source of truth".
+It takes in two connection strings as arguments.
+For names that are easy to read, append `<name>===` in front of the string.
+The first argument is considered as the "source of truth".
 
 ```shell
-# Compare two postgres instances, with simplified naming for both instances.
+# Compare postgres and CRDB instance.
 molt verify \
   'pg_truth===postgres://user:pass@url:5432/db' \
   'crdb_compare===postgres://root@localhost:26257?sslmode=disable'
 
-# Compare mysql and postgres.
+# Compare mysql and CRDB instance.
 molt verify \
   'mysql===jdbc:mysql://root@tcp(localhost:3306)/defaultdb' \
-  'postgresql://root@127.0.0.1:26257/defaultdb?options=-ccluster%3Ddemo-tenant&sslmode=disable'
+  'postgresql://root@127.0.0.1:26257/defaultdb?sslmode=disable'
 ```
 
 See `molt verify --help` for all available parameters.
 
 #### Limitations
-* Splitting a table by shard only works for int, uuid and float types.
-* We page 20000 rows at a time, but row values can change in between. Temporary
-  blips in data consistency can be expected.
+* Temporary blips in data consistency can be expected.
 * MySQL enums and set types are not supported.
 * Supports only comparing one MySQL database vs a whole CRDB schema (which is assumed to be "public").
 * Geospatial types cannot yet be compared.
@@ -72,7 +70,7 @@ CREATE DATABASE testdb;
 * Ensure a local MySQL is setup with username `root` and an empty password,
   with a `defaultdb` database setup 
   (this can be overriden with the `MYSQL_URL` env var):
-```
+```sql
 CREATE DATABASE defaultdb;
 ```
 * Run the tests: `go test ./...`.

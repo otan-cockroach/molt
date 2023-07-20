@@ -196,7 +196,7 @@ func compareRows(
 		}
 	}
 
-	for _, it := range iterators {
+	for _, it := range iterators[1:] {
 		if err := it.Error(); err != nil {
 			reporter.Report(StatusReport{
 				Info: fmt.Sprintf("error validating %s.%s on %s: %v", table.Schema, table.Table, it.Conn.ID(), err),

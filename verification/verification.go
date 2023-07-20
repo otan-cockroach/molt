@@ -3,6 +3,7 @@ package verification
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 
@@ -104,28 +105,65 @@ func Verify(
 		}
 	}
 
-	for {
-		// Compare rows up to the concurrency specified.
-		g, _ := errgroup.WithContext(ctx)
-		workQueue := make(chan TableShard)
-		for it := 0; it < opts.concurrency; it++ {
-			g.Go(func() error {
-				for {
-					splitTable, ok := <-workQueue
-					if !ok {
-						return nil
-					}
+	shards := make([]TableShard, 0, len(tbls))
+	for _, tbl := range tbls {
+		if !tbl.RowVerifiable {
+			logger.Warn().Msgf("skipping unverifiable table %s.%s", tbl.Schema, tbl.Table)
+			continue
+		}
+		// Get and first and last of each PK.
+		tableShards, err := shardTable(ctx, conns[0], tbl, reporter, opts.tableSplits)
+		if err != nil {
+			return errors.Wrapf(err, "error splitting tables")
+		}
+		shards = append(shards, tableShards...)
+	}
+
+	numGoroutines := opts.concurrency
+	if opts.continuous {
+		if opts.concurrency != 0 && opts.concurrency < len(shards) {
+			logger.Warn().Msgf("--concurrency is set to a higher value %d so that continuous mode can run successfully", len(shards))
+		}
+		// For continuous mode, we default to running each shard on a continous loop.
+		numGoroutines = len(shards)
+	} else if numGoroutines == 0 {
+		numGoroutines = runtime.NumCPU()
+		logger.Debug().Int("concurrency", numGoroutines).
+			Msgf("no concurrency set; defaulting to number of CPUs")
+	}
+
+	if numGoroutines > runtime.NumCPU()*4 {
+		logger.Warn().Msgf(
+			"running %d row verifications concurrently, which may thrash your CPU (consider reducing using --concurrency or using less tables)",
+			numGoroutines,
+		)
+	}
+
+	// Compare rows up to the numGoroutines specified.
+	g, _ := errgroup.WithContext(ctx)
+	workQueue := make(chan TableShard)
+	for goroutineIdx := 0; goroutineIdx < numGoroutines; goroutineIdx++ {
+		g.Go(func() error {
+			for {
+				shard, ok := <-workQueue
+				if !ok {
+					return nil
+				}
+				for runNum := 1; opts.continuous || runNum <= 1; runNum++ {
 					msg := fmt.Sprintf(
 						"starting verify on %s.%s, shard %d/%d",
-						splitTable.Schema,
-						splitTable.Table,
-						splitTable.ShardNum,
-						splitTable.TotalShards,
+						shard.Schema,
+						shard.Table,
+						shard.ShardNum,
+						shard.TotalShards,
 					)
-					if splitTable.TotalShards > 1 {
+					if opts.continuous {
+						msg += fmt.Sprintf(", run #%d", runNum)
+					}
+					if shard.TotalShards > 1 {
 						msg += ", range: ["
-						if len(splitTable.StartPKVals) > 0 {
-							for i, val := range splitTable.StartPKVals {
+						if len(shard.StartPKVals) > 0 {
+							for i, val := range shard.StartPKVals {
 								if i > 0 {
 									msg += ","
 								}
@@ -135,8 +173,8 @@ func Verify(
 							msg += "<beginning>"
 						}
 						msg += " - "
-						if len(splitTable.EndPKVals) > 0 {
-							for i, val := range splitTable.EndPKVals {
+						if len(shard.EndPKVals) > 0 {
+							for i, val := range shard.EndPKVals {
 								if i > 0 {
 									msg += ", "
 								}
@@ -150,49 +188,32 @@ func Verify(
 					reporter.Report(StatusReport{
 						Info: msg,
 					})
-					if err := verifyDataWorker(ctx, conns, reporter, opts.rowBatchSize, splitTable); err != nil {
+					if err := verifyRowShard(ctx, conns, reporter, opts.rowBatchSize, shard); err != nil {
 						logger.Err(err).
-							Str("schema", string(splitTable.Schema)).
-							Str("table", string(splitTable.Table)).
+							Str("schema", string(shard.Schema)).
+							Str("table", string(shard.Table)).
 							Msgf("error verifying rows")
 					}
+					time.Sleep(opts.continuousPause)
 				}
-			})
-		}
-		for _, tbl := range tbls {
-			// Ignore tables which cannot be verified.
-			if !tbl.RowVerifiable {
-				continue
 			}
-
-			// Get and first and last of each PK.
-			splitTables, err := splitTable(ctx, conns[0], tbl, reporter, opts.tableSplits)
-			if err != nil {
-				return errors.Wrapf(err, "error splitting tables")
-			}
-			for _, splitTable := range splitTables {
-				workQueue <- splitTable
-			}
-		}
-		close(workQueue)
-		if err := g.Wait(); err != nil {
-			return err
-		}
-		if !opts.continuous {
-			return nil
-		}
-		time.Sleep(opts.continuousPause)
+		})
 	}
+	for _, shard := range shards {
+		workQueue <- shard
+	}
+	close(workQueue)
+	return g.Wait()
 }
 
-func verifyDataWorker(
+func verifyRowShard(
 	ctx context.Context,
 	conns dbconn.OrderedConns,
 	reporter Reporter,
 	rowBatchSize int,
 	tbl TableShard,
 ) error {
-	// Copy connections over naming wise, but initialize a new pgx connection
+	// Copy connections over naming wise, but initialize a new connection
 	// for each table.
 	var workerConns dbconn.OrderedConns
 	for i := range workerConns {
