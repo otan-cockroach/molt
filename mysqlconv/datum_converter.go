@@ -57,9 +57,6 @@ func ConvertRowValue(typMap *pgtype.Map, val []byte, typOID oid.Oid) (tree.Datum
 		return ret, err
 	case pgtype.TimestamptzOID:
 		v := string(val)
-		if strings.HasPrefix(v, "0000-") {
-			return tree.DNull, nil
-		}
 		ret, _, err := tree.ParseDTimestampTZ(timeCtx, v, time.Microsecond)
 		return ret, err
 	case pgtype.DateOID:

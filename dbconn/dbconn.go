@@ -23,7 +23,6 @@ type Conn interface {
 	// Clone creates a new Conn with the same underlying connections arguments.
 	Clone(ctx context.Context) (Conn, error)
 	// TypeMap returns a pgx typemap.
-	// TODO: consider whether pgtype.Map is the right abstraction.
 	TypeMap() *pgtype.Map
 }
 

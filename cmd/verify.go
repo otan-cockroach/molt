@@ -43,13 +43,12 @@ var (
 				if len(splitArgs) == 2 {
 					preferredID, connStr = dbconn.ID(splitArgs[0]), splitArgs[1]
 				}
-				reporter.Report(verification.StatusReport{Info: fmt.Sprintf("connecting to %s", connStr)})
 				conn, err := dbconn.Connect(ctx, preferredID, connStr)
 				if err != nil {
 					return err
 				}
 				conns = append(conns, conn)
-				reporter.Report(verification.StatusReport{Info: fmt.Sprintf("connected to %s as %s", connStr, conn.ID())})
+				reporter.Report(verification.StatusReport{Info: fmt.Sprintf("connected to %s", conn.ID())})
 			}
 			if flagVerifyFixup {
 				reporter.Reporters = append(reporter.Reporters, &verification.FixReporter{
