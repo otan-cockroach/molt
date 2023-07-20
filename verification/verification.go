@@ -3,12 +3,12 @@ package verification
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
+	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -64,7 +64,11 @@ func WithContinuous(c bool, pauseLength time.Duration) VerifyOpt {
 
 // Verify verifies the given connections have matching tables and contents.
 func Verify(
-	ctx context.Context, conns dbconn.OrderedConns, reporter Reporter, inOpts ...VerifyOpt,
+	ctx context.Context,
+	conns dbconn.OrderedConns,
+	logger zerolog.Logger,
+	reporter Reporter,
+	inOpts ...VerifyOpt,
 ) error {
 	opts := verifyOpts{
 		concurrency:  DefaultConcurrency,
@@ -147,7 +151,10 @@ func Verify(
 						Info: msg,
 					})
 					if err := verifyDataWorker(ctx, conns, reporter, opts.rowBatchSize, splitTable); err != nil {
-						log.Printf("[ERROR] error comparing rows on %s.%s: %v", splitTable.Schema, splitTable.Table, err)
+						logger.Err(err).
+							Str("schema", string(splitTable.Schema)).
+							Str("table", string(splitTable.Table)).
+							Msgf("error verifying rows")
 					}
 				}
 			})
@@ -171,7 +178,6 @@ func Verify(
 		if err := g.Wait(); err != nil {
 			return err
 		}
-		// TODO: make continuous per shard, instead of global wait.
 		if !opts.continuous {
 			return nil
 		}

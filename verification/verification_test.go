@@ -126,7 +126,15 @@ func testDataDriven(t *testing.T, path string, connArgs []connArg) {
 				Logger: zerolog.New(&sb),
 			}
 			// Use 1 concurrency / splitting to ensure deterministic results.
-			err := Verify(ctx, conns, reporter, WithConcurrency(1), WithRowBatchSize(2), WithTableSplits(numSplits))
+			err := Verify(
+				ctx,
+				conns,
+				zerolog.Nop(),
+				reporter,
+				WithConcurrency(1),
+				WithRowBatchSize(2),
+				WithTableSplits(numSplits),
+			)
 			if err != nil {
 				sb.WriteString(fmt.Sprintf("error: %s\n", err.Error()))
 			}

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 
@@ -65,6 +66,7 @@ var (
 			if err := verification.Verify(
 				ctx,
 				conns,
+				logger,
 				reporter,
 				verification.WithConcurrency(flagVerifyConcurrency),
 				verification.WithTableSplits(flagVerifyTableSplits),
@@ -83,18 +85,18 @@ func init() {
 	verifyCmd.PersistentFlags().IntVar(
 		&flagVerifyConcurrency,
 		"concurrency",
-		1,
+		runtime.NumCPU(),
 		"number of shards to process at a time",
 	)
 	verifyCmd.PersistentFlags().IntVar(
 		&flagVerifyTableSplits,
-		"table_splits",
+		"table-splits",
 		1,
 		"number of shards to break down each table into whilst doing row-based verification",
 	)
 	verifyCmd.PersistentFlags().IntVar(
 		&flagVerifyRowBatchSize,
-		"row_batch_size",
+		"row-batch-size",
 		20000,
 		"number of rows to get from a table at a time",
 	)
@@ -104,9 +106,6 @@ func init() {
 		false,
 		"whether to fix up any rows",
 	)
-	if err := verifyCmd.PersistentFlags().MarkHidden("fixup"); err != nil {
-		panic(err)
-	}
 	verifyCmd.PersistentFlags().DurationVar(
 		&flagVerifyContinuousPause,
 		"continuous-pause-duration",
@@ -120,4 +119,9 @@ func init() {
 		"whether verification should continuously run on each shard",
 	)
 	rootCmd.AddCommand(verifyCmd)
+	for _, hidden := range []string{"fixup", "table-splits"} {
+		if err := verifyCmd.PersistentFlags().MarkHidden(hidden); err != nil {
+			panic(err)
+		}
+	}
 }
