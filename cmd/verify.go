@@ -80,13 +80,13 @@ func init() {
 	verifyCmd.PersistentFlags().IntVar(
 		&flagVerifyConcurrency,
 		"concurrency",
-		16,
+		1,
 		"number of shards to process at a time",
 	)
 	verifyCmd.PersistentFlags().IntVar(
 		&flagVerifyTableSplits,
 		"table_splits",
-		16,
+		1,
 		"number of shards to break down each table into whilst doing row-based verification",
 	)
 	verifyCmd.PersistentFlags().IntVar(
@@ -106,21 +106,15 @@ func init() {
 	}
 	verifyCmd.PersistentFlags().DurationVar(
 		&flagVerifyContinuousPause,
-		"continuous-pause",
+		"continuous-pause-duration",
 		0,
-		"pause between continuous modes",
+		"pause between continuous runs",
 	)
-	if err := verifyCmd.PersistentFlags().MarkHidden("continuous-pause"); err != nil {
-		panic(err)
-	}
 	verifyCmd.PersistentFlags().BoolVar(
 		&flagVerifyContinuous,
 		"continuous",
 		false,
-		"whether verification should continuously run",
+		"whether verification should continuously run on each shard",
 	)
-	if err := verifyCmd.PersistentFlags().MarkHidden("continuous"); err != nil {
-		panic(err)
-	}
 	rootCmd.AddCommand(verifyCmd)
 }

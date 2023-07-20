@@ -7,18 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
-	"github.com/lib/pq/oid"
 	"golang.org/x/sync/errgroup"
 )
-
-func init() {
-	// Inject JSON as a OidToType.
-	types.OidToType[oid.T_json] = types.Jsonb
-	types.OidToType[oid.T__json] = types.MakeArray(types.Jsonb)
-}
 
 func (tm TableMetadata) Compare(o TableMetadata) int {
 	if c := strings.Compare(string(tm.Schema), string(o.Schema)); c != 0 {
@@ -46,10 +38,9 @@ type WorkFunc func(
 ) error
 
 type verifyOpts struct {
-	concurrency  int
-	rowBatchSize int
-	tableSplits  int
-	// TODO: better abstraction for this.
+	concurrency     int
+	rowBatchSize    int
+	tableSplits     int
 	workFunc        WorkFunc
 	continuous      bool
 	continuousPause time.Duration

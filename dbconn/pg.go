@@ -3,7 +3,9 @@ package dbconn
 import (
 	"context"
 
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
 	"github.com/jackc/pgx/v5"
+	"github.com/lib/pq/oid"
 )
 
 type PGConn struct {
@@ -31,4 +33,10 @@ func (c *PGConn) Clone(ctx context.Context) (Conn, error) {
 		return nil, err
 	}
 	return NewPGConn(c.id, conn), nil
+}
+
+func init() {
+	// Inject JSON as a OidToType.
+	types.OidToType[oid.T_json] = types.Jsonb
+	types.OidToType[oid.T__json] = types.MakeArray(types.Jsonb)
 }
