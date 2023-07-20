@@ -29,19 +29,10 @@ const DefaultTableSplits = 8
 
 type VerifyOpt func(*verifyOpts)
 
-type WorkFunc func(
-	ctx context.Context,
-	conns dbconn.OrderedConns,
-	table TableShard,
-	rowBatchSize int,
-	reporter Reporter,
-) error
-
 type verifyOpts struct {
 	concurrency     int
 	rowBatchSize    int
 	tableSplits     int
-	workFunc        WorkFunc
 	continuous      bool
 	continuousPause time.Duration
 }
@@ -64,12 +55,6 @@ func WithTableSplits(c int) VerifyOpt {
 	}
 }
 
-func WithWorkFunc(c WorkFunc) VerifyOpt {
-	return func(o *verifyOpts) {
-		o.workFunc = c
-	}
-}
-
 func WithContinuous(c bool, pauseLength time.Duration) VerifyOpt {
 	return func(o *verifyOpts) {
 		o.continuous = c
@@ -85,7 +70,6 @@ func Verify(
 		concurrency:  DefaultConcurrency,
 		rowBatchSize: DefaultRowBatchSize,
 		tableSplits:  DefaultTableSplits,
-		workFunc:     CompareRows,
 	}
 	for _, applyOpt := range inOpts {
 		applyOpt(&opts)
@@ -162,7 +146,7 @@ func Verify(
 					reporter.Report(StatusReport{
 						Info: msg,
 					})
-					if err := verifyDataWorker(ctx, conns, reporter, opts.rowBatchSize, splitTable, opts.workFunc); err != nil {
+					if err := verifyDataWorker(ctx, conns, reporter, opts.rowBatchSize, splitTable); err != nil {
 						log.Printf("[ERROR] error comparing rows on %s.%s: %v", splitTable.Schema, splitTable.Table, err)
 					}
 				}
@@ -201,7 +185,6 @@ func verifyDataWorker(
 	reporter Reporter,
 	rowBatchSize int,
 	tbl TableShard,
-	workFunc WorkFunc,
 ) error {
 	// Copy connections over naming wise, but initialize a new pgx connection
 	// for each table.
@@ -218,5 +201,5 @@ func verifyDataWorker(
 			_ = workerConns[i].Close(ctx)
 		}()
 	}
-	return workFunc(ctx, workerConns, tbl, rowBatchSize, reporter)
+	return compareRows(ctx, workerConns, tbl, rowBatchSize, reporter)
 }

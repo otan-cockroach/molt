@@ -65,7 +65,7 @@ type TableShard struct {
 
 var TimingEnabled = false
 
-func CompareRows(
+func compareRows(
 	ctx context.Context,
 	conns dbconn.OrderedConns,
 	table TableShard,

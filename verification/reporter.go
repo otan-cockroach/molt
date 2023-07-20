@@ -58,8 +58,7 @@ func (l LogReporter) Report(obj ReportableObject) {
 			Str("mismatch_info", obj.Info).
 			Msgf("mismatching table definition")
 	case StatusReport:
-		l.Info().
-			Msg(obj.Info)
+		l.Info().Msg(obj.Info)
 	case MismatchingRow:
 		falseValues := zerolog.Dict()
 		truthVals := zerolog.Dict()
