@@ -228,5 +228,5 @@ func verifyRowShard(
 			_ = workerConns[i].Close(ctx)
 		}()
 	}
-	return compareRows(ctx, workerConns, tbl, rowBatchSize, reporter)
+	return verifyRowsOnShard(ctx, workerConns, tbl, rowBatchSize, reporter)
 }
