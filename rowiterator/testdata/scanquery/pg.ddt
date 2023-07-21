@@ -1,0 +1,40 @@
+table
+CREATE TABLE sc.table_name (
+    id INT,
+    id2 INT,
+    textual_val TEXT,
+    PRIMARY KEY(id, id2)
+)
+----
+
+pg
+----
+
+generate
+----
+SELECT id, id2, textual_val FROM sc.table_name WHERE true AND true ORDER BY id, id2 LIMIT 10000
+
+generate
+1
+2
+----
+SELECT id, id2, textual_val FROM sc.table_name WHERE ((id, id2) > ('1', '2')) AND true ORDER BY id, id2 LIMIT 10000
+
+start_pk
+0
+0
+----
+
+end_pk
+3
+4
+----
+
+pg
+----
+
+generate
+2
+3
+----
+SELECT id, id2, textual_val FROM sc.table_name WHERE ((id, id2) > ('2', '3')) AND ((id, id2) < ('3', '4')) ORDER BY id, id2 LIMIT 10000

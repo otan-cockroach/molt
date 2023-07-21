@@ -2,15 +2,10 @@ package rowiterator
 
 import (
 	"context"
-	"strings"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
-	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree/treecmp"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
-	"github.com/pingcap/tidb/parser/ast"
-	"github.com/pingcap/tidb/parser/format"
-	"github.com/pingcap/tidb/parser/opcode"
 )
 
 type scanIterator struct {
@@ -23,7 +18,7 @@ type scanIterator struct {
 	pkCursor      tree.Datums
 	currCacheSize int
 	err           error
-	queryCache    interface{}
+	scanQuery     scanQuery
 }
 
 type itResult struct {
@@ -50,9 +45,9 @@ func NewScanIterator(
 	}
 	switch conn := conn.(type) {
 	case *dbconn.PGConn:
-		it.queryCache = constructPGBaseSelectClause(table, rowBatchSize)
+		it.scanQuery = newPGScanQuery(table, rowBatchSize)
 	case *dbconn.MySQLConn:
-		it.queryCache = constructMySQLBaseSelectClause(table, rowBatchSize)
+		it.scanQuery = newMySQLScanQuery(table, rowBatchSize)
 	default:
 		return nil, errors.Newf("unsupported conn type %T", conn)
 	}
@@ -101,42 +96,13 @@ func (it *scanIterator) nextPage(ctx context.Context) {
 	go func() {
 		datums, err := func() ([]tree.Datums, error) {
 			var currRows rows
+			q, err := it.scanQuery.generate(it.pkCursor)
+			if err != nil {
+				return nil, err
+			}
 			switch conn := it.conn.(type) {
 			case *dbconn.PGConn:
-				andClause := &tree.AndExpr{
-					Left:  tree.DBoolTrue,
-					Right: tree.DBoolTrue,
-				}
-				// Use the cursor if available, otherwise not.
-				if len(it.pkCursor) > 0 {
-					andClause.Left = makePGCompareExpr(
-						treecmp.MakeComparisonOperator(treecmp.GT),
-						it.table.ColumnNames,
-						it.pkCursor,
-					)
-				} else if len(it.table.StartPKVals) > 0 {
-					andClause.Left = makePGCompareExpr(
-						treecmp.MakeComparisonOperator(treecmp.GE),
-						it.table.ColumnNames,
-						it.table.StartPKVals,
-					)
-				}
-				if len(it.table.EndPKVals) > 0 {
-					andClause.Right = makePGCompareExpr(
-						treecmp.MakeComparisonOperator(treecmp.LT),
-						it.table.ColumnNames,
-						it.table.EndPKVals,
-					)
-				}
-				selectStmt := it.queryCache.(*tree.Select)
-				selectStmt.Select.(*tree.SelectClause).Where = &tree.Where{
-					Type: tree.AstWhere,
-					Expr: andClause,
-				}
-
-				f := tree.NewFmtCtx(tree.FmtParsableNumerics)
-				f.FormatNode(selectStmt)
-				newRows, err := conn.Query(ctx, f.CloseAndGetString())
+				newRows, err := conn.Query(ctx, q)
 				if err != nil {
 					return nil, errors.Wrapf(err, "error getting rows for table %s.%s from %s", it.table.Schema, it.table.Table, it.conn.ID)
 				}
@@ -146,39 +112,7 @@ func (it *scanIterator) nextPage(ctx context.Context) {
 					typOIDs: it.table.ColumnOIDs,
 				}
 			case *dbconn.MySQLConn:
-				andClause := &ast.BinaryOperationExpr{
-					Op: opcode.LogicAnd,
-					L:  ast.NewValueExpr(1, "", ""),
-					R:  ast.NewValueExpr(1, "", ""),
-				}
-				// Use the cursor if available, otherwise not.
-				if len(it.pkCursor) > 0 {
-					andClause.L = makeMySQLCompareExpr(
-						opcode.GT,
-						it.table.ColumnNames,
-						it.pkCursor,
-					)
-				} else if len(it.table.StartPKVals) > 0 {
-					andClause.L = makeMySQLCompareExpr(
-						opcode.GE,
-						it.table.ColumnNames,
-						it.table.StartPKVals,
-					)
-				}
-				if len(it.table.EndPKVals) > 0 {
-					andClause.R = makeMySQLCompareExpr(
-						opcode.LT,
-						it.table.ColumnNames,
-						it.table.EndPKVals,
-					)
-				}
-				selectStmt := it.queryCache.(*ast.SelectStmt)
-				selectStmt.Where = andClause
-				var sb strings.Builder
-				if err := selectStmt.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb)); err != nil {
-					return nil, errors.Wrap(err, "error generating MySQL statement")
-				}
-				newRows, err := conn.QueryContext(ctx, sb.String())
+				newRows, err := conn.QueryContext(ctx, q)
 				if err != nil {
 					return nil, errors.Wrapf(err, "error getting rows for table %s in %s", it.table.Table, it.conn.ID())
 				}
@@ -191,6 +125,7 @@ func (it *scanIterator) nextPage(ctx context.Context) {
 				return nil, errors.AssertionFailedf("unhandled conn type: %T", conn)
 			}
 			defer func() { currRows.Close() }()
+
 			datums := make([]tree.Datums, 0, it.rowBatchSize)
 			for currRows.Next() {
 				d, err := currRows.Datums()

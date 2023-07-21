@@ -1,0 +1,40 @@
+table
+CREATE TABLE sc.table_name (
+    id INT,
+    id2 INT,
+    textual_val TEXT,
+    PRIMARY KEY(id, id2)
+)
+----
+
+mysql
+----
+
+generate
+----
+SELECT `id`,`id2`,`textual_val` FROM `table_name` WHERE 1 AND 1 ORDER BY `id`,`id2` LIMIT 10000
+
+generate
+1
+2
+----
+SELECT `id`,`id2`,`textual_val` FROM `table_name` WHERE ROW(`id`,`id2`)>ROW('1','2') AND 1 ORDER BY `id`,`id2` LIMIT 10000
+
+start_pk
+0
+0
+----
+
+end_pk
+3
+4
+----
+
+mysql
+----
+
+generate
+3
+4
+----
+SELECT `id`,`id2`,`textual_val` FROM `table_name` WHERE ROW(`id`,`id2`)>ROW('3','4') AND ROW(`id`,`id2`)<ROW('3','4') ORDER BY `id`,`id2` LIMIT 10000
