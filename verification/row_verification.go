@@ -115,83 +115,81 @@ func verifyRowsOnShard(
 		stats.numVerified++
 
 		truthVals := truth.Next(ctx)
-		for itIdx := 1; itIdx < len(iterators); itIdx++ {
-			it := iterators[itIdx]
+		it := iterators[1]
 
-		itLoop:
-			for {
-				if !it.HasNext(ctx) && it.Error() == nil {
-					stats.numMissing++
-					reporter.Report(MissingRow{
-						ConnID:            it.Conn().ID(),
-						Schema:            table.Schema,
-						Table:             table.Table,
-						PrimaryKeyColumns: table.PrimaryKeyColumns,
-						PrimaryKeyValues:  truthVals[:len(table.PrimaryKeyColumns)],
-						Columns:           table.MatchingColumns,
-						Values:            truthVals,
-					})
+	itLoop:
+		for {
+			if !it.HasNext(ctx) && it.Error() == nil {
+				stats.numMissing++
+				reporter.Report(MissingRow{
+					ConnID:            it.Conn().ID(),
+					Schema:            table.Schema,
+					Table:             table.Table,
+					PrimaryKeyColumns: table.PrimaryKeyColumns,
+					PrimaryKeyValues:  truthVals[:len(table.PrimaryKeyColumns)],
+					Columns:           table.MatchingColumns,
+					Values:            truthVals,
+				})
+				break
+			}
+
+			// Check the primary key.
+			targetVals := it.Peek(ctx)
+			var compareVal int
+			for i := range table.PrimaryKeyColumns {
+				if compareVal = truthVals[i].Compare(cmpCtx, targetVals[i]); compareVal != 0 {
 					break
 				}
-
-				// Check the primary key.
-				targetVals := it.Peek(ctx)
-				var compareVal int
-				for i := range table.PrimaryKeyColumns {
-					if compareVal = truthVals[i].Compare(cmpCtx, targetVals[i]); compareVal != 0 {
-						break
+			}
+			switch compareVal {
+			case 1:
+				// Extraneous row. Log and continue.
+				it.Next(ctx)
+				reporter.Report(ExtraneousRow{
+					ConnID:            it.Conn().ID(),
+					Schema:            table.Schema,
+					Table:             table.Table,
+					PrimaryKeyColumns: table.PrimaryKeyColumns,
+					PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
+				})
+				stats.numExtraneous++
+			case 0:
+				// Matching primary key. Compare values and break loop.
+				targetVals = it.Next(ctx)
+				mismatches := MismatchingRow{
+					ConnID:            it.Conn().ID(),
+					Schema:            table.Schema,
+					Table:             table.Table,
+					PrimaryKeyColumns: table.PrimaryKeyColumns,
+					PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
+				}
+				for valIdx := len(table.PrimaryKeyColumns); valIdx < len(targetVals); valIdx++ {
+					if targetVals[valIdx].Compare(cmpCtx, truthVals[valIdx]) != 0 {
+						mismatches.MismatchingColumns = append(mismatches.MismatchingColumns, table.MatchingColumns[valIdx])
+						mismatches.TargetVals = append(mismatches.TargetVals, targetVals[valIdx])
+						mismatches.TruthVals = append(mismatches.TruthVals, truthVals[valIdx])
 					}
 				}
-				switch compareVal {
-				case 1:
-					// Extraneous row. Log and continue.
-					it.Next(ctx)
-					reporter.Report(ExtraneousRow{
-						ConnID:            it.Conn().ID(),
-						Schema:            table.Schema,
-						Table:             table.Table,
-						PrimaryKeyColumns: table.PrimaryKeyColumns,
-						PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
-					})
-					stats.numExtraneous++
-				case 0:
-					// Matching primary key. compare values and break loop.
-					targetVals = it.Next(ctx)
-					mismatches := MismatchingRow{
-						ConnID:            it.Conn().ID(),
-						Schema:            table.Schema,
-						Table:             table.Table,
-						PrimaryKeyColumns: table.PrimaryKeyColumns,
-						PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
-					}
-					for valIdx := len(table.PrimaryKeyColumns); valIdx < len(targetVals); valIdx++ {
-						if targetVals[valIdx].Compare(cmpCtx, truthVals[valIdx]) != 0 {
-							mismatches.MismatchingColumns = append(mismatches.MismatchingColumns, table.MatchingColumns[valIdx])
-							mismatches.TargetVals = append(mismatches.TargetVals, targetVals[valIdx])
-							mismatches.TruthVals = append(mismatches.TruthVals, truthVals[valIdx])
-						}
-					}
-					if len(mismatches.MismatchingColumns) > 0 {
-						reporter.Report(mismatches)
-						stats.numMismatch++
-					} else {
-						stats.numSuccess++
-					}
-					break itLoop
-				case -1:
-					// Missing a row.
-					reporter.Report(MissingRow{
-						ConnID:            it.Conn().ID(),
-						Schema:            table.Schema,
-						Table:             table.Table,
-						PrimaryKeyColumns: table.PrimaryKeyColumns,
-						PrimaryKeyValues:  truthVals[:len(table.PrimaryKeyColumns)],
-						Columns:           table.MatchingColumns,
-						Values:            truthVals,
-					})
-					stats.numMissing++
-					break itLoop
+				if len(mismatches.MismatchingColumns) > 0 {
+					reporter.Report(mismatches)
+					stats.numMismatch++
+				} else {
+					stats.numSuccess++
 				}
+				break itLoop
+			case -1:
+				// Missing a row.
+				reporter.Report(MissingRow{
+					ConnID:            it.Conn().ID(),
+					Schema:            table.Schema,
+					Table:             table.Table,
+					PrimaryKeyColumns: table.PrimaryKeyColumns,
+					PrimaryKeyValues:  truthVals[:len(table.PrimaryKeyColumns)],
+					Columns:           table.MatchingColumns,
+					Values:            truthVals,
+				})
+				stats.numMissing++
+				break itLoop
 			}
 		}
 	}
