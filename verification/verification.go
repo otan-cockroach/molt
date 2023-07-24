@@ -188,7 +188,7 @@ func Verify(
 					reporter.Report(StatusReport{
 						Info: msg,
 					})
-					if err := verifyRowShard(ctx, conns, reporter, opts.rowBatchSize, shard); err != nil {
+					if err := verifyRowShard(ctx, conns, reporter, logger, opts.rowBatchSize, shard); err != nil {
 						logger.Err(err).
 							Str("schema", string(shard.Schema)).
 							Str("table", string(shard.Table)).
@@ -210,6 +210,7 @@ func verifyRowShard(
 	ctx context.Context,
 	conns dbconn.OrderedConns,
 	reporter Reporter,
+	logger zerolog.Logger,
 	rowBatchSize int,
 	tbl TableShard,
 ) error {
@@ -228,5 +229,5 @@ func verifyRowShard(
 			_ = workerConns[i].Close(ctx)
 		}()
 	}
-	return verifyRowsOnShard(ctx, workerConns, tbl, rowBatchSize, reporter)
+	return verifyRowsOnShard(ctx, workerConns, tbl, rowBatchSize, reporter, logger)
 }

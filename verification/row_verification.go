@@ -10,6 +10,7 @@ import (
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/rowiterator"
 	"github.com/lib/pq/oid"
+	"github.com/rs/zerolog"
 )
 
 type rowStats struct {
@@ -63,16 +64,14 @@ type TableShard struct {
 	TotalShards int
 }
 
-var TimingEnabled = false
-
 func verifyRowsOnShard(
 	ctx context.Context,
 	conns dbconn.OrderedConns,
 	table TableShard,
 	rowBatchSize int,
 	reporter Reporter,
+	logger zerolog.Logger,
 ) error {
-	startTime := time.Now()
 	var iterators [2]rowiterator.Iterator
 	for i, conn := range conns {
 		var err error
@@ -95,24 +94,27 @@ func verifyRowsOnShard(
 		}
 	}
 
+	var evl VerifyEventListener = &nonLiveReporter{reporter: reporter, table: table}
+	if err := verifyRows(ctx, iterators, table, evl); err != nil {
+		return err
+	}
+	switch evl := evl.(type) {
+	case *nonLiveReporter:
+		reporter.Report(StatusReport{
+			Info: fmt.Sprintf("finished row verification on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, evl.stats.String()),
+		})
+	}
+	return nil
+}
+
+func verifyRows(
+	ctx context.Context, iterators [2]rowiterator.Iterator, table TableShard, evl VerifyEventListener,
+) error {
 	cmpCtx := &compareContext{}
 
-	var stats rowStats
 	truth := iterators[0]
 	for truth.HasNext(ctx) {
-		if stats.numVerified%10000 == 0 && stats.numVerified > 0 {
-			reporter.Report(StatusReport{
-				Info: fmt.Sprintf("progress on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, stats.String()),
-			})
-			if TimingEnabled {
-				endTime := time.Now()
-				duration := endTime.Sub(startTime)
-				reporter.Report(StatusReport{
-					Info: fmt.Sprintf("scanned %d rows in %s (%.2f rows/sec)", stats.numVerified, duration, float64(stats.numVerified)/(float64(duration)/float64(time.Second))),
-				})
-			}
-		}
-		stats.numVerified++
+		evl.OnRowScan()
 
 		truthVals := truth.Next(ctx)
 		it := iterators[1]
@@ -120,8 +122,7 @@ func verifyRowsOnShard(
 	itLoop:
 		for {
 			if !it.HasNext(ctx) && it.Error() == nil {
-				stats.numMissing++
-				reporter.Report(MissingRow{
+				evl.OnMissingRow(MissingRow{
 					ConnID:            it.Conn().ID(),
 					Schema:            table.Schema,
 					Table:             table.Table,
@@ -145,14 +146,13 @@ func verifyRowsOnShard(
 			case 1:
 				// Extraneous row. Log and continue.
 				it.Next(ctx)
-				reporter.Report(ExtraneousRow{
+				evl.OnExtraneousRow(ExtraneousRow{
 					ConnID:            it.Conn().ID(),
 					Schema:            table.Schema,
 					Table:             table.Table,
 					PrimaryKeyColumns: table.PrimaryKeyColumns,
 					PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
 				})
-				stats.numExtraneous++
 			case 0:
 				// Matching primary key. Compare values and break loop.
 				targetVals = it.Next(ctx)
@@ -171,15 +171,13 @@ func verifyRowsOnShard(
 					}
 				}
 				if len(mismatches.MismatchingColumns) > 0 {
-					reporter.Report(mismatches)
-					stats.numMismatch++
+					evl.OnMismatchingRow(mismatches)
 				} else {
-					stats.numSuccess++
+					evl.OnMatch()
 				}
 				break itLoop
 			case -1:
-				// Missing a row.
-				reporter.Report(MissingRow{
+				evl.OnMissingRow(MissingRow{
 					ConnID:            it.Conn().ID(),
 					Schema:            table.Schema,
 					Table:             table.Table,
@@ -188,7 +186,6 @@ func verifyRowsOnShard(
 					Columns:           table.MatchingColumns,
 					Values:            truthVals,
 				})
-				stats.numMissing++
 				break itLoop
 			}
 		}
@@ -196,35 +193,62 @@ func verifyRowsOnShard(
 
 	for _, it := range iterators[1:] {
 		if err := it.Error(); err != nil {
-			reporter.Report(StatusReport{
-				Info: fmt.Sprintf("error validating %s.%s on %s: %v", table.Schema, table.Table, it.Conn().ID(), err),
-			})
 			return err
 		}
 
 		for it.HasNext(ctx) {
 			targetVals := it.Next(ctx)
-			reporter.Report(ExtraneousRow{
+			evl.OnExtraneousRow(ExtraneousRow{
 				ConnID:            it.Conn().ID(),
 				Schema:            table.Schema,
 				Table:             table.Table,
 				PrimaryKeyColumns: table.PrimaryKeyColumns,
 				PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
 			})
-			stats.numExtraneous++
 		}
 	}
 
-	reporter.Report(StatusReport{
-		Info: fmt.Sprintf("finished row verification on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, stats.String()),
-	})
-	if TimingEnabled {
-		endTime := time.Now()
-		duration := endTime.Sub(startTime)
-		reporter.Report(StatusReport{
-			Info: fmt.Sprintf("scanned %d rows in %s (%.2f rows/sec)", stats.numVerified, duration, float64(stats.numVerified)/(float64(duration)/float64(time.Second))),
+	return nil
+}
+
+type VerifyEventListener interface {
+	OnExtraneousRow(row ExtraneousRow)
+	OnMissingRow(row MissingRow)
+	OnMismatchingRow(row MismatchingRow)
+	OnMatch()
+	OnRowScan()
+}
+
+type nonLiveReporter struct {
+	reporter Reporter
+	stats    rowStats
+	table    TableShard
+}
+
+func (n *nonLiveReporter) OnExtraneousRow(row ExtraneousRow) {
+	n.reporter.Report(row)
+	n.stats.numExtraneous++
+}
+
+func (n *nonLiveReporter) OnMissingRow(row MissingRow) {
+	n.stats.numMissing++
+	n.reporter.Report(row)
+}
+
+func (n *nonLiveReporter) OnMismatchingRow(row MismatchingRow) {
+	n.reporter.Report(row)
+	n.stats.numMismatch++
+}
+
+func (n *nonLiveReporter) OnMatch() {
+	n.stats.numSuccess++
+}
+
+func (n *nonLiveReporter) OnRowScan() {
+	if n.stats.numVerified%10000 == 0 && n.stats.numVerified > 0 {
+		n.reporter.Report(StatusReport{
+			Info: fmt.Sprintf("progress on %s.%s (shard %d/%d): %s", n.table.Schema, n.table.Table, n.table.ShardNum, n.table.TotalShards, n.stats.String()),
 		})
 	}
-
-	return nil
+	n.stats.numVerified++
 }
