@@ -1,0 +1,40 @@
+table
+CREATE TABLE sc.table_name (
+    id INT,
+    id2 INT,
+    textual_val TEXT,
+    PRIMARY KEY(id)
+)
+----
+
+pks
+1
+2
+3
+4
+5
+----
+
+pg
+----
+SELECT id, id2, textual_val FROM sc.table_name WHERE id IN ('1', '2') ORDER BY id
+
+next
+----
+SELECT id, id2, textual_val FROM sc.table_name WHERE id IN ('3', '4') ORDER BY id
+
+next
+----
+SELECT id, id2, textual_val FROM sc.table_name WHERE id = '5' ORDER BY id
+
+mysql
+----
+SELECT `id`,`id2`,`textual_val` FROM `table_name` WHERE `id` IN ('1','2') ORDER BY `id`
+
+next
+----
+SELECT `id`,`id2`,`textual_val` FROM `table_name` WHERE `id` IN ('3','4') ORDER BY `id`
+
+next
+----
+SELECT `id`,`id2`,`textual_val` FROM `table_name` WHERE `id` IN ('5') ORDER BY `id`
