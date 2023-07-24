@@ -20,8 +20,8 @@ func TestReverifyQueue(t *testing.T) {
 		)
 		require.NoError(t, err)
 		retryItems[i] = &RetryItem{
-			Table: tree.Name(fmt.Sprintf("%d", i+1)),
-			Retry: r,
+			PrimaryKeys: []tree.Datums{{tree.NewDString(fmt.Sprintf("%d", i+1))}},
+			Retry:       r,
 		}
 	}
 	var q reverifyQueue

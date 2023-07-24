@@ -29,20 +29,15 @@ type pointLookupIterator struct {
 
 // NewPointLookupIterator returns a row iterator does a point lookup.
 func NewPointLookupIterator(
-	ctx context.Context, conn dbconn.Conn, table Table, rowBatchSize int,
-) (Iterator, error) {
-	// Initialize the type map on the connection.
-	for _, typOID := range table.ColumnOIDs {
-		if _, err := dbconn.GetDataType(ctx, conn, typOID); err != nil {
-			return nil, errors.Wrapf(err, "Error initializing type oid %d", typOID)
-		}
-	}
+	ctx context.Context, conn dbconn.Conn, table Table, rowBatchSize int, pks []tree.Datums,
+) Iterator {
 	it := &pointLookupIterator{
 		conn:         conn,
 		table:        table,
 		rowBatchSize: rowBatchSize,
+		pks:          pks,
 	}
-	return it, nil
+	return it
 }
 
 func (it *pointLookupIterator) Conn() dbconn.Conn {
@@ -104,8 +99,6 @@ func (it *pointLookupIterator) HasNext(ctx context.Context) bool {
 			it.err = err
 			return false
 		}
-		it.cacheCursor = 0
-		return len(it.cache) > 0
 	}
 }
 
@@ -209,7 +202,7 @@ func (it *pointLookupIterator) Peek(ctx context.Context) tree.Datums {
 	return nil
 }
 
-func (it pointLookupIterator) Next(ctx context.Context) tree.Datums {
+func (it *pointLookupIterator) Next(ctx context.Context) tree.Datums {
 	if it.HasNext(ctx) {
 		ret := it.cache[it.cacheCursor]
 		it.cacheCursor++

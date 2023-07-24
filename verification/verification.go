@@ -36,6 +36,7 @@ type verifyOpts struct {
 	tableSplits     int
 	continuous      bool
 	continuousPause time.Duration
+	live            bool
 }
 
 func WithConcurrency(c int) VerifyOpt {
@@ -60,6 +61,12 @@ func WithContinuous(c bool, pauseLength time.Duration) VerifyOpt {
 	return func(o *verifyOpts) {
 		o.continuous = c
 		o.continuousPause = pauseLength
+	}
+}
+
+func WithLive(l bool) VerifyOpt {
+	return func(o *verifyOpts) {
+		o.live = l
 	}
 }
 
@@ -188,7 +195,7 @@ func Verify(
 					reporter.Report(StatusReport{
 						Info: msg,
 					})
-					if err := verifyRowShard(ctx, conns, reporter, logger, opts.rowBatchSize, shard); err != nil {
+					if err := verifyRowShard(ctx, conns, reporter, logger, opts.rowBatchSize, shard, opts.live); err != nil {
 						logger.Err(err).
 							Str("schema", string(shard.Schema)).
 							Str("table", string(shard.Table)).
@@ -213,6 +220,7 @@ func verifyRowShard(
 	logger zerolog.Logger,
 	rowBatchSize int,
 	tbl TableShard,
+	live bool,
 ) error {
 	// Copy connections over naming wise, but initialize a new connection
 	// for each table.
@@ -229,5 +237,5 @@ func verifyRowShard(
 			_ = workerConns[i].Close(ctx)
 		}()
 	}
-	return verifyRowsOnShard(ctx, workerConns, tbl, rowBatchSize, reporter, logger)
+	return verifyRowsOnShard(ctx, workerConns, tbl, rowBatchSize, reporter, logger, live)
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/retry"
 	"github.com/cockroachdb/molt/rowiterator"
 	"github.com/lib/pq/oid"
 	"github.com/rs/zerolog"
@@ -57,8 +58,9 @@ type TableShard struct {
 	MatchingColumns        []tree.Name
 	MatchingColumnTypeOIDs [2][]oid.Oid
 	PrimaryKeyColumns      []tree.Name
-	StartPKVals            []tree.Datum
-	EndPKVals              []tree.Datum
+
+	StartPKVals []tree.Datum
+	EndPKVals   []tree.Datum
 
 	ShardNum    int
 	TotalShards int
@@ -71,6 +73,7 @@ func verifyRowsOnShard(
 	rowBatchSize int,
 	reporter Reporter,
 	logger zerolog.Logger,
+	live bool,
 ) error {
 	var iterators [2]rowiterator.Iterator
 	for i, conn := range conns {
@@ -95,6 +98,15 @@ func verifyRowsOnShard(
 	}
 
 	var evl VerifyEventListener = &nonLiveReporter{reporter: reporter, table: table}
+	var reverifier *Reverifier
+	if live {
+		var err error
+		reverifier, err = NewReverifier(ctx, logger, conns, table, evl)
+		if err != nil {
+			return err
+		}
+		evl = &liveReporter{base: evl.(*nonLiveReporter), r: reverifier}
+	}
 	if err := verifyRows(ctx, iterators, table, evl); err != nil {
 		return err
 	}
@@ -102,6 +114,15 @@ func verifyRowsOnShard(
 	case *nonLiveReporter:
 		reporter.Report(StatusReport{
 			Info: fmt.Sprintf("finished row verification on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, evl.stats.String()),
+		})
+	case *liveReporter:
+		logger.Debug().Msgf("flushing reverifier objects")
+		evl.Flush()
+		reverifier.ScanComplete()
+		logger.Debug().Msgf("waiting for reverifier to complete")
+		reverifier.WaitForDone()
+		reporter.Report(StatusReport{
+			Info: fmt.Sprintf("finished LIVE row verification on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, evl.base.stats.String()),
 		})
 	}
 	return nil
@@ -251,4 +272,53 @@ func (n *nonLiveReporter) OnRowScan() {
 		})
 	}
 	n.stats.numVerified++
+}
+
+type liveReporter struct {
+	base *nonLiveReporter
+	pks  []tree.Datums
+	r    *Reverifier
+}
+
+func (n *liveReporter) OnExtraneousRow(row ExtraneousRow) {
+	n.pks = append(n.pks, row.PrimaryKeyValues)
+}
+
+func (n *liveReporter) OnMissingRow(row MissingRow) {
+	n.pks = append(n.pks, row.PrimaryKeyValues)
+}
+
+func (n *liveReporter) OnMismatchingRow(row MismatchingRow) {
+	n.pks = append(n.pks, row.PrimaryKeyValues)
+}
+
+func (n *liveReporter) OnMatch() {
+	n.base.OnMatch()
+}
+
+func (n *liveReporter) OnRowScan() {
+	n.base.OnRowScan()
+	if n.base.stats.numVerified%10000 == 0 {
+		n.Flush()
+	}
+}
+
+func (n *liveReporter) Flush() {
+	if len(n.pks) > 0 {
+		r, err := retry.NewRetry(retry.Settings{
+			InitialBackoff: time.Millisecond * 200,
+			Multiplier:     4,
+			MaxBackoff:     3 * time.Second,
+			MaxRetries:     6,
+		})
+		if err != nil {
+			panic(err)
+		}
+		n.r.Push(&RetryItem{
+			PrimaryKeys: n.pks,
+			// TODO: configurable.
+			Retry: r,
+		})
+		n.pks = nil
+	}
 }

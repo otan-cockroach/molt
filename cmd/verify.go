@@ -21,6 +21,7 @@ var (
 	flagVerifyFixup           bool
 	flagVerifyContinuousPause time.Duration
 	flagVerifyContinuous      bool
+	flagVerifyLive            bool
 
 	verifyCmd = &cobra.Command{
 		Use:   "verify",
@@ -70,6 +71,7 @@ var (
 				verification.WithTableSplits(flagVerifyTableSplits),
 				verification.WithRowBatchSize(flagVerifyRowBatchSize),
 				verification.WithContinuous(flagVerifyContinuous, flagVerifyContinuousPause),
+				verification.WithLive(flagVerifyLive),
 			); err != nil {
 				return errors.Wrapf(err, "error verifying")
 			}
@@ -116,8 +118,14 @@ func init() {
 		false,
 		"whether verification should continuously run on each shard",
 	)
+	verifyCmd.PersistentFlags().BoolVar(
+		&flagVerifyLive,
+		"live",
+		false,
+		"whether verification should attempt to account for rows that can change in value",
+	)
 	rootCmd.AddCommand(verifyCmd)
-	for _, hidden := range []string{"fixup", "table-splits"} {
+	for _, hidden := range []string{"fixup", "table-splits", "live"} {
 		if err := verifyCmd.PersistentFlags().MarkHidden(hidden); err != nil {
 			panic(err)
 		}

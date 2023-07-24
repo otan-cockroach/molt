@@ -47,8 +47,14 @@ molt verify \
 
 See `molt verify --help` for all available parameters.
 
+#### Continuous verification
+If you want all tables to be verified in a loop, you can use `--continuous`.
+
+#### Live verification
+If you expect data to change as you do data verification, you can use `--live`.
+This makes verifier re-check rows before marking them as problematic.
+
 #### Limitations
-* Temporary blips in data consistency can be expected.
 * MySQL enums and set types are not supported.
 * Supports only comparing one MySQL database vs a whole CRDB schema (which is assumed to be "public").
 * Geospatial types cannot yet be compared.
