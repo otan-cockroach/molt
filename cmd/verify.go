@@ -55,8 +55,12 @@ var (
 				reporter.Report(verification.StatusReport{Info: fmt.Sprintf("connected to %s", conn.ID())})
 			}
 			if flagVerifyFixup {
+				fixupConn, err := conns[1].Clone(ctx)
+				if err != nil {
+					panic(err)
+				}
 				reporter.Reporters = append(reporter.Reporters, &verification.FixReporter{
-					Conn:   conns[1],
+					Conn:   fixupConn,
 					Logger: logger,
 				})
 			}

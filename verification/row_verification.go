@@ -20,16 +20,18 @@ type rowStats struct {
 	numMissing    int
 	numMismatch   int
 	numExtraneous int
+	numLiveRetry  int
 }
 
 func (s *rowStats) String() string {
 	return fmt.Sprintf(
-		"truth rows seen: %d, success: %d, missing: %d, mismatch: %d, extraneous: %d",
+		"truth rows seen: %d, success: %d, missing: %d, mismatch: %d, extraneous: %d, live_retry: %d",
 		s.numVerified,
 		s.numSuccess,
 		s.numMissing,
 		s.numMismatch,
 		s.numExtraneous,
+		s.numLiveRetry,
 	)
 }
 
@@ -142,16 +144,18 @@ func verifyRows(
 
 	itLoop:
 		for {
-			if !it.HasNext(ctx) && it.Error() == nil {
-				evl.OnMissingRow(MissingRow{
-					ConnID:            it.Conn().ID(),
-					Schema:            table.Schema,
-					Table:             table.Table,
-					PrimaryKeyColumns: table.PrimaryKeyColumns,
-					PrimaryKeyValues:  truthVals[:len(table.PrimaryKeyColumns)],
-					Columns:           table.MatchingColumns,
-					Values:            truthVals,
-				})
+			if !it.HasNext(ctx) {
+				if err := it.Error(); err == nil {
+					evl.OnMissingRow(MissingRow{
+						ConnID:            it.Conn().ID(),
+						Schema:            table.Schema,
+						Table:             table.Table,
+						PrimaryKeyColumns: table.PrimaryKeyColumns,
+						PrimaryKeyValues:  truthVals[:len(table.PrimaryKeyColumns)],
+						Columns:           table.MatchingColumns,
+						Values:            truthVals,
+					})
+				}
 				break
 			}
 
@@ -212,20 +216,22 @@ func verifyRows(
 		}
 	}
 
-	for _, it := range iterators[1:] {
+	for idx, it := range iterators {
 		if err := it.Error(); err != nil {
 			return err
 		}
-
-		for it.HasNext(ctx) {
-			targetVals := it.Next(ctx)
-			evl.OnExtraneousRow(ExtraneousRow{
-				ConnID:            it.Conn().ID(),
-				Schema:            table.Schema,
-				Table:             table.Table,
-				PrimaryKeyColumns: table.PrimaryKeyColumns,
-				PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
-			})
+		// If we still have rows in our iterator, they're all extraneous.
+		if idx > 0 {
+			for it.HasNext(ctx) {
+				targetVals := it.Next(ctx)
+				evl.OnExtraneousRow(ExtraneousRow{
+					ConnID:            it.Conn().ID(),
+					Schema:            table.Schema,
+					Table:             table.Table,
+					PrimaryKeyColumns: table.PrimaryKeyColumns,
+					PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
+				})
+			}
 		}
 	}
 
@@ -282,14 +288,17 @@ type liveReporter struct {
 
 func (n *liveReporter) OnExtraneousRow(row ExtraneousRow) {
 	n.pks = append(n.pks, row.PrimaryKeyValues)
+	n.base.stats.numLiveRetry++
 }
 
 func (n *liveReporter) OnMissingRow(row MissingRow) {
 	n.pks = append(n.pks, row.PrimaryKeyValues)
+	n.base.stats.numLiveRetry++
 }
 
 func (n *liveReporter) OnMismatchingRow(row MismatchingRow) {
 	n.pks = append(n.pks, row.PrimaryKeyValues)
+	n.base.stats.numLiveRetry++
 }
 
 func (n *liveReporter) OnMatch() {
