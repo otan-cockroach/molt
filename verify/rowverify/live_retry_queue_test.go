@@ -29,7 +29,7 @@ func TestLiveQueue(t *testing.T) {
 		q.heapPush(it)
 	}
 	for i := numItems - 1; i >= 0; i-- {
-		require.Equal(t, retryItems[i], q[0])
+		require.Equal(t, retryItems[i], q.items[0])
 		it := q.heapPop()
 		require.Equal(t, retryItems[i], it)
 	}

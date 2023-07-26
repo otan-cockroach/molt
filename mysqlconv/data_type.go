@@ -43,7 +43,8 @@ func DataTypeToOID(dataType, columnType string) oid.Oid {
 	case "json":
 		return oid.T_jsonb
 	case "enum":
-		panic(errors.Newf("enums not yet handled"))
+		// TODO: this is probably wrong, but leaving it for now.
+		return oid.T_text
 	case "set":
 		panic(errors.Newf("enums not yet handled"))
 	default:
