@@ -14,9 +14,8 @@ import (
 )
 
 type pointLookupIterator struct {
-	conn         dbconn.Conn
-	table        Table
-	rowBatchSize int
+	conn  dbconn.Conn
+	table Table
 
 	pks []tree.Datums
 
@@ -28,14 +27,11 @@ type pointLookupIterator struct {
 }
 
 // NewPointLookupIterator returns a row iterator does a point lookup.
-func NewPointLookupIterator(
-	conn dbconn.Conn, table Table, rowBatchSize int, pks []tree.Datums,
-) Iterator {
+func NewPointLookupIterator(conn dbconn.Conn, table Table, pks []tree.Datums) Iterator {
 	it := &pointLookupIterator{
-		conn:         conn,
-		table:        table,
-		rowBatchSize: rowBatchSize,
-		pks:          pks,
+		conn:  conn,
+		table: table,
+		pks:   pks,
 	}
 	return it
 }

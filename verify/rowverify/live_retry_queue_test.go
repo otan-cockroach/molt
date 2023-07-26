@@ -12,19 +12,19 @@ import (
 
 func TestLiveQueue(t *testing.T) {
 	const numItems = 5
-	retryItems := make([]*liveItem, numItems)
+	retryItems := make([]*liveRetryItem, numItems)
 	for i := 0; i < numItems; i++ {
 		r, err := retry.NewRetryWithTime(
 			time.Date(2020, 12, 30, 0, 50, 30, 0, time.UTC).Add(-time.Duration(i)*time.Hour),
 			retry.DefaultSettings(),
 		)
 		require.NoError(t, err)
-		retryItems[i] = &liveItem{
+		retryItems[i] = &liveRetryItem{
 			PrimaryKeys: []tree.Datums{{tree.NewDString(fmt.Sprintf("%d", i+1))}},
 			Retry:       r,
 		}
 	}
-	var q liveQueue
+	var q liveRetryQueue
 	for _, it := range retryItems {
 		q.heapPush(it)
 	}

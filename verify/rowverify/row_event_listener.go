@@ -56,7 +56,10 @@ func (n *defaultRowEventListener) OnRowScan() {
 type liveRowEventListener struct {
 	base *defaultRowEventListener
 	pks  []tree.Datums
-	r    *liveVerifier
+	r    *liveReverifier
+
+	settings  LiveReverificationSettings
+	lastFlush time.Time
 }
 
 func (n *liveRowEventListener) OnExtraneousRow(row inconsistency.ExtraneousRow) {
@@ -80,23 +83,19 @@ func (n *liveRowEventListener) OnMatch() {
 
 func (n *liveRowEventListener) OnRowScan() {
 	n.base.OnRowScan()
-	if n.base.stats.numVerified%10000 == 0 {
+	if time.Since(n.lastFlush) > n.settings.FlushInterval || len(n.pks) >= n.settings.MaxBatchSize {
 		n.Flush()
 	}
 }
 
 func (n *liveRowEventListener) Flush() {
+	n.lastFlush = time.Now()
 	if len(n.pks) > 0 {
-		r, err := retry.NewRetry(retry.Settings{
-			InitialBackoff: time.Millisecond * 200,
-			Multiplier:     4,
-			MaxBackoff:     3 * time.Second,
-			MaxRetries:     6,
-		})
+		r, err := retry.NewRetry(n.settings.RetrySettings)
 		if err != nil {
 			panic(err)
 		}
-		n.r.Push(&liveItem{
+		n.r.Push(&liveRetryItem{
 			PrimaryKeys: n.pks,
 			// TODO: configurable.
 			Retry: r,

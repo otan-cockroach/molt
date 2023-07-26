@@ -12,7 +12,6 @@ import (
 func TestPointLookupQuery(t *testing.T) {
 	datadriven.Walk(t, "testdata/pointlookup", func(t *testing.T, path string) {
 		var pt pointLookupIterator
-		pt.rowBatchSize = 2
 		datadriven.RunTest(t, path, func(t *testing.T, d *datadriven.TestData) string {
 			switch d.Cmd {
 			case "table":

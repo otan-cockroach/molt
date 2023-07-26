@@ -71,7 +71,7 @@ func VerifyRowsOnShard(
 	rowBatchSize int,
 	reporter inconsistency.Reporter,
 	logger zerolog.Logger,
-	live bool,
+	liveReverifySettings *LiveReverificationSettings,
 ) error {
 	var iterators [2]rowiterator.Iterator
 	for i, conn := range conns {
@@ -96,14 +96,19 @@ func VerifyRowsOnShard(
 
 	defaultRowEVL := &defaultRowEventListener{reporter: reporter, table: table}
 	var rowEVL RowEventListener = defaultRowEVL
-	var reverifier *liveVerifier
-	if live {
+	var liveReverifier *liveReverifier
+	if liveReverifySettings != nil {
 		var err error
-		reverifier, err = newLiveReverifier(ctx, logger, conns, table, rowEVL)
+		liveReverifier, err = newLiveReverifier(ctx, logger, conns, table, rowEVL)
 		if err != nil {
 			return err
 		}
-		rowEVL = &liveRowEventListener{base: defaultRowEVL, r: reverifier}
+		rowEVL = &liveRowEventListener{
+			base:      defaultRowEVL,
+			r:         liveReverifier,
+			settings:  *liveReverifySettings,
+			lastFlush: time.Now(),
+		}
 	}
 	if err := verifyRows(ctx, iterators, table, rowEVL); err != nil {
 		return err
@@ -114,11 +119,11 @@ func VerifyRowsOnShard(
 			Info: fmt.Sprintf("finished row verification on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, rowEVL.stats.String()),
 		})
 	case *liveRowEventListener:
-		logger.Trace().Msgf("flushing remaining reverifier objects")
+		logger.Trace().Msgf("flushing remaining live reverifier objects")
 		rowEVL.Flush()
-		reverifier.ScanComplete()
-		logger.Trace().Msgf("waiting for reverifier to complete")
-		reverifier.WaitForDone()
+		liveReverifier.ScanComplete()
+		logger.Trace().Msgf("waiting for live reverifier to complete")
+		liveReverifier.WaitForDone()
 		reporter.Report(inconsistency.StatusReport{
 			Info: fmt.Sprintf("finished LIVE row verification on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, rowEVL.base.stats.String()),
 		})

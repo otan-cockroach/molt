@@ -13,13 +13,19 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type liveItem struct {
+type LiveReverificationSettings struct {
+	MaxBatchSize  int
+	FlushInterval time.Duration
+	RetrySettings retry.Settings
+}
+
+type liveRetryItem struct {
 	PrimaryKeys []tree.Datums
 	Retry       *retry.Retry
 }
 
-type liveVerifier struct {
-	insertQueue  chan *liveItem
+type liveReverifier struct {
+	insertQueue  chan *liveRetryItem
 	scanComplete chan struct{}
 	done         chan struct{}
 	logger       zerolog.Logger
@@ -32,9 +38,9 @@ func newLiveReverifier(
 	baseConns dbconn.OrderedConns,
 	table TableShard,
 	baseListener RowEventListener,
-) (*liveVerifier, error) {
-	r := &liveVerifier{
-		insertQueue:  make(chan *liveItem),
+) (*liveReverifier, error) {
+	r := &liveReverifier{
+		insertQueue:  make(chan *liveRetryItem),
 		logger:       logger,
 		table:        table,
 		done:         make(chan struct{}),
@@ -65,7 +71,7 @@ func newLiveReverifier(
 			}
 			close(r.done)
 		}()
-		var queue liveQueue
+		var queue liveRetryQueue
 		noTrafficChannel := make(chan time.Time)
 		var done bool
 		for !done || len(queue.items) > 0 {
@@ -113,10 +119,8 @@ func newLiveReverifier(
 							ColumnOIDs:        table.ColumnOIDs[i],
 							PrimaryKeyColumns: table.PrimaryKeyColumns,
 						},
-						10,
 						it.PrimaryKeys,
 					)
-					// TODO: make configurable row batch size
 				}
 				it.PrimaryKeys = it.PrimaryKeys[:0]
 				if err := verifyRows(ctx, iterators, table, &reverifyEventListener{RetryItem: it, BaseListener: baseListener}); err != nil {
@@ -139,20 +143,20 @@ func newLiveReverifier(
 	return r, nil
 }
 
-func (r *liveVerifier) Push(it *liveItem) {
+func (r *liveReverifier) Push(it *liveRetryItem) {
 	r.insertQueue <- it
 }
 
-func (r *liveVerifier) ScanComplete() {
+func (r *liveReverifier) ScanComplete() {
 	r.scanComplete <- struct{}{}
 }
 
-func (r *liveVerifier) WaitForDone() {
+func (r *liveReverifier) WaitForDone() {
 	<-r.done
 }
 
 type reverifyEventListener struct {
-	RetryItem    *liveItem
+	RetryItem    *liveRetryItem
 	BaseListener RowEventListener
 }
 

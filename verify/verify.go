@@ -23,12 +23,12 @@ const DefaultTableSplits = 8
 type VerifyOpt func(*verifyOpts)
 
 type verifyOpts struct {
-	concurrency     int
-	rowBatchSize    int
-	tableSplits     int
-	continuous      bool
-	continuousPause time.Duration
-	live            bool
+	concurrency              int
+	rowBatchSize             int
+	tableSplits              int
+	continuous               bool
+	continuousPause          time.Duration
+	liveVerificationSettings *rowverify.LiveReverificationSettings
 }
 
 func WithConcurrency(c int) VerifyOpt {
@@ -56,9 +56,11 @@ func WithContinuous(c bool, pauseLength time.Duration) VerifyOpt {
 	}
 }
 
-func WithLive(l bool) VerifyOpt {
+func WithLive(live bool, settings rowverify.LiveReverificationSettings) VerifyOpt {
 	return func(o *verifyOpts) {
-		o.live = l
+		if live {
+			o.liveVerificationSettings = &settings
+		}
 	}
 }
 
@@ -187,7 +189,7 @@ func Verify(
 					reporter.Report(inconsistency.StatusReport{
 						Info: msg,
 					})
-					if err := verifyRowShard(ctx, conns, reporter, logger, opts.rowBatchSize, shard, opts.live); err != nil {
+					if err := verifyRowShard(ctx, conns, reporter, logger, opts.rowBatchSize, shard, opts.liveVerificationSettings); err != nil {
 						logger.Err(err).
 							Str("schema", string(shard.Schema)).
 							Str("table", string(shard.Table)).
@@ -212,7 +214,7 @@ func verifyRowShard(
 	logger zerolog.Logger,
 	rowBatchSize int,
 	tbl rowverify.TableShard,
-	live bool,
+	liveVerifySettings *rowverify.LiveReverificationSettings,
 ) error {
 	// Copy connections over naming wise, but initialize a new connection
 	// for each table.
@@ -229,5 +231,13 @@ func verifyRowShard(
 			_ = workerConns[i].Close(ctx)
 		}()
 	}
-	return rowverify.VerifyRowsOnShard(ctx, workerConns, tbl, rowBatchSize, reporter, logger, live)
+	return rowverify.VerifyRowsOnShard(
+		ctx,
+		workerConns,
+		tbl,
+		rowBatchSize,
+		reporter,
+		logger,
+		liveVerifySettings,
+	)
 }
