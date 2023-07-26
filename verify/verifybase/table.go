@@ -28,3 +28,11 @@ func (tm DBTable) Compare(o DBTable) int {
 func (tm DBTable) Less(o DBTable) bool {
 	return tm.Compare(o) < 0
 }
+
+// VerifiableTable represents a table which can be verified.
+type VerifiableTable struct {
+	TableName
+	PrimaryKeyColumns []tree.Name
+	Columns           []tree.Name
+	ColumnOIDs        [2][]oid.Oid
+}

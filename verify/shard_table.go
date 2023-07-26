@@ -88,15 +88,11 @@ func shardTable(
 					}
 				}
 				ret = append(ret, TableShard{
-					Table:                  tbl.Table,
-					Schema:                 tbl.Schema,
-					MatchingColumns:        tbl.MatchingColumns,
-					MatchingColumnTypeOIDs: tbl.ColumnTypeOIDs,
-					PrimaryKeyColumns:      tbl.PrimaryKeyColumns,
-					StartPKVals:            nextMin,
-					EndPKVals:              nextMax,
-					ShardNum:               splitNum,
-					TotalShards:            numSplits,
+					VerifiableTable: tbl.VerifiableTable,
+					StartPKVals:     nextMin,
+					EndPKVals:       nextMax,
+					ShardNum:        splitNum,
+					TotalShards:     numSplits,
 				})
 				nextMin = nextMax
 			}
@@ -107,13 +103,9 @@ func shardTable(
 	}
 	ret := []TableShard{
 		{
-			Table:                  tbl.Table,
-			Schema:                 tbl.Schema,
-			MatchingColumns:        tbl.MatchingColumns,
-			MatchingColumnTypeOIDs: tbl.ColumnTypeOIDs,
-			PrimaryKeyColumns:      tbl.PrimaryKeyColumns,
-			ShardNum:               1,
-			TotalShards:            1,
+			VerifiableTable: tbl.VerifiableTable,
+			ShardNum:        1,
+			TotalShards:     1,
 		},
 	}
 	if numSplits != 1 {
@@ -150,7 +142,7 @@ func getTableExtremes(
 			if err != nil {
 				return nil, err
 			}
-			rowVals, err := pgconv.ConvertRowValues(truthConn.TypeMap(), vals, tbl.ColumnTypeOIDs[0][:len(tbl.PrimaryKeyColumns)])
+			rowVals, err := pgconv.ConvertRowValues(truthConn.TypeMap(), vals, tbl.ColumnOIDs[0][:len(tbl.PrimaryKeyColumns)])
 			if err != nil {
 				return nil, err
 			}
@@ -169,7 +161,7 @@ func getTableExtremes(
 		}
 		defer rows.Close()
 		if rows.Next() {
-			return mysqlconv.ScanRowDynamicTypes(rows, truthConn.TypeMap(), tbl.ColumnTypeOIDs[0][:len(tbl.PrimaryKeyColumns)])
+			return mysqlconv.ScanRowDynamicTypes(rows, truthConn.TypeMap(), tbl.ColumnOIDs[0][:len(tbl.PrimaryKeyColumns)])
 		}
 		return nil, rows.Err()
 

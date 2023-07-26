@@ -30,7 +30,7 @@ func NewReverifier(
 	logger zerolog.Logger,
 	baseConns dbconn.OrderedConns,
 	table TableShard,
-	baseListener VerifyEventListener,
+	baseListener RowEventListener,
 ) (*Reverifier, error) {
 	r := &Reverifier{
 		insertQueue:  make(chan *RetryItem),
@@ -48,7 +48,7 @@ func NewReverifier(
 			return nil, err
 		}
 		// Initialize the type map on the connection.
-		for _, typOID := range table.MatchingColumnTypeOIDs[i] {
+		for _, typOID := range table.ColumnOIDs[i] {
 			if _, err := dbconn.GetDataType(ctx, conn, typOID); err != nil {
 				return nil, errors.Wrapf(err, "error initializing type oid %d", typOID)
 			}
@@ -100,10 +100,9 @@ func NewReverifier(
 						ctx,
 						conn,
 						rowiterator.Table{
-							Schema:            table.Schema,
-							Table:             table.Table,
-							ColumnNames:       table.MatchingColumns,
-							ColumnOIDs:        table.MatchingColumnTypeOIDs[i],
+							TableName:         table.TableName,
+							ColumnNames:       table.Columns,
+							ColumnOIDs:        table.ColumnOIDs[i],
 							PrimaryKeyColumns: table.PrimaryKeyColumns,
 						},
 						10,
@@ -142,7 +141,7 @@ func (r *Reverifier) WaitForDone() {
 
 type reverifyEventListener struct {
 	RetryItem    *RetryItem
-	BaseListener VerifyEventListener
+	BaseListener RowEventListener
 }
 
 func (r *reverifyEventListener) OnExtraneousRow(row ExtraneousRow) {

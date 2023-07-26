@@ -156,12 +156,8 @@ func mapColumns(cols []columnMetadata) map[tree.Name]columnMetadata {
 }
 
 type Result struct {
-	Schema                      tree.Name
-	Table                       tree.Name
-	RowVerifiable               bool
-	MatchingColumns             []tree.Name
-	ColumnTypeOIDs              [2][]oid.Oid
-	PrimaryKeyColumns           []tree.Name
+	RowVerifiable bool
+	verifybase.VerifiableTable
 	MismatchingTableDefinitions []inconsistency.MismatchingTableDefinition
 }
 
@@ -176,8 +172,12 @@ func VerifyCommonTables(
 	for tblIdx, table := range tables {
 		truthTbl := table[0]
 		res := Result{
-			Schema: truthTbl.Schema,
-			Table:  truthTbl.Table,
+			VerifiableTable: verifybase.VerifiableTable{
+				TableName: verifybase.TableName{
+					Schema: truthTbl.Schema,
+					Table:  truthTbl.Table,
+				},
+			},
 		}
 		truthCols, err := getColumns(ctx, truthConn, truthTbl)
 		if err != nil {
@@ -325,9 +325,9 @@ func VerifyCommonTables(
 		// Place PK columns first.
 		for _, col := range truthPKCols {
 			if _, ok := comparableColumns[col]; ok {
-				res.MatchingColumns = append(res.MatchingColumns, col)
+				res.Columns = append(res.Columns, col)
 				for i := range conns {
-					res.ColumnTypeOIDs[i] = append(res.ColumnTypeOIDs[i], columnOIDMap[i][col])
+					res.ColumnOIDs[i] = append(res.ColumnOIDs[i], columnOIDMap[i][col])
 				}
 				delete(comparableColumns, col)
 			}
@@ -335,9 +335,9 @@ func VerifyCommonTables(
 		// Then every other column.
 		for _, col := range truthCols {
 			if _, ok := comparableColumns[col.columnName]; ok {
-				res.MatchingColumns = append(res.MatchingColumns, col.columnName)
+				res.Columns = append(res.Columns, col.columnName)
 				for i := range conns {
-					res.ColumnTypeOIDs[i] = append(res.ColumnTypeOIDs[i], columnOIDMap[i][col.columnName])
+					res.ColumnOIDs[i] = append(res.ColumnOIDs[i], columnOIDMap[i][col.columnName])
 				}
 			}
 		}

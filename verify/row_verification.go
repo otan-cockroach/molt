@@ -10,7 +10,7 @@ import (
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/retry"
 	"github.com/cockroachdb/molt/verify/internal/rowiterator"
-	"github.com/lib/pq/oid"
+	"github.com/cockroachdb/molt/verify/verifybase"
 	"github.com/rs/zerolog"
 )
 
@@ -55,11 +55,7 @@ func (c *compareContext) MustGetPlaceholderValue(p *tree.Placeholder) tree.Datum
 }
 
 type TableShard struct {
-	Schema                 tree.Name
-	Table                  tree.Name
-	MatchingColumns        []tree.Name
-	MatchingColumnTypeOIDs [2][]oid.Oid
-	PrimaryKeyColumns      []tree.Name
+	verifybase.VerifiableTable
 
 	StartPKVals []tree.Datum
 	EndPKVals   []tree.Datum
@@ -84,10 +80,9 @@ func verifyRowsOnShard(
 			ctx,
 			conn,
 			rowiterator.Table{
-				Schema:            table.Schema,
-				Table:             table.Table,
-				ColumnNames:       table.MatchingColumns,
-				ColumnOIDs:        table.MatchingColumnTypeOIDs[i],
+				TableName:         table.TableName,
+				ColumnNames:       table.Columns,
+				ColumnOIDs:        table.ColumnOIDs[i],
 				PrimaryKeyColumns: table.PrimaryKeyColumns,
 				StartPKVals:       table.StartPKVals,
 				EndPKVals:         table.EndPKVals,
@@ -99,7 +94,7 @@ func verifyRowsOnShard(
 		}
 	}
 
-	var evl VerifyEventListener = &nonLiveRowEventListener{reporter: reporter, table: table}
+	var evl RowEventListener = &nonLiveRowEventListener{reporter: reporter, table: table}
 	var reverifier *Reverifier
 	if live {
 		var err error
@@ -131,7 +126,7 @@ func verifyRowsOnShard(
 }
 
 func verifyRows(
-	ctx context.Context, iterators [2]rowiterator.Iterator, table TableShard, evl VerifyEventListener,
+	ctx context.Context, iterators [2]rowiterator.Iterator, table TableShard, evl RowEventListener,
 ) error {
 	cmpCtx := &compareContext{}
 
@@ -152,7 +147,7 @@ func verifyRows(
 						Table:             table.Table,
 						PrimaryKeyColumns: table.PrimaryKeyColumns,
 						PrimaryKeyValues:  truthVals[:len(table.PrimaryKeyColumns)],
-						Columns:           table.MatchingColumns,
+						Columns:           table.Columns,
 						Values:            truthVals,
 					})
 				}
@@ -190,7 +185,7 @@ func verifyRows(
 				}
 				for valIdx := len(table.PrimaryKeyColumns); valIdx < len(targetVals); valIdx++ {
 					if targetVals[valIdx].Compare(cmpCtx, truthVals[valIdx]) != 0 {
-						mismatches.MismatchingColumns = append(mismatches.MismatchingColumns, table.MatchingColumns[valIdx])
+						mismatches.MismatchingColumns = append(mismatches.MismatchingColumns, table.Columns[valIdx])
 						mismatches.TargetVals = append(mismatches.TargetVals, targetVals[valIdx])
 						mismatches.TruthVals = append(mismatches.TruthVals, truthVals[valIdx])
 					}
@@ -208,7 +203,7 @@ func verifyRows(
 					Table:             table.Table,
 					PrimaryKeyColumns: table.PrimaryKeyColumns,
 					PrimaryKeyValues:  truthVals[:len(table.PrimaryKeyColumns)],
-					Columns:           table.MatchingColumns,
+					Columns:           table.Columns,
 					Values:            truthVals,
 				})
 				break itLoop
@@ -238,7 +233,7 @@ func verifyRows(
 	return nil
 }
 
-type VerifyEventListener interface {
+type RowEventListener interface {
 	OnExtraneousRow(row ExtraneousRow)
 	OnMissingRow(row MissingRow)
 	OnMismatchingRow(row MismatchingRow)

@@ -8,6 +8,7 @@ import (
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/mysqlconv"
 	"github.com/cockroachdb/molt/pgconv"
+	"github.com/cockroachdb/molt/verify/verifybase"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
@@ -22,8 +23,7 @@ type Iterator interface {
 }
 
 type Table struct {
-	Schema            tree.Name
-	Table             tree.Name
+	verifybase.TableName
 	ColumnNames       []tree.Name
 	ColumnOIDs        []oid.Oid
 	PrimaryKeyColumns []tree.Name
