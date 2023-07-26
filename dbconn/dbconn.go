@@ -82,11 +82,9 @@ func TestOnlyCleanDatabase(ctx context.Context, id ID, url string, dbName string
 		}
 		return NewPGConn(c.id, pgConn), nil
 	case *MySQLConn:
-		// TODO: escape
 		if _, err := c.ExecContext(ctx, "DROP DATABASE IF EXISTS "+dbName); err != nil {
 			return nil, err
 		}
-		// TODO: escape
 		if _, err := c.ExecContext(ctx, "CREATE DATABASE "+dbName); err != nil {
 			return nil, err
 		}

@@ -18,8 +18,7 @@ type pointLookupIterator struct {
 	table        Table
 	rowBatchSize int
 
-	pks      []tree.Datums
-	pkCursor int
+	pks []tree.Datums
 
 	cache       []tree.Datums
 	cacheCursor int
@@ -29,7 +28,7 @@ type pointLookupIterator struct {
 
 // NewPointLookupIterator returns a row iterator does a point lookup.
 func NewPointLookupIterator(
-	ctx context.Context, conn dbconn.Conn, table Table, rowBatchSize int, pks []tree.Datums,
+	conn dbconn.Conn, table Table, rowBatchSize int, pks []tree.Datums,
 ) Iterator {
 	it := &pointLookupIterator{
 		conn:         conn,
@@ -51,9 +50,6 @@ func (it *pointLookupIterator) HasNext(ctx context.Context) bool {
 		}
 		if it.cacheCursor < len(it.cache) {
 			return true
-		}
-		if it.pkCursor >= len(it.pks) {
-			return false
 		}
 
 		if err := func() error {
@@ -103,16 +99,6 @@ func (it *pointLookupIterator) HasNext(ctx context.Context) bool {
 }
 
 func (it *pointLookupIterator) genQuery() (string, error) {
-	if it.pkCursor >= len(it.pks) {
-		return "", errors.AssertionFailedf("out of bounds: pk cursor %d, len %d", it.pkCursor, len(it.pks))
-	}
-	batchSize := it.rowBatchSize
-	if it.pkCursor+batchSize > len(it.pks) {
-		batchSize = len(it.pks) - it.pkCursor
-	}
-	pks := it.pks[it.pkCursor : it.pkCursor+batchSize]
-	it.pkCursor += batchSize
-
 	switch conn := it.conn.(type) {
 	case *dbconn.PGConn:
 		stmt := newPGBaseSelectClause(it.table)
@@ -130,7 +116,7 @@ func (it *pointLookupIterator) genQuery() (string, error) {
 			inClause.Left = tree.NewUnresolvedName(string(it.table.PrimaryKeyColumns[0]))
 		}
 		pkClause := &tree.Tuple{}
-		for _, pk := range pks {
+		for _, pk := range it.pks {
 			if len(pk) > 1 {
 				pkTup := &tree.Tuple{}
 				for _, val := range pk {
@@ -141,7 +127,7 @@ func (it *pointLookupIterator) genQuery() (string, error) {
 				pkClause.Exprs = append(pkClause.Exprs, pk[0])
 			}
 		}
-		if len(pks) == 1 {
+		if len(it.pks) == 1 {
 			inClause.Operator = treecmp.MakeComparisonOperator(treecmp.EQ)
 			inClause.Right = pkClause.Exprs[0]
 		} else {
@@ -168,7 +154,7 @@ func (it *pointLookupIterator) genQuery() (string, error) {
 		} else {
 			inExpr.Expr = mysqlconv.MySQLASTColumnField(it.table.PrimaryKeyColumns[0])
 		}
-		for _, pk := range pks {
+		for _, pk := range it.pks {
 			if len(pk) > 1 {
 				pkTup := &ast.RowExpr{}
 				for _, val := range pk {

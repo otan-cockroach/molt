@@ -17,24 +17,8 @@ pks
 
 pg
 ----
-SELECT id, id2, textual_val FROM sc.table_name WHERE (id, id2) IN (('1', '10'), ('2', '20')) ORDER BY id, id2
-
-next
-----
-SELECT id, id2, textual_val FROM sc.table_name WHERE (id, id2) IN (('3', '30'), ('4', '40')) ORDER BY id, id2
-
-next
-----
-SELECT id, id2, textual_val FROM sc.table_name WHERE (id, id2) = ('5', '50') ORDER BY id, id2
+SELECT id, id2, textual_val FROM sc.table_name WHERE (id, id2) IN (('1', '10'), ('2', '20'), ('3', '30'), ('4', '40'), ('5', '50')) ORDER BY id, id2
 
 mysql
 ----
-SELECT `id`,`id2`,`textual_val` FROM `table_name` WHERE ROW(`id`,`id2`) IN (ROW('1','10'),ROW('2','20')) ORDER BY `id`,`id2`
-
-next
-----
-SELECT `id`,`id2`,`textual_val` FROM `table_name` WHERE ROW(`id`,`id2`) IN (ROW('3','30'),ROW('4','40')) ORDER BY `id`,`id2`
-
-next
-----
-SELECT `id`,`id2`,`textual_val` FROM `table_name` WHERE ROW(`id`,`id2`) IN (ROW('5','50')) ORDER BY `id`,`id2`
+SELECT `id`,`id2`,`textual_val` FROM `table_name` WHERE ROW(`id`,`id2`) IN (ROW('1','10'),ROW('2','20'),ROW('3','30'),ROW('4','40'),ROW('5','50')) ORDER BY `id`,`id2`

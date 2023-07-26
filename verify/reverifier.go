@@ -97,7 +97,6 @@ func NewReverifier(
 				var iterators [2]rowiterator.Iterator
 				for i, conn := range conns {
 					iterators[i] = rowiterator.NewPointLookupIterator(
-						ctx,
 						conn,
 						rowiterator.Table{
 							TableName:         table.TableName,

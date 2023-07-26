@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/molt/dbconn"
-	"github.com/cockroachdb/molt/verification/internal/inconsistency"
-	"github.com/cockroachdb/molt/verification/verifybase"
+	"github.com/cockroachdb/molt/verify/inconsistency"
+	"github.com/cockroachdb/molt/verify/verifybase"
 	"github.com/stretchr/testify/require"
 )
 

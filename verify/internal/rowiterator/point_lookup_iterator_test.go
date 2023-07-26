@@ -26,17 +26,11 @@ func TestPointLookupQuery(t *testing.T) {
 				return ""
 			case "mysql":
 				pt.conn = &dbconn.MySQLConn{}
-				pt.pkCursor = 0
 				q, err := pt.genQuery()
 				require.NoError(t, err)
 				return q
 			case "pg":
 				pt.conn = &dbconn.PGConn{}
-				pt.pkCursor = 0
-				q, err := pt.genQuery()
-				require.NoError(t, err)
-				return q
-			case "next":
 				q, err := pt.genQuery()
 				require.NoError(t, err)
 				return q

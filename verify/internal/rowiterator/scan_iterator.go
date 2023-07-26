@@ -356,7 +356,7 @@ func makeMySQLCompareExpr(
 func datumToMySQLValue(val tree.Datum) ast.ValueExpr {
 	f := tree.NewFmtCtx(tree.FmtParsableNumerics | tree.FmtBareStrings)
 	f.FormatNode(val)
-	// TODO: this is not correct for all types.
+	// NOTE: this may not correct for all types.
 	// We shouldn't cast everything to string at the very least.
 	return ast.NewValueExpr(f.CloseAndGetString(), "", "")
 }
