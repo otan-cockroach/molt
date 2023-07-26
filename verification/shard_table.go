@@ -15,6 +15,7 @@ import (
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/mysqlconv"
 	"github.com/cockroachdb/molt/pgconv"
+	"github.com/cockroachdb/molt/verification/internal/tableverify"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/format"
 	"github.com/pingcap/tidb/parser/model"
@@ -23,7 +24,7 @@ import (
 func shardTable(
 	ctx context.Context,
 	truthConn dbconn.Conn,
-	tbl verifyTableResult,
+	tbl tableverify.Result,
 	reporter Reporter,
 	numSplits int,
 ) ([]TableShard, error) {
@@ -128,7 +129,7 @@ func shardTable(
 }
 
 func getTableExtremes(
-	ctx context.Context, truthConn dbconn.Conn, tbl verifyTableResult, isMin bool,
+	ctx context.Context, truthConn dbconn.Conn, tbl tableverify.Result, isMin bool,
 ) (tree.Datums, error) {
 	// Note here we use `.Query` instead of the `.QueryRow` counterpart.
 	// This is because the API for `.Query` actually has other metadata from
@@ -176,7 +177,7 @@ func getTableExtremes(
 	return nil, errors.AssertionFailedf("unknown type for extremes: %T", truthConn)
 }
 
-func buildSelectForSplitPG(tbl verifyTableResult, isMin bool) *tree.Select {
+func buildSelectForSplitPG(tbl tableverify.Result, isMin bool) *tree.Select {
 	tn := tree.MakeTableNameFromPrefix(
 		tree.ObjectNamePrefix{SchemaName: tbl.Schema, ExplicitSchema: true},
 		tbl.Table,
@@ -211,7 +212,7 @@ func buildSelectForSplitPG(tbl verifyTableResult, isMin bool) *tree.Select {
 	return baseSelectExpr
 }
 
-func buildSelectForSplitMySQL(table verifyTableResult, isMin bool) *ast.SelectStmt {
+func buildSelectForSplitMySQL(table tableverify.Result, isMin bool) *ast.SelectStmt {
 	fields := &ast.FieldList{
 		Fields: make([]*ast.SelectField, len(table.PrimaryKeyColumns)),
 	}

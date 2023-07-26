@@ -7,22 +7,6 @@ import (
 
 type ReportableObject interface{}
 
-type MissingTable struct {
-	ConnID dbconn.ID
-	TableMetadata
-}
-
-type ExtraneousTable struct {
-	ConnID dbconn.ID
-	TableMetadata
-}
-
-type MismatchingTableDefinition struct {
-	ConnID dbconn.ID
-	TableMetadata
-	Info string
-}
-
 type MissingRow struct {
 	ConnID dbconn.ID
 	Schema tree.Name

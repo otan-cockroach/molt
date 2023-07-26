@@ -4,25 +4,15 @@ import (
 	"context"
 	"fmt"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/verification/internal/dbverify"
+	"github.com/cockroachdb/molt/verification/internal/tableverify"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
-
-func (tm TableMetadata) Compare(o TableMetadata) int {
-	if c := strings.Compare(string(tm.Schema), string(o.Schema)); c != 0 {
-		return c
-	}
-	return strings.Compare(string(tm.Table), string(o.Table))
-}
-
-func (tm TableMetadata) Less(o TableMetadata) bool {
-	return tm.Compare(o) < 0
-}
 
 const DefaultConcurrency = 8
 const DefaultRowBatchSize = 1000
@@ -87,20 +77,20 @@ func Verify(
 		applyOpt(&opts)
 	}
 
-	ret, err := verifyDatabaseTables(ctx, conns)
+	ret, err := dbverify.Verify(ctx, conns)
 	if err != nil {
 		return errors.Wrap(err, "error comparing database tables")
 	}
 
-	for _, missingTable := range ret.missingTables {
+	for _, missingTable := range ret.MissingTables {
 		reporter.Report(missingTable)
 	}
-	for _, extraneousTable := range ret.extraneousTables {
+	for _, extraneousTable := range ret.ExtraneousTables {
 		reporter.Report(extraneousTable)
 	}
 
 	// Grab columns for each table on both sides.
-	tbls, err := verifyCommonTables(ctx, conns, ret.verified)
+	tbls, err := tableverify.VerifyCommonTables(ctx, conns, ret.Verified)
 	if err != nil {
 		return err
 	}

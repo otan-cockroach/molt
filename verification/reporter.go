@@ -7,6 +7,7 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree/treecmp"
 	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/verification/internal/inconsistency"
 	"github.com/rs/zerolog"
 )
 
@@ -38,19 +39,19 @@ type LogReporter struct {
 
 func (l LogReporter) Report(obj ReportableObject) {
 	switch obj := obj.(type) {
-	case MissingTable:
+	case inconsistency.MissingTable:
 		l.Warn().
 			Str("culprit", string(obj.ConnID)).
 			Str("table_schema", string(obj.Schema)).
 			Str("table_name", string(obj.Table)).
 			Msgf("missing table detected")
-	case ExtraneousTable:
+	case inconsistency.ExtraneousTable:
 		l.Warn().
 			Str("culprit", string(obj.ConnID)).
 			Str("table_schema", string(obj.Schema)).
 			Str("table_name", string(obj.Table)).
 			Msgf("extraneous table detected")
-	case MismatchingTableDefinition:
+	case inconsistency.MismatchingTableDefinition:
 		l.Warn().
 			Str("culprit", string(obj.ConnID)).
 			Str("table_schema", string(obj.Schema)).

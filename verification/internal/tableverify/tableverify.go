@@ -1,4 +1,4 @@
-package verification
+package tableverify
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/mysqlconv"
+	"github.com/cockroachdb/molt/verification/internal/inconsistency"
+	"github.com/cockroachdb/molt/verification/verifybase"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
 )
@@ -20,7 +22,7 @@ type columnMetadata struct {
 }
 
 func getColumns(
-	ctx context.Context, conn dbconn.Conn, table TableMetadata,
+	ctx context.Context, conn dbconn.Conn, table verifybase.DBTable,
 ) ([]columnMetadata, error) {
 	var ret []columnMetadata
 
@@ -79,7 +81,7 @@ ORDER BY ordinal_position`,
 }
 
 func getPrimaryKey(
-	ctx context.Context, conn dbconn.Conn, table TableMetadata,
+	ctx context.Context, conn dbconn.Conn, table verifybase.DBTable,
 ) ([]tree.Name, error) {
 	var ret []tree.Name
 
@@ -153,26 +155,27 @@ func mapColumns(cols []columnMetadata) map[tree.Name]columnMetadata {
 	return ret
 }
 
-type verifyTableResult struct {
+type Result struct {
 	Schema                      tree.Name
 	Table                       tree.Name
 	RowVerifiable               bool
 	MatchingColumns             []tree.Name
 	ColumnTypeOIDs              [2][]oid.Oid
 	PrimaryKeyColumns           []tree.Name
-	MismatchingTableDefinitions []MismatchingTableDefinition
+	MismatchingTableDefinitions []inconsistency.MismatchingTableDefinition
 }
 
-func verifyCommonTables(
-	ctx context.Context, conns dbconn.OrderedConns, tables [2][]TableMetadata,
-) ([]verifyTableResult, error) {
-	var ret []verifyTableResult
+func VerifyCommonTables(
+	ctx context.Context, conns dbconn.OrderedConns, tables [][2]verifybase.DBTable,
+) ([]Result, error) {
+	var ret []Result
 
 	columnOIDMap := make(map[int]map[tree.Name]oid.Oid)
 
 	truthConn := conns[0]
-	for tblIdx, truthTbl := range tables[0] {
-		res := verifyTableResult{
+	for tblIdx, table := range tables {
+		truthTbl := table[0]
+		res := Result{
 			Schema: truthTbl.Schema,
 			Table:  truthTbl.Table,
 		}
@@ -193,10 +196,10 @@ func verifyCommonTables(
 		if len(truthPKCols) == 0 {
 			res.MismatchingTableDefinitions = append(
 				res.MismatchingTableDefinitions,
-				MismatchingTableDefinition{
-					ConnID:        truthConn.ID(),
-					TableMetadata: truthTbl,
-					Info:          "missing a PRIMARY KEY - results cannot be compared",
+				inconsistency.MismatchingTableDefinition{
+					ConnID:  truthConn.ID(),
+					DBTable: truthTbl,
+					Info:    "missing a PRIMARY KEY - results cannot be compared",
 				},
 			)
 		}
@@ -205,7 +208,7 @@ func verifyCommonTables(
 		for i := 1; i < len(conns); i++ {
 			compareConn := conns[i]
 			truthMappedCols := mapColumns(truthCols)
-			targetTbl := tables[i][tblIdx]
+			targetTbl := tables[tblIdx][i]
 			compareColumns, err := getColumns(ctx, conns[i], targetTbl)
 			if err != nil {
 				return nil, errors.Wrap(err, "error getting columns for table")
@@ -217,10 +220,10 @@ func verifyCommonTables(
 				if !ok {
 					res.MismatchingTableDefinitions = append(
 						res.MismatchingTableDefinitions,
-						MismatchingTableDefinition{
-							ConnID:        compareConn.ID(),
-							TableMetadata: targetTbl,
-							Info:          fmt.Sprintf("extraneous column %s found", targetCol.columnName),
+						inconsistency.MismatchingTableDefinition{
+							ConnID:  compareConn.ID(),
+							DBTable: targetTbl,
+							Info:    fmt.Sprintf("extraneous column %s found", targetCol.columnName),
 						},
 					)
 					continue
@@ -231,9 +234,9 @@ func verifyCommonTables(
 				if sourceCol.notNull != targetCol.notNull {
 					res.MismatchingTableDefinitions = append(
 						res.MismatchingTableDefinitions,
-						MismatchingTableDefinition{
-							ConnID:        compareConn.ID(),
-							TableMetadata: targetTbl,
+						inconsistency.MismatchingTableDefinition{
+							ConnID:  compareConn.ID(),
+							DBTable: targetTbl,
 							Info: fmt.Sprintf(
 								"column %s NOT NULL mismatch: %s=%t vs %s=%t",
 								targetCol.columnName,
@@ -256,9 +259,9 @@ func verifyCommonTables(
 				if !comparableType(truthTyp, compareTyp) {
 					res.MismatchingTableDefinitions = append(
 						res.MismatchingTableDefinitions,
-						MismatchingTableDefinition{
-							ConnID:        compareConn.ID(),
-							TableMetadata: targetTbl,
+						inconsistency.MismatchingTableDefinition{
+							ConnID:  compareConn.ID(),
+							DBTable: targetTbl,
 							Info: fmt.Sprintf(
 								"column type mismatch on %s: %s=%s vs %s=%s",
 								targetCol.columnName,
@@ -275,9 +278,9 @@ func verifyCommonTables(
 			for colName := range truthMappedCols {
 				res.MismatchingTableDefinitions = append(
 					res.MismatchingTableDefinitions,
-					MismatchingTableDefinition{
-						ConnID:        compareConn.ID(),
-						TableMetadata: targetTbl,
+					inconsistency.MismatchingTableDefinition{
+						ConnID:  compareConn.ID(),
+						DBTable: targetTbl,
 						Info: fmt.Sprintf(
 							"missing column %s",
 							colName,
@@ -309,10 +312,10 @@ func verifyCommonTables(
 				pkSame = false
 				res.MismatchingTableDefinitions = append(
 					res.MismatchingTableDefinitions,
-					MismatchingTableDefinition{
-						ConnID:        compareConn.ID(),
-						TableMetadata: targetTbl,
-						Info:          "PRIMARY KEY does not match source of truth (columns and types must match)",
+					inconsistency.MismatchingTableDefinition{
+						ConnID:  compareConn.ID(),
+						DBTable: targetTbl,
+						Info:    "PRIMARY KEY does not match source of truth (columns and types must match)",
 					},
 				)
 			}

@@ -1,60 +1,51 @@
-package verification
+// Package dbverify is responsible for verifying two different databases match.
+package dbverify
 
 import (
 	"context"
 	"sort"
 
-	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
-	"github.com/lib/pq/oid"
+	"github.com/cockroachdb/molt/verification/internal/inconsistency"
+	"github.com/cockroachdb/molt/verification/verifybase"
 )
 
-type TableMetadata struct {
-	OID    oid.Oid
-	Schema tree.Name
-	Table  tree.Name
+type Result struct {
+	Verified [][2]verifybase.DBTable
+
+	MissingTables    []inconsistency.MissingTable
+	ExtraneousTables []inconsistency.ExtraneousTable
 }
 
 type connWithTables struct {
 	dbconn.Conn
-	tableMetadata []TableMetadata
-}
-
-type databaseTableVerificationResult struct {
-	verified [2][]TableMetadata
-
-	missingTables    []MissingTable
-	extraneousTables []ExtraneousTable
+	tableMetadata []verifybase.DBTable
 }
 
 type tableVerificationIterator struct {
-	table   connWithTables
+	tables  connWithTables
 	currIdx int
 }
 
 func (c *tableVerificationIterator) done() bool {
-	return c.currIdx >= len(c.table.tableMetadata)
+	return c.currIdx >= len(c.tables.tableMetadata)
 }
 
 func (c *tableVerificationIterator) next() {
 	c.currIdx++
 }
 
-func (c *tableVerificationIterator) curr() TableMetadata {
-	return c.table.tableMetadata[c.currIdx]
+func (c *tableVerificationIterator) curr() verifybase.DBTable {
+	return c.tables.tableMetadata[c.currIdx]
 }
 
-// verifyDatabaseTables verifies tables exist in all databases.
-func verifyDatabaseTables(
-	ctx context.Context, conns dbconn.OrderedConns,
-) (databaseTableVerificationResult, error) {
-	ret := databaseTableVerificationResult{}
-
+// Verify verifies tables exist in all databases.
+func Verify(ctx context.Context, conns dbconn.OrderedConns) (Result, error) {
 	// Grab all tables and verify them.
 	var in []connWithTables
 	for _, conn := range conns {
-		var tms []TableMetadata
+		var tms []verifybase.DBTable
 		switch conn := conn.(type) {
 		case *dbconn.MySQLConn:
 			rows, err := conn.QueryContext(
@@ -64,21 +55,23 @@ WHERE table_schema = database() AND table_type = "BASE TABLE"
 ORDER BY table_name`,
 			)
 			if err != nil {
-				return ret, err
+				return Result{}, err
 			}
 
 			for rows.Next() {
 				// Fake the public schema for now.
-				tm := TableMetadata{
-					Schema: "public",
+				tm := verifybase.DBTable{
+					TableName: verifybase.TableName{
+						Schema: "public",
+					},
 				}
 				if err := rows.Scan(&tm.Table); err != nil {
-					return ret, errors.Wrap(err, "error decoding table metadata")
+					return Result{}, errors.Wrap(err, "error decoding tables metadata")
 				}
 				tms = append(tms, tm)
 			}
 			if rows.Err() != nil {
-				return ret, errors.Wrap(err, "error collecting table metadata")
+				return Result{}, errors.Wrap(err, "error collecting tables metadata")
 			}
 		case *dbconn.PGConn:
 			rows, err := conn.Query(
@@ -90,21 +83,21 @@ WHERE relkind = 'r' AND pg_namespace.nspname NOT IN ('pg_catalog', 'information_
 ORDER BY 3, 2`,
 			)
 			if err != nil {
-				return ret, err
+				return Result{}, err
 			}
 
 			for rows.Next() {
-				var tm TableMetadata
+				var tm verifybase.DBTable
 				if err := rows.Scan(&tm.OID, &tm.Table, &tm.Schema); err != nil {
-					return ret, errors.Wrap(err, "error decoding table metadata")
+					return Result{}, errors.Wrap(err, "error decoding tables metadata")
 				}
 				tms = append(tms, tm)
 			}
 			if rows.Err() != nil {
-				return ret, errors.Wrap(err, "error collecting table metadata")
+				return Result{}, errors.Wrap(err, "error collecting tables metadata")
 			}
 		default:
-			return ret, errors.Newf("connection %T not supported", conn)
+			return Result{}, errors.Newf("connection %T not supported", conn)
 		}
 
 		// Sort tables by schemas and names.
@@ -120,10 +113,16 @@ ORDER BY 3, 2`,
 	var iterators [2]tableVerificationIterator
 	for i := range in {
 		iterators[i] = tableVerificationIterator{
-			table: in[i],
+			tables: in[i],
 		}
 	}
+	return compare(iterators), nil
+}
 
+// compare compares two lists of tables.
+// It assumes tables are in sorted order in each iterator.
+func compare(iterators [2]tableVerificationIterator) Result {
+	ret := Result{}
 	// Iterate through all tables in source of truthIterator, moving iterators
 	// across
 	truthIterator := &iterators[0]
@@ -131,7 +130,7 @@ ORDER BY 3, 2`,
 	for !truthIterator.done() {
 		// If the iterator is done, that means we are missing tables
 		// from the truth value. Mark nonTruthIterator as 1 to signify nonTruthIterator as a missing
-		// table.
+		// tables.
 		compareVal := 1
 		if !nonTruthIterator.done() {
 			compareVal = nonTruthIterator.curr().Compare(truthIterator.curr())
@@ -139,33 +138,35 @@ ORDER BY 3, 2`,
 		switch compareVal {
 		case -1:
 			// Extraneous row compared to source of truthIterator.
-			ret.extraneousTables = append(
-				ret.extraneousTables,
-				ExtraneousTable{ConnID: nonTruthIterator.table.ID(), TableMetadata: nonTruthIterator.curr()},
+			ret.ExtraneousTables = append(
+				ret.ExtraneousTables,
+				inconsistency.ExtraneousTable{ConnID: nonTruthIterator.tables.ID(), DBTable: nonTruthIterator.curr()},
 			)
 			nonTruthIterator.next()
 		case 0:
+			var tables [2]verifybase.DBTable
 			for i := range iterators {
-				ret.verified[i] = append(ret.verified[i], iterators[i].curr())
+				tables[i] = iterators[i].curr()
 			}
+			ret.Verified = append(ret.Verified, tables)
 			nonTruthIterator.next()
 			truthIterator.next()
 		case 1:
 			// Missing a row from source of truth.
-			ret.missingTables = append(
-				ret.missingTables,
-				MissingTable{ConnID: nonTruthIterator.table.ID(), TableMetadata: truthIterator.curr()},
+			ret.MissingTables = append(
+				ret.MissingTables,
+				inconsistency.MissingTable{ConnID: nonTruthIterator.tables.ID(), DBTable: truthIterator.curr()},
 			)
 			truthIterator.next()
 		}
 	}
 
 	for !nonTruthIterator.done() {
-		ret.extraneousTables = append(
-			ret.extraneousTables,
-			ExtraneousTable{ConnID: nonTruthIterator.table.ID(), TableMetadata: nonTruthIterator.curr()},
+		ret.ExtraneousTables = append(
+			ret.ExtraneousTables,
+			inconsistency.ExtraneousTable{ConnID: nonTruthIterator.tables.ID(), DBTable: nonTruthIterator.curr()},
 		)
 		nonTruthIterator.next()
 	}
-	return ret, nil
+	return ret
 }

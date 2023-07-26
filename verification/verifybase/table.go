@@ -1,0 +1,30 @@
+package verifybase
+
+import (
+	"strings"
+
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
+	"github.com/lib/pq/oid"
+)
+
+type TableName struct {
+	Schema tree.Name
+	Table  tree.Name
+}
+
+// DBTable represents a basic table object with OID from the relevant table.
+type DBTable struct {
+	TableName
+	OID oid.Oid
+}
+
+func (tm DBTable) Compare(o DBTable) int {
+	if c := strings.Compare(string(tm.Schema), string(o.Schema)); c != 0 {
+		return c
+	}
+	return strings.Compare(string(tm.Table), string(o.Table))
+}
+
+func (tm DBTable) Less(o DBTable) bool {
+	return tm.Compare(o) < 0
+}
