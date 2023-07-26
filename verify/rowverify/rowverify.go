@@ -1,4 +1,4 @@
-package verify
+package rowverify
 
 import (
 	"context"
@@ -64,7 +64,7 @@ type TableShard struct {
 	TotalShards int
 }
 
-func verifyRowsOnShard(
+func VerifyRowsOnShard(
 	ctx context.Context,
 	conns dbconn.OrderedConns,
 	table TableShard,
@@ -96,10 +96,10 @@ func verifyRowsOnShard(
 
 	defaultRowEVL := &defaultRowEventListener{reporter: reporter, table: table}
 	var rowEVL RowEventListener = defaultRowEVL
-	var reverifier *Reverifier
+	var reverifier *liveVerifier
 	if live {
 		var err error
-		reverifier, err = NewReverifier(ctx, logger, conns, table, rowEVL)
+		reverifier, err = newLiveReverifier(ctx, logger, conns, table, rowEVL)
 		if err != nil {
 			return err
 		}

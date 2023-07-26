@@ -1,4 +1,4 @@
-package verify
+package rowverify
 
 import (
 	"fmt"
@@ -56,7 +56,7 @@ func (n *defaultRowEventListener) OnRowScan() {
 type liveRowEventListener struct {
 	base *defaultRowEventListener
 	pks  []tree.Datums
-	r    *Reverifier
+	r    *liveVerifier
 }
 
 func (n *liveRowEventListener) OnExtraneousRow(row inconsistency.ExtraneousRow) {
@@ -96,7 +96,7 @@ func (n *liveRowEventListener) Flush() {
 		if err != nil {
 			panic(err)
 		}
-		n.r.Push(&RetryItem{
+		n.r.Push(&liveItem{
 			PrimaryKeys: n.pks,
 			// TODO: configurable.
 			Retry: r,

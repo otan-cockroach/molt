@@ -22,6 +22,7 @@ type pointLookupIterator struct {
 
 	cache       []tree.Datums
 	cacheCursor int
+	ran         bool
 
 	err error
 }
@@ -44,14 +45,8 @@ func (it *pointLookupIterator) Conn() dbconn.Conn {
 }
 
 func (it *pointLookupIterator) HasNext(ctx context.Context) bool {
-	for {
-		if it.err != nil {
-			return false
-		}
-		if it.cacheCursor < len(it.cache) {
-			return true
-		}
-
+	if !it.ran {
+		it.ran = true
 		if err := func() error {
 			var currRows rows
 			q, err := it.genQuery()
@@ -96,6 +91,13 @@ func (it *pointLookupIterator) HasNext(ctx context.Context) bool {
 			return false
 		}
 	}
+	if it.err != nil {
+		return false
+	}
+	if len(it.cache) == it.cacheCursor {
+		return false
+	}
+	return it.cacheCursor < len(it.cache)
 }
 
 func (it *pointLookupIterator) genQuery() (string, error) {

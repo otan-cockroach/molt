@@ -1,4 +1,4 @@
-package verify
+package rowverify
 
 import (
 	"fmt"
@@ -10,21 +10,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestReverifyQueue(t *testing.T) {
+func TestLiveQueue(t *testing.T) {
 	const numItems = 5
-	retryItems := make([]*RetryItem, numItems)
+	retryItems := make([]*liveItem, numItems)
 	for i := 0; i < numItems; i++ {
 		r, err := retry.NewRetryWithTime(
 			time.Date(2020, 12, 30, 0, 50, 30, 0, time.UTC).Add(-time.Duration(i)*time.Hour),
 			retry.DefaultSettings(),
 		)
 		require.NoError(t, err)
-		retryItems[i] = &RetryItem{
+		retryItems[i] = &liveItem{
 			PrimaryKeys: []tree.Datums{{tree.NewDString(fmt.Sprintf("%d", i+1))}},
 			Retry:       r,
 		}
 	}
-	var q reverifyQueue
+	var q liveQueue
 	for _, it := range retryItems {
 		q.heapPush(it)
 	}

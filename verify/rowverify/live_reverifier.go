@@ -1,4 +1,4 @@
-package verify
+package rowverify
 
 import (
 	"context"
@@ -13,28 +13,28 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type RetryItem struct {
+type liveItem struct {
 	PrimaryKeys []tree.Datums
 	Retry       *retry.Retry
 }
 
-type Reverifier struct {
-	insertQueue  chan *RetryItem
+type liveVerifier struct {
+	insertQueue  chan *liveItem
 	scanComplete chan struct{}
 	done         chan struct{}
 	logger       zerolog.Logger
 	table        TableShard
 }
 
-func NewReverifier(
+func newLiveReverifier(
 	ctx context.Context,
 	logger zerolog.Logger,
 	baseConns dbconn.OrderedConns,
 	table TableShard,
 	baseListener RowEventListener,
-) (*Reverifier, error) {
-	r := &Reverifier{
-		insertQueue:  make(chan *RetryItem),
+) (*liveVerifier, error) {
+	r := &liveVerifier{
+		insertQueue:  make(chan *liveItem),
 		logger:       logger,
 		table:        table,
 		done:         make(chan struct{}),
@@ -60,28 +60,31 @@ func NewReverifier(
 		defer func() {
 			for _, conn := range conns {
 				if err := conn.Close(ctx); err != nil {
-					logger.Err(err).Msgf("error closing reverifier connection")
+					logger.Err(err).Msgf("error closing live reverifier connection")
 				}
 			}
 			close(r.done)
 		}()
-		var queue reverifyQueue
+		var queue liveQueue
 		noTrafficChannel := make(chan time.Time)
 		var done bool
-		for !done || len(queue) > 0 {
+		for !done || len(queue.items) > 0 {
 			if done {
-				logger.Debug().Msgf("waiting for %d remaining items in reverifier queue", len(queue))
+				logger.Info().
+					Int("num_batches", len(queue.items)).
+					Int("num_pks", queue.numPKs).
+					Msgf("waiting for live reverifier to complete")
 			}
 			// By default, block until we get work.
 			var nextWorkCh <-chan time.Time = noTrafficChannel
-			if len(queue) > 0 {
+			if len(queue.items) > 0 {
 				// If we have work queued up, wait for it.
-				nextWorkCh = time.After(time.Until(queue[0].Retry.NextRetry))
+				nextWorkCh = time.After(time.Until(queue.items[0].Retry.NextRetry))
 			}
 			select {
 			case <-r.scanComplete:
 				done = true
-				logger.Debug().Msgf("reverifier marked scan as complete")
+				logger.Debug().Msgf("live reverifier marked scan as complete")
 			case it, ok := <-r.insertQueue:
 				// If the queue is closed, we can exit.
 				if !ok {
@@ -94,7 +97,12 @@ func NewReverifier(
 					continue
 				}
 
-				logger.Debug().Msgf("reverifying primary keys (queued instance %s, iteration %d)", it.Retry.StartTime.Format(time.RFC3339), it.Retry.Iteration)
+				logger.Trace().
+					Int("iteration", it.Retry.Iteration).
+					Time("start_time", it.Retry.StartTime).
+					Time("next_retry", it.Retry.NextRetry).
+					Int("num_failed_keys", len(it.PrimaryKeys)).
+					Msgf("live reverifying primary keys")
 				var iterators [2]rowiterator.Iterator
 				for i, conn := range conns {
 					iterators[i] = rowiterator.NewPointLookupIterator(
@@ -112,14 +120,18 @@ func NewReverifier(
 				}
 				it.PrimaryKeys = it.PrimaryKeys[:0]
 				if err := verifyRows(ctx, iterators, table, &reverifyEventListener{RetryItem: it, BaseListener: baseListener}); err != nil {
-					logger.Err(err).Msgf("error during reverify")
+					logger.Err(err).Msgf("error during live verification")
 					continue
 				}
 				if len(it.PrimaryKeys) > 0 {
-					// dunno if this is abuse of retry, fix later
 					it.Retry.Next()
 					queue.heapPush(it)
-					logger.Debug().Msgf("sending for another verification run at %s", it.Retry.NextRetry.Format(time.RFC3339))
+					logger.Trace().
+						Int("iteration", it.Retry.Iteration-1).
+						Time("start_time", it.Retry.StartTime).
+						Time("next_retry", it.Retry.NextRetry).
+						Int("num_failed_keys", len(it.PrimaryKeys)).
+						Msgf("did not reverify everything; retrying")
 				}
 			}
 		}
@@ -127,20 +139,20 @@ func NewReverifier(
 	return r, nil
 }
 
-func (r *Reverifier) Push(it *RetryItem) {
+func (r *liveVerifier) Push(it *liveItem) {
 	r.insertQueue <- it
 }
 
-func (r *Reverifier) ScanComplete() {
+func (r *liveVerifier) ScanComplete() {
 	r.scanComplete <- struct{}{}
 }
 
-func (r *Reverifier) WaitForDone() {
+func (r *liveVerifier) WaitForDone() {
 	<-r.done
 }
 
 type reverifyEventListener struct {
-	RetryItem    *RetryItem
+	RetryItem    *liveItem
 	BaseListener RowEventListener
 }
 

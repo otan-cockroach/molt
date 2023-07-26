@@ -16,6 +16,7 @@ import (
 	"github.com/cockroachdb/molt/mysqlconv"
 	"github.com/cockroachdb/molt/pgconv"
 	"github.com/cockroachdb/molt/verify/inconsistency"
+	"github.com/cockroachdb/molt/verify/rowverify"
 	"github.com/cockroachdb/molt/verify/tableverify"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/format"
@@ -28,12 +29,12 @@ func shardTable(
 	tbl tableverify.Result,
 	reporter inconsistency.Reporter,
 	numSplits int,
-) ([]TableShard, error) {
+) ([]rowverify.TableShard, error) {
 	if numSplits < 1 {
 		return nil, errors.AssertionFailedf("failed to split rows: %d", numSplits)
 	}
 	if numSplits > 1 {
-		ret := make([]TableShard, 0, numSplits)
+		ret := make([]rowverify.TableShard, 0, numSplits)
 		// For now, be dumb and split only the first column.
 		min, err := getTableExtremes(ctx, truthConn, tbl, true)
 		if err != nil {
@@ -88,7 +89,7 @@ func shardTable(
 						break splitLoop
 					}
 				}
-				ret = append(ret, TableShard{
+				ret = append(ret, rowverify.TableShard{
 					VerifiableTable: tbl.VerifiableTable,
 					StartPKVals:     nextMin,
 					EndPKVals:       nextMax,
@@ -102,7 +103,7 @@ func shardTable(
 			}
 		}
 	}
-	ret := []TableShard{
+	ret := []rowverify.TableShard{
 		{
 			VerifiableTable: tbl.VerifiableTable,
 			ShardNum:        1,

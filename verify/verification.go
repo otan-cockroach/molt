@@ -10,6 +10,7 @@ import (
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/verify/dbverify"
 	"github.com/cockroachdb/molt/verify/inconsistency"
+	"github.com/cockroachdb/molt/verify/rowverify"
 	"github.com/cockroachdb/molt/verify/tableverify"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
@@ -103,7 +104,7 @@ func Verify(
 		}
 	}
 
-	shards := make([]TableShard, 0, len(tbls))
+	shards := make([]rowverify.TableShard, 0, len(tbls))
 	for _, tbl := range tbls {
 		if !tbl.RowVerifiable {
 			logger.Warn().Msgf("skipping unverifiable table %s.%s", tbl.Schema, tbl.Table)
@@ -139,7 +140,7 @@ func Verify(
 
 	// Compare rows up to the numGoroutines specified.
 	g, _ := errgroup.WithContext(ctx)
-	workQueue := make(chan TableShard)
+	workQueue := make(chan rowverify.TableShard)
 	for goroutineIdx := 0; goroutineIdx < numGoroutines; goroutineIdx++ {
 		g.Go(func() error {
 			for {
@@ -210,7 +211,7 @@ func verifyRowShard(
 	reporter inconsistency.Reporter,
 	logger zerolog.Logger,
 	rowBatchSize int,
-	tbl TableShard,
+	tbl rowverify.TableShard,
 	live bool,
 ) error {
 	// Copy connections over naming wise, but initialize a new connection
@@ -228,5 +229,5 @@ func verifyRowShard(
 			_ = workerConns[i].Close(ctx)
 		}()
 	}
-	return verifyRowsOnShard(ctx, workerConns, tbl, rowBatchSize, reporter, logger, live)
+	return rowverify.VerifyRowsOnShard(ctx, workerConns, tbl, rowBatchSize, reporter, logger, live)
 }
