@@ -1,4 +1,4 @@
-package verification
+package verify
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/mysqlconv"
 	"github.com/cockroachdb/molt/pgconv"
-	"github.com/cockroachdb/molt/verification/internal/tableverify"
+	"github.com/cockroachdb/molt/verify/tableverify"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/format"
 	"github.com/pingcap/tidb/parser/model"

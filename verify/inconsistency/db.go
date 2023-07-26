@@ -2,7 +2,7 @@ package inconsistency
 
 import (
 	"github.com/cockroachdb/molt/dbconn"
-	"github.com/cockroachdb/molt/verification/verifybase"
+	"github.com/cockroachdb/molt/verify/verifybase"
 )
 
 // MissingTable represents a table that is missing from a database.

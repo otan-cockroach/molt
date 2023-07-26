@@ -8,7 +8,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
-	"github.com/cockroachdb/molt/verification"
+	"github.com/cockroachdb/molt/verify"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
@@ -31,8 +31,8 @@ var (
 			cw := zerolog.NewConsoleWriter()
 			logger := zerolog.New(cw)
 
-			reporter := verification.CombinedReporter{}
-			reporter.Reporters = append(reporter.Reporters, &verification.LogReporter{Logger: logger})
+			reporter := verify.CombinedReporter{}
+			reporter.Reporters = append(reporter.Reporters, &verify.LogReporter{Logger: logger})
 			defer reporter.Close()
 
 			ctx := context.Background()
@@ -52,34 +52,34 @@ var (
 					return err
 				}
 				conns[i] = conn
-				reporter.Report(verification.StatusReport{Info: fmt.Sprintf("connected to %s", conn.ID())})
+				reporter.Report(verify.StatusReport{Info: fmt.Sprintf("connected to %s", conn.ID())})
 			}
 			if flagVerifyFixup {
 				fixupConn, err := conns[1].Clone(ctx)
 				if err != nil {
 					panic(err)
 				}
-				reporter.Reporters = append(reporter.Reporters, &verification.FixReporter{
+				reporter.Reporters = append(reporter.Reporters, &verify.FixReporter{
 					Conn:   fixupConn,
 					Logger: logger,
 				})
 			}
 
-			reporter.Report(verification.StatusReport{Info: "verification in progress"})
-			if err := verification.Verify(
+			reporter.Report(verify.StatusReport{Info: "verification in progress"})
+			if err := verify.Verify(
 				ctx,
 				conns,
 				logger,
 				reporter,
-				verification.WithConcurrency(flagVerifyConcurrency),
-				verification.WithTableSplits(flagVerifyTableSplits),
-				verification.WithRowBatchSize(flagVerifyRowBatchSize),
-				verification.WithContinuous(flagVerifyContinuous, flagVerifyContinuousPause),
-				verification.WithLive(flagVerifyLive),
+				verify.WithConcurrency(flagVerifyConcurrency),
+				verify.WithTableSplits(flagVerifyTableSplits),
+				verify.WithRowBatchSize(flagVerifyRowBatchSize),
+				verify.WithContinuous(flagVerifyContinuous, flagVerifyContinuousPause),
+				verify.WithLive(flagVerifyLive),
 			); err != nil {
 				return errors.Wrapf(err, "error verifying")
 			}
-			reporter.Report(verification.StatusReport{Info: "verification complete"})
+			reporter.Report(verify.StatusReport{Info: "verification complete"})
 			return nil
 		},
 	}

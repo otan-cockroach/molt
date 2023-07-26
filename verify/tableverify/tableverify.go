@@ -9,8 +9,8 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/mysqlconv"
-	"github.com/cockroachdb/molt/verification/internal/inconsistency"
-	"github.com/cockroachdb/molt/verification/verifybase"
+	"github.com/cockroachdb/molt/verify/inconsistency"
+	"github.com/cockroachdb/molt/verify/verifybase"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
 )

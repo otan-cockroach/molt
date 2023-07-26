@@ -1,4 +1,4 @@
-package verification
+package verify
 
 import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"

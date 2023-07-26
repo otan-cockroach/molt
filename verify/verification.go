@@ -1,4 +1,4 @@
-package verification
+package verify
 
 import (
 	"context"
@@ -8,8 +8,8 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
-	"github.com/cockroachdb/molt/verification/internal/dbverify"
-	"github.com/cockroachdb/molt/verification/internal/tableverify"
+	"github.com/cockroachdb/molt/verify/dbverify"
+	"github.com/cockroachdb/molt/verify/tableverify"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )

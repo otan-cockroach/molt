@@ -1,4 +1,4 @@
-package verification
+package verify
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/retry"
-	"github.com/cockroachdb/molt/verification/internal/rowiterator"
+	"github.com/cockroachdb/molt/verify/internal/rowiterator"
 	"github.com/rs/zerolog"
 )
 
