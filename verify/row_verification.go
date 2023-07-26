@@ -99,7 +99,7 @@ func verifyRowsOnShard(
 		}
 	}
 
-	var evl VerifyEventListener = &nonLiveReporter{reporter: reporter, table: table}
+	var evl VerifyEventListener = &nonLiveRowEventListener{reporter: reporter, table: table}
 	var reverifier *Reverifier
 	if live {
 		var err error
@@ -107,21 +107,21 @@ func verifyRowsOnShard(
 		if err != nil {
 			return err
 		}
-		evl = &liveReporter{base: evl.(*nonLiveReporter), r: reverifier}
+		evl = &liveRowEventListener{base: evl.(*nonLiveRowEventListener), r: reverifier}
 	}
 	if err := verifyRows(ctx, iterators, table, evl); err != nil {
 		return err
 	}
 	switch evl := evl.(type) {
-	case *nonLiveReporter:
+	case *nonLiveRowEventListener:
 		reporter.Report(StatusReport{
 			Info: fmt.Sprintf("finished row verification on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, evl.stats.String()),
 		})
-	case *liveReporter:
-		logger.Debug().Msgf("flushing reverifier objects")
+	case *liveRowEventListener:
+		logger.Trace().Msgf("flushing remaining reverifier objects")
 		evl.Flush()
 		reverifier.ScanComplete()
-		logger.Debug().Msgf("waiting for reverifier to complete")
+		logger.Trace().Msgf("waiting for reverifier to complete")
 		reverifier.WaitForDone()
 		reporter.Report(StatusReport{
 			Info: fmt.Sprintf("finished LIVE row verification on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, evl.base.stats.String()),
@@ -246,32 +246,32 @@ type VerifyEventListener interface {
 	OnRowScan()
 }
 
-type nonLiveReporter struct {
+type nonLiveRowEventListener struct {
 	reporter Reporter
 	stats    rowStats
 	table    TableShard
 }
 
-func (n *nonLiveReporter) OnExtraneousRow(row ExtraneousRow) {
+func (n *nonLiveRowEventListener) OnExtraneousRow(row ExtraneousRow) {
 	n.reporter.Report(row)
 	n.stats.numExtraneous++
 }
 
-func (n *nonLiveReporter) OnMissingRow(row MissingRow) {
+func (n *nonLiveRowEventListener) OnMissingRow(row MissingRow) {
 	n.stats.numMissing++
 	n.reporter.Report(row)
 }
 
-func (n *nonLiveReporter) OnMismatchingRow(row MismatchingRow) {
+func (n *nonLiveRowEventListener) OnMismatchingRow(row MismatchingRow) {
 	n.reporter.Report(row)
 	n.stats.numMismatch++
 }
 
-func (n *nonLiveReporter) OnMatch() {
+func (n *nonLiveRowEventListener) OnMatch() {
 	n.stats.numSuccess++
 }
 
-func (n *nonLiveReporter) OnRowScan() {
+func (n *nonLiveRowEventListener) OnRowScan() {
 	if n.stats.numVerified%10000 == 0 && n.stats.numVerified > 0 {
 		n.reporter.Report(StatusReport{
 			Info: fmt.Sprintf("progress on %s.%s (shard %d/%d): %s", n.table.Schema, n.table.Table, n.table.ShardNum, n.table.TotalShards, n.stats.String()),
@@ -280,39 +280,39 @@ func (n *nonLiveReporter) OnRowScan() {
 	n.stats.numVerified++
 }
 
-type liveReporter struct {
-	base *nonLiveReporter
+type liveRowEventListener struct {
+	base *nonLiveRowEventListener
 	pks  []tree.Datums
 	r    *Reverifier
 }
 
-func (n *liveReporter) OnExtraneousRow(row ExtraneousRow) {
+func (n *liveRowEventListener) OnExtraneousRow(row ExtraneousRow) {
 	n.pks = append(n.pks, row.PrimaryKeyValues)
 	n.base.stats.numLiveRetry++
 }
 
-func (n *liveReporter) OnMissingRow(row MissingRow) {
+func (n *liveRowEventListener) OnMissingRow(row MissingRow) {
 	n.pks = append(n.pks, row.PrimaryKeyValues)
 	n.base.stats.numLiveRetry++
 }
 
-func (n *liveReporter) OnMismatchingRow(row MismatchingRow) {
+func (n *liveRowEventListener) OnMismatchingRow(row MismatchingRow) {
 	n.pks = append(n.pks, row.PrimaryKeyValues)
 	n.base.stats.numLiveRetry++
 }
 
-func (n *liveReporter) OnMatch() {
+func (n *liveRowEventListener) OnMatch() {
 	n.base.OnMatch()
 }
 
-func (n *liveReporter) OnRowScan() {
+func (n *liveRowEventListener) OnRowScan() {
 	n.base.OnRowScan()
 	if n.base.stats.numVerified%10000 == 0 {
 		n.Flush()
 	}
 }
 
-func (n *liveReporter) Flush() {
+func (n *liveRowEventListener) Flush() {
 	if len(n.pks) > 0 {
 		r, err := retry.NewRetry(retry.Settings{
 			InitialBackoff: time.Millisecond * 200,
