@@ -15,6 +15,7 @@ import (
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/mysqlconv"
 	"github.com/cockroachdb/molt/pgconv"
+	"github.com/cockroachdb/molt/verify/inconsistency"
 	"github.com/cockroachdb/molt/verify/tableverify"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/format"
@@ -25,7 +26,7 @@ func shardTable(
 	ctx context.Context,
 	truthConn dbconn.Conn,
 	tbl tableverify.Result,
-	reporter Reporter,
+	reporter inconsistency.Reporter,
 	numSplits int,
 ) ([]TableShard, error) {
 	if numSplits < 1 {
@@ -109,7 +110,7 @@ func shardTable(
 		},
 	}
 	if numSplits != 1 {
-		reporter.Report(StatusReport{
+		reporter.Report(inconsistency.StatusReport{
 			Info: fmt.Sprintf(
 				"unable to identify a split for primary key %s.%s, defaulting to a full scan",
 				tbl.Schema,

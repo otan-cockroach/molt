@@ -8,7 +8,8 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
-	"github.com/cockroachdb/molt/verify/internal/rowiterator"
+	rowiterator "github.com/cockroachdb/molt/rowiterator"
+	"github.com/cockroachdb/molt/verify/inconsistency"
 	"github.com/cockroachdb/molt/verify/verifybase"
 	"github.com/rs/zerolog"
 )
@@ -68,7 +69,7 @@ func verifyRowsOnShard(
 	conns dbconn.OrderedConns,
 	table TableShard,
 	rowBatchSize int,
-	reporter Reporter,
+	reporter inconsistency.Reporter,
 	logger zerolog.Logger,
 	live bool,
 ) error {
@@ -109,7 +110,7 @@ func verifyRowsOnShard(
 	}
 	switch rowEVL := rowEVL.(type) {
 	case *defaultRowEventListener:
-		reporter.Report(StatusReport{
+		reporter.Report(inconsistency.StatusReport{
 			Info: fmt.Sprintf("finished row verification on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, rowEVL.stats.String()),
 		})
 	case *liveRowEventListener:
@@ -118,7 +119,7 @@ func verifyRowsOnShard(
 		reverifier.ScanComplete()
 		logger.Trace().Msgf("waiting for reverifier to complete")
 		reverifier.WaitForDone()
-		reporter.Report(StatusReport{
+		reporter.Report(inconsistency.StatusReport{
 			Info: fmt.Sprintf("finished LIVE row verification on %s.%s (shard %d/%d): %s", table.Schema, table.Table, table.ShardNum, table.TotalShards, rowEVL.base.stats.String()),
 		})
 	default:
@@ -143,7 +144,7 @@ func verifyRows(
 		for {
 			if !it.HasNext(ctx) {
 				if err := it.Error(); err == nil {
-					evl.OnMissingRow(MissingRow{
+					evl.OnMissingRow(inconsistency.MissingRow{
 						ConnID:            it.Conn().ID(),
 						Schema:            table.Schema,
 						Table:             table.Table,
@@ -168,7 +169,7 @@ func verifyRows(
 			case 1:
 				// Extraneous row. Log and continue.
 				it.Next(ctx)
-				evl.OnExtraneousRow(ExtraneousRow{
+				evl.OnExtraneousRow(inconsistency.ExtraneousRow{
 					ConnID:            it.Conn().ID(),
 					Schema:            table.Schema,
 					Table:             table.Table,
@@ -178,7 +179,7 @@ func verifyRows(
 			case 0:
 				// Matching primary key. Compare values and break loop.
 				targetVals = it.Next(ctx)
-				mismatches := MismatchingRow{
+				mismatches := inconsistency.MismatchingRow{
 					ConnID:            it.Conn().ID(),
 					Schema:            table.Schema,
 					Table:             table.Table,
@@ -199,7 +200,7 @@ func verifyRows(
 				}
 				break itLoop
 			case -1:
-				evl.OnMissingRow(MissingRow{
+				evl.OnMissingRow(inconsistency.MissingRow{
 					ConnID:            it.Conn().ID(),
 					Schema:            table.Schema,
 					Table:             table.Table,
@@ -221,7 +222,7 @@ func verifyRows(
 		if idx > 0 {
 			for it.HasNext(ctx) {
 				targetVals := it.Next(ctx)
-				evl.OnExtraneousRow(ExtraneousRow{
+				evl.OnExtraneousRow(inconsistency.ExtraneousRow{
 					ConnID:            it.Conn().ID(),
 					Schema:            table.Schema,
 					Table:             table.Table,

@@ -1,4 +1,4 @@
-package verify
+package inconsistency
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree/treecmp"
 	"github.com/cockroachdb/molt/dbconn"
-	inconsistency2 "github.com/cockroachdb/molt/verify/inconsistency"
 	"github.com/rs/zerolog"
 )
 
@@ -32,26 +31,30 @@ func (c CombinedReporter) Close() {
 	}
 }
 
-// LogReporter reports to `log`.
+type StatusReport struct {
+	Info string
+}
+
+// LogReporter reports to `zerolog`.
 type LogReporter struct {
 	zerolog.Logger
 }
 
 func (l LogReporter) Report(obj ReportableObject) {
 	switch obj := obj.(type) {
-	case inconsistency2.MissingTable:
+	case MissingTable:
 		l.Warn().
 			Str("culprit", string(obj.ConnID)).
 			Str("table_schema", string(obj.Schema)).
 			Str("table_name", string(obj.Table)).
 			Msgf("missing table detected")
-	case inconsistency2.ExtraneousTable:
+	case ExtraneousTable:
 		l.Warn().
 			Str("culprit", string(obj.ConnID)).
 			Str("table_schema", string(obj.Schema)).
 			Str("table_name", string(obj.Table)).
 			Msgf("extraneous table detected")
-	case inconsistency2.MismatchingTableDefinition:
+	case MismatchingTableDefinition:
 		l.Warn().
 			Str("culprit", string(obj.ConnID)).
 			Str("table_schema", string(obj.Schema)).

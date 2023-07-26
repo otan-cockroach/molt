@@ -9,6 +9,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/verify"
+	"github.com/cockroachdb/molt/verify/inconsistency"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
@@ -31,8 +32,8 @@ var (
 			cw := zerolog.NewConsoleWriter()
 			logger := zerolog.New(cw)
 
-			reporter := verify.CombinedReporter{}
-			reporter.Reporters = append(reporter.Reporters, &verify.LogReporter{Logger: logger})
+			reporter := inconsistency.CombinedReporter{}
+			reporter.Reporters = append(reporter.Reporters, &inconsistency.LogReporter{Logger: logger})
 			defer reporter.Close()
 
 			ctx := context.Background()
@@ -52,20 +53,20 @@ var (
 					return err
 				}
 				conns[i] = conn
-				reporter.Report(verify.StatusReport{Info: fmt.Sprintf("connected to %s", conn.ID())})
+				reporter.Report(inconsistency.StatusReport{Info: fmt.Sprintf("connected to %s", conn.ID())})
 			}
 			if flagVerifyFixup {
 				fixupConn, err := conns[1].Clone(ctx)
 				if err != nil {
 					panic(err)
 				}
-				reporter.Reporters = append(reporter.Reporters, &verify.FixReporter{
+				reporter.Reporters = append(reporter.Reporters, &inconsistency.FixReporter{
 					Conn:   fixupConn,
 					Logger: logger,
 				})
 			}
 
-			reporter.Report(verify.StatusReport{Info: "verification in progress"})
+			reporter.Report(inconsistency.StatusReport{Info: "verification in progress"})
 			if err := verify.Verify(
 				ctx,
 				conns,
@@ -79,7 +80,7 @@ var (
 			); err != nil {
 				return errors.Wrapf(err, "error verifying")
 			}
-			reporter.Report(verify.StatusReport{Info: "verification complete"})
+			reporter.Report(inconsistency.StatusReport{Info: "verification complete"})
 			return nil
 		},
 	}

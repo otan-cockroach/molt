@@ -9,6 +9,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/verify/dbverify"
+	"github.com/cockroachdb/molt/verify/inconsistency"
 	"github.com/cockroachdb/molt/verify/tableverify"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
@@ -65,7 +66,7 @@ func Verify(
 	ctx context.Context,
 	conns dbconn.OrderedConns,
 	logger zerolog.Logger,
-	reporter Reporter,
+	reporter inconsistency.Reporter,
 	inOpts ...VerifyOpt,
 ) error {
 	opts := verifyOpts{
@@ -182,7 +183,7 @@ func Verify(
 							msg += "<end>]"
 						}
 					}
-					reporter.Report(StatusReport{
+					reporter.Report(inconsistency.StatusReport{
 						Info: msg,
 					})
 					if err := verifyRowShard(ctx, conns, reporter, logger, opts.rowBatchSize, shard, opts.live); err != nil {
@@ -206,7 +207,7 @@ func Verify(
 func verifyRowShard(
 	ctx context.Context,
 	conns dbconn.OrderedConns,
-	reporter Reporter,
+	reporter inconsistency.Reporter,
 	logger zerolog.Logger,
 	rowBatchSize int,
 	tbl TableShard,

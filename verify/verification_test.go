@@ -10,6 +10,7 @@ import (
 	"github.com/cockroachdb/datadriven"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/testutils"
+	"github.com/cockroachdb/molt/verify/inconsistency"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
@@ -122,7 +123,7 @@ func testDataDriven(t *testing.T, path string, connArgs []connArg) {
 					require.NoError(t, err)
 				}
 			}
-			reporter := &LogReporter{
+			reporter := &inconsistency.LogReporter{
 				Logger: zerolog.New(&sb),
 			}
 			// Use 1 concurrency / splitting to ensure deterministic results.
