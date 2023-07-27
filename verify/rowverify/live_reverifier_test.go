@@ -9,10 +9,10 @@ import (
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/dbtable"
 	"github.com/cockroachdb/molt/retry"
 	"github.com/cockroachdb/molt/testutils"
 	"github.com/cockroachdb/molt/verify/inconsistency"
-	"github.com/cockroachdb/molt/verify/verifybase"
 	"github.com/lib/pq/oid"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -20,8 +20,8 @@ import (
 
 func TestLiveReverifier(t *testing.T) {
 	const schema = `CREATE TABLE test_table (id INT4 PRIMARY KEY, text TEXT)`
-	tbl := verifybase.VerifiableTable{
-		TableName: verifybase.TableName{
+	tbl := dbtable.VerifiedTable{
+		Name: dbtable.Name{
 			Schema: "public",
 			Table:  "test_table",
 		},
@@ -113,7 +113,7 @@ func TestLiveReverifier(t *testing.T) {
 			},
 			expectedMissing: []inconsistency.MissingRow{
 				{
-					TableName: verifybase.TableName{
+					Name: dbtable.Name{
 						Schema: "public",
 						Table:  "test_table",
 					},
@@ -187,7 +187,7 @@ func TestLiveReverifier(t *testing.T) {
 				ctx,
 				zerolog.New(os.Stderr),
 				conns,
-				TableShard{VerifiableTable: tbl},
+				TableShard{VerifiedTable: tbl},
 				evl,
 			)
 			require.NoError(t, err)

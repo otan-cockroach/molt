@@ -90,11 +90,11 @@ func shardTable(
 					}
 				}
 				ret = append(ret, rowverify.TableShard{
-					VerifiableTable: tbl.VerifiableTable,
-					StartPKVals:     nextMin,
-					EndPKVals:       nextMax,
-					ShardNum:        splitNum,
-					TotalShards:     numSplits,
+					VerifiedTable: tbl.VerifiedTable,
+					StartPKVals:   nextMin,
+					EndPKVals:     nextMax,
+					ShardNum:      splitNum,
+					TotalShards:   numSplits,
 				})
 				nextMin = nextMax
 			}
@@ -105,9 +105,9 @@ func shardTable(
 	}
 	ret := []rowverify.TableShard{
 		{
-			VerifiableTable: tbl.VerifiableTable,
-			ShardNum:        1,
-			TotalShards:     1,
+			VerifiedTable: tbl.VerifiedTable,
+			ShardNum:      1,
+			TotalShards:   1,
 		},
 	}
 	if numSplits != 1 {

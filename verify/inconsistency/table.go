@@ -1,9 +1,9 @@
 package inconsistency
 
-import "github.com/cockroachdb/molt/verify/verifybase"
+import "github.com/cockroachdb/molt/dbtable"
 
 // MismatchingTableDefinition represents a missing table definition.
 type MismatchingTableDefinition struct {
-	verifybase.DBTable
+	dbtable.DBTable
 	Info string
 }

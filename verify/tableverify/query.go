@@ -7,8 +7,8 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/dbtable"
 	"github.com/cockroachdb/molt/mysqlconv"
-	"github.com/cockroachdb/molt/verify/verifybase"
 	"github.com/lib/pq/oid"
 )
 
@@ -19,7 +19,7 @@ type columnMetadata struct {
 }
 
 func getColumns(
-	ctx context.Context, conn dbconn.Conn, table verifybase.DBTable,
+	ctx context.Context, conn dbconn.Conn, table dbtable.DBTable,
 ) ([]columnMetadata, error) {
 	var ret []columnMetadata
 
@@ -82,7 +82,7 @@ ORDER BY ordinal_position`,
 }
 
 func getColumnsForTables(
-	ctx context.Context, conns dbconn.OrderedConns, tbls [2]verifybase.DBTable,
+	ctx context.Context, conns dbconn.OrderedConns, tbls [2]dbtable.DBTable,
 ) ([2][]columnMetadata, error) {
 	var ret [2][]columnMetadata
 	for i, conn := range conns {
@@ -96,7 +96,7 @@ func getColumnsForTables(
 }
 
 func getPrimaryKeysForTables(
-	ctx context.Context, conns dbconn.OrderedConns, tbls [2]verifybase.DBTable,
+	ctx context.Context, conns dbconn.OrderedConns, tbls [2]dbtable.DBTable,
 ) ([2][]tree.Name, error) {
 	var ret [2][]tree.Name
 	for i, conn := range conns {
@@ -110,7 +110,7 @@ func getPrimaryKeysForTables(
 }
 
 func getPrimaryKey(
-	ctx context.Context, conn dbconn.Conn, table verifybase.DBTable,
+	ctx context.Context, conn dbconn.Conn, table dbtable.DBTable,
 ) ([]tree.Name, error) {
 	var ret []tree.Name
 

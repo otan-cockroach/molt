@@ -2,13 +2,13 @@ package inconsistency
 
 import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
-	"github.com/cockroachdb/molt/verify/verifybase"
+	"github.com/cockroachdb/molt/dbtable"
 )
 
 type ReportableObject interface{}
 
 type MissingRow struct {
-	verifybase.TableName
+	dbtable.Name
 
 	PrimaryKeyColumns []tree.Name
 	PrimaryKeyValues  tree.Datums
@@ -18,14 +18,14 @@ type MissingRow struct {
 }
 
 type ExtraneousRow struct {
-	verifybase.TableName
+	dbtable.Name
 
 	PrimaryKeyColumns []tree.Name
 	PrimaryKeyValues  tree.Datums
 }
 
 type MismatchingRow struct {
-	verifybase.TableName
+	dbtable.Name
 
 	PrimaryKeyColumns []tree.Name
 	PrimaryKeyValues  tree.Datums

@@ -4,36 +4,36 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/dbtable"
 	"github.com/cockroachdb/molt/verify/inconsistency"
-	"github.com/cockroachdb/molt/verify/verifybase"
 	"github.com/stretchr/testify/require"
 )
 
 func TestTableCompare(t *testing.T) {
-	table1 := verifybase.DBTable{
+	table1 := dbtable.DBTable{
 		OID: 1,
-		TableName: verifybase.TableName{
+		Name: dbtable.Name{
 			Schema: "1",
 			Table:  "1",
 		},
 	}
-	table2 := verifybase.DBTable{
+	table2 := dbtable.DBTable{
 		OID: 2,
-		TableName: verifybase.TableName{
+		Name: dbtable.Name{
 			Schema: "2",
 			Table:  "2",
 		},
 	}
-	table3 := verifybase.DBTable{
+	table3 := dbtable.DBTable{
 		OID: 3,
-		TableName: verifybase.TableName{
+		Name: dbtable.Name{
 			Schema: "3",
 			Table:  "3",
 		},
 	}
-	table3DifferentOID := verifybase.DBTable{
+	table3DifferentOID := dbtable.DBTable{
 		OID: 33,
-		TableName: verifybase.TableName{
+		Name: dbtable.Name{
 			Schema: "3",
 			Table:  "3",
 		},
@@ -51,18 +51,18 @@ func TestTableCompare(t *testing.T) {
 				{
 					tables: connWithTables{
 						Conn:          conn1,
-						tableMetadata: []verifybase.DBTable{table1, table2, table3},
+						tableMetadata: []dbtable.DBTable{table1, table2, table3},
 					},
 				},
 				{
 					tables: connWithTables{
 						Conn:          conn2,
-						tableMetadata: []verifybase.DBTable{table1, table2, table3DifferentOID},
+						tableMetadata: []dbtable.DBTable{table1, table2, table3DifferentOID},
 					},
 				},
 			},
 			expected: Result{
-				Verified: [][2]verifybase.DBTable{
+				Verified: [][2]dbtable.DBTable{
 					{table1, table1},
 					{table2, table2},
 					{table3, table3DifferentOID},
@@ -75,7 +75,7 @@ func TestTableCompare(t *testing.T) {
 				{
 					tables: connWithTables{
 						Conn:          conn1,
-						tableMetadata: []verifybase.DBTable{table1, table2, table3},
+						tableMetadata: []dbtable.DBTable{table1, table2, table3},
 					},
 				},
 				{
@@ -103,7 +103,7 @@ func TestTableCompare(t *testing.T) {
 				{
 					tables: connWithTables{
 						Conn:          conn2,
-						tableMetadata: []verifybase.DBTable{table1, table2, table3},
+						tableMetadata: []dbtable.DBTable{table1, table2, table3},
 					},
 				},
 			},
@@ -121,18 +121,18 @@ func TestTableCompare(t *testing.T) {
 				{
 					tables: connWithTables{
 						Conn:          conn1,
-						tableMetadata: []verifybase.DBTable{table1, table2},
+						tableMetadata: []dbtable.DBTable{table1, table2},
 					},
 				},
 				{
 					tables: connWithTables{
 						Conn:          conn2,
-						tableMetadata: []verifybase.DBTable{table2, table3},
+						tableMetadata: []dbtable.DBTable{table2, table3},
 					},
 				},
 			},
 			expected: Result{
-				Verified: [][2]verifybase.DBTable{
+				Verified: [][2]dbtable.DBTable{
 					{table2, table2},
 				},
 				MissingTables: []inconsistency.MissingTable{

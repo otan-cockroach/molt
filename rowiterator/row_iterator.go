@@ -6,9 +6,9 @@ import (
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/dbtable"
 	"github.com/cockroachdb/molt/mysqlconv"
 	"github.com/cockroachdb/molt/pgconv"
-	"github.com/cockroachdb/molt/verify/verifybase"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
@@ -23,7 +23,7 @@ type Iterator interface {
 }
 
 type Table struct {
-	verifybase.TableName
+	dbtable.Name
 	ColumnNames       []tree.Name
 	ColumnOIDs        []oid.Oid
 	PrimaryKeyColumns []tree.Name

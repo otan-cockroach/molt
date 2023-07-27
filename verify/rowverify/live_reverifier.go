@@ -126,7 +126,7 @@ func newLiveReverifier(
 					iterators[i] = rowiterator.NewPointLookupIterator(
 						conn,
 						rowiterator.Table{
-							TableName:         table.TableName,
+							Name:              table.Name,
 							ColumnNames:       table.Columns,
 							ColumnOIDs:        table.ColumnOIDs[i],
 							PrimaryKeyColumns: table.PrimaryKeyColumns,

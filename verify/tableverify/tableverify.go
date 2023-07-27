@@ -7,20 +7,20 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
 	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/dbtable"
 	"github.com/cockroachdb/molt/verify/inconsistency"
-	"github.com/cockroachdb/molt/verify/verifybase"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
 )
 
 type Result struct {
 	RowVerifiable bool
-	verifybase.VerifiableTable
+	dbtable.VerifiedTable
 	MismatchingTableDefinitions []inconsistency.MismatchingTableDefinition
 }
 
 func VerifyCommonTables(
-	ctx context.Context, conns dbconn.OrderedConns, allTables [][2]verifybase.DBTable,
+	ctx context.Context, conns dbconn.OrderedConns, allTables [][2]dbtable.DBTable,
 ) ([]Result, error) {
 	var ret []Result
 
@@ -45,7 +45,7 @@ func VerifyCommonTables(
 func verifyTable(
 	ctx context.Context,
 	conns dbconn.OrderedConns,
-	cmpTables [2]verifybase.DBTable,
+	cmpTables [2]dbtable.DBTable,
 	pkCols [2][]tree.Name,
 	columns [2][]columnMetadata,
 ) (Result, error) {
@@ -55,8 +55,8 @@ func verifyTable(
 		columnOIDMap[i] = make(map[tree.Name]oid.Oid)
 	}
 	res := Result{
-		VerifiableTable: verifybase.VerifiableTable{
-			TableName: verifybase.TableName{
+		VerifiedTable: dbtable.VerifiedTable{
+			Name: dbtable.Name{
 				Schema: truthTbl.Schema,
 				Table:  truthTbl.Table,
 			},

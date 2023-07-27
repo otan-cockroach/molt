@@ -8,9 +8,9 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/dbtable"
 	rowiterator "github.com/cockroachdb/molt/rowiterator"
 	"github.com/cockroachdb/molt/verify/inconsistency"
-	"github.com/cockroachdb/molt/verify/verifybase"
 	"github.com/rs/zerolog"
 )
 
@@ -55,7 +55,7 @@ func (c *compareContext) MustGetPlaceholderValue(p *tree.Placeholder) tree.Datum
 }
 
 type TableShard struct {
-	verifybase.VerifiableTable
+	dbtable.VerifiedTable
 
 	StartPKVals []tree.Datum
 	EndPKVals   []tree.Datum
@@ -81,7 +81,7 @@ func VerifyRowsOnShard(
 			conn,
 			rowiterator.ScanTable{
 				Table: rowiterator.Table{
-					TableName:         table.TableName,
+					Name:              table.Name,
 					ColumnNames:       table.Columns,
 					ColumnOIDs:        table.ColumnOIDs[i],
 					PrimaryKeyColumns: table.PrimaryKeyColumns,
@@ -152,7 +152,7 @@ func verifyRows(
 			if !it.HasNext(ctx) {
 				if err := it.Error(); err == nil {
 					evl.OnMissingRow(inconsistency.MissingRow{
-						TableName:         table.TableName,
+						Name:              table.Name,
 						PrimaryKeyColumns: table.PrimaryKeyColumns,
 						PrimaryKeyValues:  truthVals[:len(table.PrimaryKeyColumns)],
 						Columns:           table.Columns,
@@ -175,7 +175,7 @@ func verifyRows(
 				// Extraneous row. Log and continue.
 				it.Next(ctx)
 				evl.OnExtraneousRow(inconsistency.ExtraneousRow{
-					TableName:         table.TableName,
+					Name:              table.Name,
 					PrimaryKeyColumns: table.PrimaryKeyColumns,
 					PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
 				})
@@ -183,7 +183,7 @@ func verifyRows(
 				// Matching primary key. Compare values and break loop.
 				targetVals = it.Next(ctx)
 				mismatches := inconsistency.MismatchingRow{
-					TableName:         table.TableName,
+					Name:              table.Name,
 					PrimaryKeyColumns: table.PrimaryKeyColumns,
 					PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
 				}
@@ -202,7 +202,7 @@ func verifyRows(
 				break itLoop
 			case -1:
 				evl.OnMissingRow(inconsistency.MissingRow{
-					TableName:         table.TableName,
+					Name:              table.Name,
 					PrimaryKeyColumns: table.PrimaryKeyColumns,
 					PrimaryKeyValues:  truthVals[:len(table.PrimaryKeyColumns)],
 					Columns:           table.Columns,
@@ -222,7 +222,7 @@ func verifyRows(
 			for it.HasNext(ctx) {
 				targetVals := it.Next(ctx)
 				evl.OnExtraneousRow(inconsistency.ExtraneousRow{
-					TableName:         table.TableName,
+					Name:              table.Name,
 					PrimaryKeyColumns: table.PrimaryKeyColumns,
 					PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
 				})

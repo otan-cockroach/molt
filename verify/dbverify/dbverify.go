@@ -8,12 +8,12 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/dbtable"
 	"github.com/cockroachdb/molt/verify/inconsistency"
-	"github.com/cockroachdb/molt/verify/verifybase"
 )
 
 type Result struct {
-	Verified [][2]verifybase.DBTable
+	Verified [][2]dbtable.DBTable
 
 	MissingTables    []inconsistency.MissingTable
 	ExtraneousTables []inconsistency.ExtraneousTable
@@ -21,7 +21,7 @@ type Result struct {
 
 type connWithTables struct {
 	dbconn.Conn
-	tableMetadata []verifybase.DBTable
+	tableMetadata []dbtable.DBTable
 }
 
 type tableVerificationIterator struct {
@@ -37,7 +37,7 @@ func (c *tableVerificationIterator) next() {
 	c.currIdx++
 }
 
-func (c *tableVerificationIterator) curr() verifybase.DBTable {
+func (c *tableVerificationIterator) curr() dbtable.DBTable {
 	return c.tables.tableMetadata[c.currIdx]
 }
 
@@ -46,7 +46,7 @@ func Verify(ctx context.Context, conns dbconn.OrderedConns) (Result, error) {
 	// Grab all tables and verify them.
 	var in []connWithTables
 	for _, conn := range conns {
-		var tms []verifybase.DBTable
+		var tms []dbtable.DBTable
 		switch conn := conn.(type) {
 		case *dbconn.MySQLConn:
 			rows, err := conn.QueryContext(
@@ -65,8 +65,8 @@ ORDER BY table_name`,
 					return Result{}, errors.Wrap(err, "error decoding tables metadata")
 				}
 				// Fake the public schema for now.
-				tm := verifybase.DBTable{
-					TableName: verifybase.TableName{
+				tm := dbtable.DBTable{
+					Name: dbtable.Name{
 						Schema: "public",
 						Table:  tree.Name(tn),
 					},
@@ -90,7 +90,7 @@ ORDER BY 3, 2`,
 			}
 
 			for rows.Next() {
-				var tm verifybase.DBTable
+				var tm dbtable.DBTable
 				if err := rows.Scan(&tm.OID, &tm.Table, &tm.Schema); err != nil {
 					return Result{}, errors.Wrap(err, "error decoding tables metadata")
 				}
@@ -147,7 +147,7 @@ func compare(iterators [2]tableVerificationIterator) Result {
 			)
 			nonTruthIterator.next()
 		case 0:
-			var tables [2]verifybase.DBTable
+			var tables [2]dbtable.DBTable
 			for i := range iterators {
 				tables[i] = iterators[i].curr()
 			}

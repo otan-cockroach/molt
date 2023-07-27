@@ -8,7 +8,7 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
 	"github.com/cockroachdb/datadriven"
-	"github.com/cockroachdb/molt/verify/verifybase"
+	"github.com/cockroachdb/molt/dbtable"
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,7 +53,7 @@ func tableFromCreateTable(t *testing.T, input string) Table {
 
 	createTableStmt := p.AST.(*tree.CreateTable)
 	table := Table{
-		TableName: verifybase.TableName{
+		Name: dbtable.Name{
 			Schema: createTableStmt.Table.SchemaName,
 			Table:  createTableStmt.Table.ObjectName,
 		},

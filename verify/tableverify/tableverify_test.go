@@ -6,8 +6,8 @@ import (
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/dbtable"
 	"github.com/cockroachdb/molt/verify/inconsistency"
-	"github.com/cockroachdb/molt/verify/verifybase"
 	"github.com/lib/pq/oid"
 	"github.com/stretchr/testify/require"
 )
@@ -19,16 +19,16 @@ func TestVerifyTable(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		desc      string
-		cmpTables [2]verifybase.DBTable
+		cmpTables [2]dbtable.DBTable
 		pkCols    [2][]tree.Name
 		columns   [2][]columnMetadata
 		expected  Result
 	}{
 		{
 			desc: "success",
-			cmpTables: [2]verifybase.DBTable{
-				{TableName: verifybase.TableName{Schema: "public", Table: "tbl_name"}},
-				{TableName: verifybase.TableName{Schema: "public", Table: "tbl_name"}},
+			cmpTables: [2]dbtable.DBTable{
+				{Name: dbtable.Name{Schema: "public", Table: "tbl_name"}},
+				{Name: dbtable.Name{Schema: "public", Table: "tbl_name"}},
 			},
 			pkCols: [2][]tree.Name{
 				{"id"},
@@ -46,8 +46,8 @@ func TestVerifyTable(t *testing.T) {
 			},
 			expected: Result{
 				RowVerifiable: true,
-				VerifiableTable: verifybase.VerifiableTable{
-					TableName:         verifybase.TableName{Schema: "public", Table: "tbl_name"},
+				VerifiedTable: dbtable.VerifiedTable{
+					Name:              dbtable.Name{Schema: "public", Table: "tbl_name"},
 					PrimaryKeyColumns: []tree.Name{"id"},
 					Columns:           []tree.Name{"id", "txt"},
 					ColumnOIDs:        [2][]oid.Oid{{oid.T_int4, oid.T_text}, {oid.T_int4, oid.T_text}},
@@ -56,9 +56,9 @@ func TestVerifyTable(t *testing.T) {
 		},
 		{
 			desc: "missing primary key on source",
-			cmpTables: [2]verifybase.DBTable{
-				{TableName: verifybase.TableName{Schema: "public", Table: "tbl_name"}},
-				{TableName: verifybase.TableName{Schema: "public", Table: "tbl_name"}},
+			cmpTables: [2]dbtable.DBTable{
+				{Name: dbtable.Name{Schema: "public", Table: "tbl_name"}},
+				{Name: dbtable.Name{Schema: "public", Table: "tbl_name"}},
 			},
 			pkCols: [2][]tree.Name{
 				{},
@@ -75,8 +75,8 @@ func TestVerifyTable(t *testing.T) {
 				},
 			},
 			expected: Result{
-				VerifiableTable: verifybase.VerifiableTable{
-					TableName:         verifybase.TableName{Schema: "public", Table: "tbl_name"},
+				VerifiedTable: dbtable.VerifiedTable{
+					Name:              dbtable.Name{Schema: "public", Table: "tbl_name"},
 					PrimaryKeyColumns: []tree.Name{},
 					Columns:           []tree.Name{"id", "txt"},
 					ColumnOIDs:        [2][]oid.Oid{{oid.T_int4, oid.T_text}, {oid.T_int4, oid.T_text}},
@@ -84,7 +84,7 @@ func TestVerifyTable(t *testing.T) {
 				// TODO: add more tests after we make mismatches more specialised.
 				MismatchingTableDefinitions: []inconsistency.MismatchingTableDefinition{
 					{
-						DBTable: verifybase.DBTable{TableName: verifybase.TableName{Schema: "public", Table: "tbl_name"}, OID: 0x0},
+						DBTable: dbtable.DBTable{Name: dbtable.Name{Schema: "public", Table: "tbl_name"}, OID: 0x0},
 						Info:    "missing a PRIMARY KEY - results cannot be compared"},
 				},
 			},

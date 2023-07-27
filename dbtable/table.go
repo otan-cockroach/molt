@@ -1,20 +1,21 @@
-package verifybase
+package dbtable
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/lib/pq/oid"
 )
 
-type TableName struct {
+type Name struct {
 	Schema tree.Name
 	Table  tree.Name
 }
 
 // DBTable represents a basic table object with OID from the relevant table.
 type DBTable struct {
-	TableName
+	Name
 	OID oid.Oid
 }
 
@@ -29,9 +30,13 @@ func (tm DBTable) Less(o DBTable) bool {
 	return tm.Compare(o) < 0
 }
 
-// VerifiableTable represents a table which can be verified.
-type VerifiableTable struct {
-	TableName
+func (tm DBTable) String() string {
+	return fmt.Sprintf("%s.%s", tm.Schema, tm.Table)
+}
+
+// VerifiedTable represents a table which has been verified across implementations.
+type VerifiedTable struct {
+	Name
 	PrimaryKeyColumns []tree.Name
 	Columns           []tree.Name
 	ColumnOIDs        [2][]oid.Oid
