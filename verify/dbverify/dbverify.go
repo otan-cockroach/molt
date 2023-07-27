@@ -4,7 +4,9 @@ package dbverify
 import (
 	"context"
 	"sort"
+	"strings"
 
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/verify/inconsistency"
@@ -59,14 +61,16 @@ ORDER BY table_name`,
 			}
 
 			for rows.Next() {
+				var tn string
+				if err := rows.Scan(&tn); err != nil {
+					return Result{}, errors.Wrap(err, "error decoding tables metadata")
+				}
 				// Fake the public schema for now.
 				tm := verifybase.DBTable{
 					TableName: verifybase.TableName{
 						Schema: "public",
+						Table:  tree.Name(strings.ToLower(tn)),
 					},
-				}
-				if err := rows.Scan(&tm.Table); err != nil {
-					return Result{}, errors.Wrap(err, "error decoding tables metadata")
 				}
 				tms = append(tms, tm)
 			}

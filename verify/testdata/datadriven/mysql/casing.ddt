@@ -1,0 +1,16 @@
+exec source_of_truth
+CREATE TABLE tbl (`Id` INT PRIMARY KEY, t TEXT, xxx text)
+----
+[mysql] 0 rows affected
+
+exec non_source_of_truth
+CREATE TABLE tbl (id int primary key, t text, "xXx" text)
+----
+[crdb] CREATE TABLE
+
+verify
+----
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"tbl","mismatch_info":"extraneous column xXx found","message":"mismatching table definition"}
+{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"tbl","mismatch_info":"missing column xxx","message":"mismatching table definition"}
+{"level":"info","message":"starting verify on public.tbl, shard 1/1"}
+{"level":"info","message":"finished row verification on public.tbl (shard 1/1): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0, live_retry: 0"}

@@ -3,6 +3,7 @@ package tableverify
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
@@ -50,7 +51,9 @@ func getColumns(
 	case *dbconn.MySQLConn:
 		rows, err := conn.QueryContext(
 			ctx,
-			`SELECT column_name, data_type, column_type, is_nullable FROM information_schema.columns
+			`SELECT
+column_name, data_type, column_type, is_nullable
+FROM information_schema.columns
 WHERE table_schema = database() AND table_name = ?
 ORDER BY ordinal_position`,
 			string(table.Table),
@@ -60,13 +63,15 @@ ORDER BY ordinal_position`,
 		}
 
 		for rows.Next() {
-			var cm columnMetadata
+			var cn string
 			var ct string
 			var dt string
 			var isNullable string
-			if err := rows.Scan(&cm.columnName, &dt, &ct, &isNullable); err != nil {
+			if err := rows.Scan(&cn, &dt, &ct, &isNullable); err != nil {
 				return ret, errors.Wrap(err, "error decoding column metadata")
 			}
+			var cm columnMetadata
+			cm.columnName = tree.Name(strings.ToLower(cn))
 			cm.typeOID = mysqlconv.DataTypeToOID(dt, ct)
 			cm.notNull = isNullable == "NO"
 			ret = append(ret, cm)
@@ -125,7 +130,7 @@ JOIN information_schema.key_column_usage k
 USING(constraint_name,table_schema,table_name)
 WHERE t.constraint_type = 'PRIMARY KEY'
   AND t.table_schema = database()
-  AND t.table_name= ?
+  AND t.table_name = ?
   ORDER BY k.ordinal_position`,
 			string(table.Table),
 		)
@@ -134,11 +139,11 @@ WHERE t.constraint_type = 'PRIMARY KEY'
 		}
 
 		for rows.Next() {
-			var c tree.Name
+			var c string
 			if err := rows.Scan(&c); err != nil {
 				return ret, errors.Wrap(err, "error decoding column name")
 			}
-			ret = append(ret, c)
+			ret = append(ret, tree.Name(strings.ToLower(c)))
 		}
 		if rows.Err() != nil {
 			return ret, errors.Wrap(err, "error collecting primary key")
