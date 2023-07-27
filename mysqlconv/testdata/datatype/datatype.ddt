@@ -12,7 +12,8 @@ CREATE TABLE da_test_table (
     varchar_test VARCHAR(20),
     float_test FLOAT,
     bigfloat_test DOUBLE,
-    numeric_test DECIMAL
+    numeric_test DECIMAL,
+    qchar CHAR(30)
 )
 ----
 tinyint_test: int2
@@ -28,3 +29,4 @@ varchar_test: varchar
 float_test: float4
 bigfloat_test: float
 numeric_test: decimal
+qchar: "char"[]
