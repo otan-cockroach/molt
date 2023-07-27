@@ -46,6 +46,14 @@ func NewRetry(settings Settings) (*Retry, error) {
 	return NewRetryWithTime(time.Now(), settings)
 }
 
+func MustRetry(settings Settings) *Retry {
+	r, err := NewRetryWithTime(time.Now(), settings)
+	if err != nil {
+		panic(err)
+	}
+	return r
+}
+
 func NewRetryWithTime(t time.Time, settings Settings) (*Retry, error) {
 	if err := settings.Verify(); err != nil {
 		return nil, err
@@ -56,6 +64,14 @@ func NewRetryWithTime(t time.Time, settings Settings) (*Retry, error) {
 		NextRetry: t.Add(settings.InitialBackoff),
 		settings:  settings,
 	}, nil
+}
+
+func MustRetryWithTime(t time.Time, settings Settings) *Retry {
+	r, err := NewRetryWithTime(time.Now(), settings)
+	if err != nil {
+		panic(err)
+	}
+	return r
 }
 
 func (rm *Retry) ShouldContinue() bool {

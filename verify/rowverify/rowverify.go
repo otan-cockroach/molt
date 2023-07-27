@@ -79,13 +79,15 @@ func VerifyRowsOnShard(
 		iterators[i], err = rowiterator.NewScanIterator(
 			ctx,
 			conn,
-			rowiterator.Table{
-				TableName:         table.TableName,
-				ColumnNames:       table.Columns,
-				ColumnOIDs:        table.ColumnOIDs[i],
-				PrimaryKeyColumns: table.PrimaryKeyColumns,
-				StartPKVals:       table.StartPKVals,
-				EndPKVals:         table.EndPKVals,
+			rowiterator.ScanTable{
+				Table: rowiterator.Table{
+					TableName:         table.TableName,
+					ColumnNames:       table.Columns,
+					ColumnOIDs:        table.ColumnOIDs[i],
+					PrimaryKeyColumns: table.PrimaryKeyColumns,
+				},
+				StartPKVals: table.StartPKVals,
+				EndPKVals:   table.EndPKVals,
 			},
 			rowBatchSize,
 		)

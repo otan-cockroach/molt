@@ -14,12 +14,14 @@ import (
 
 func TestScanQuery(t *testing.T) {
 	datadriven.Walk(t, "testdata/scanquery", func(t *testing.T, path string) {
-		var table Table
+		var table ScanTable
 		var sq scanQuery
 		datadriven.RunTest(t, path, func(t *testing.T, d *datadriven.TestData) string {
 			switch d.Cmd {
 			case "table":
-				table = tableFromCreateTable(t, d.Input)
+				table = ScanTable{
+					Table: tableFromCreateTable(t, d.Input),
+				}
 				return ""
 			case "start_pk":
 				table.StartPKVals = parseDatums(t, d.Input, "\n")

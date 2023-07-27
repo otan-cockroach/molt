@@ -18,7 +18,7 @@ import (
 
 type scanIterator struct {
 	conn         dbconn.Conn
-	table        Table
+	table        ScanTable
 	rowBatchSize int
 
 	waitCh        chan scanIteratorResult
@@ -36,7 +36,7 @@ type scanIteratorResult struct {
 
 // NewScanIterator returns a row iterator which scans the given table.
 func NewScanIterator(
-	ctx context.Context, conn dbconn.Conn, table Table, rowBatchSize int,
+	ctx context.Context, conn dbconn.Conn, table ScanTable, rowBatchSize int,
 ) (Iterator, error) {
 	// Initialize the type map on the connection.
 	for _, typOID := range table.ColumnOIDs {
@@ -171,11 +171,11 @@ func (it *scanIterator) Error() error {
 
 type scanQuery struct {
 	base  any
-	table Table
+	table ScanTable
 }
 
-func newPGScanQuery(table Table, rowBatchSize int) scanQuery {
-	baseSelectExpr := newPGBaseSelectClause(table)
+func newPGScanQuery(table ScanTable, rowBatchSize int) scanQuery {
+	baseSelectExpr := newPGBaseSelectClause(table.Table)
 	baseSelectExpr.Limit = &tree.Limit{Count: tree.NewNumVal(constant.MakeUint64(uint64(rowBatchSize)), "", false)}
 	return scanQuery{
 		base:  baseSelectExpr,
@@ -213,8 +213,8 @@ func newPGBaseSelectClause(table Table) *tree.Select {
 	return baseSelectExpr
 }
 
-func newMySQLScanQuery(table Table, rowBatchSize int) scanQuery {
-	stmt := newMySQLBaseSelectClause(table)
+func newMySQLScanQuery(table ScanTable, rowBatchSize int) scanQuery {
+	stmt := newMySQLBaseSelectClause(table.Table)
 	stmt.Limit = &ast.Limit{Count: ast.NewValueExpr(rowBatchSize, "", "")}
 	return scanQuery{
 		base:  stmt,

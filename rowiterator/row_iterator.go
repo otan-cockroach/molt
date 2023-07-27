@@ -27,8 +27,12 @@ type Table struct {
 	ColumnNames       []tree.Name
 	ColumnOIDs        []oid.Oid
 	PrimaryKeyColumns []tree.Name
-	StartPKVals       []tree.Datum
-	EndPKVals         []tree.Datum
+}
+
+type ScanTable struct {
+	Table
+	StartPKVals []tree.Datum
+	EndPKVals   []tree.Datum
 }
 
 type rows interface {

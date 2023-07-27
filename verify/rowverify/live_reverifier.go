@@ -2,6 +2,7 @@ package rowverify
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
@@ -30,6 +31,10 @@ type liveReverifier struct {
 	done         chan struct{}
 	logger       zerolog.Logger
 	table        TableShard
+	testingKnobs struct {
+		beforeScan func(*retry.Retry, []tree.Datums)
+		canScan    atomic.Bool
+	}
 }
 
 func newLiveReverifier(
@@ -64,6 +69,7 @@ func newLiveReverifier(
 
 	go func() {
 		defer func() {
+			logger.Debug().Msgf("live reverifier exiting")
 			for _, conn := range conns {
 				if err := conn.Close(ctx); err != nil {
 					logger.Err(err).Msgf("error closing live reverifier connection")
@@ -98,11 +104,17 @@ func newLiveReverifier(
 				}
 				queue.heapPush(it)
 			case <-nextWorkCh:
+				if !r.testingKnobs.canScan.Load() {
+					continue
+				}
 				it := queue.heapPop()
 				if it == nil {
 					continue
 				}
 
+				if r.testingKnobs.beforeScan != nil {
+					r.testingKnobs.beforeScan(it.Retry, it.PrimaryKeys)
+				}
 				logger.Trace().
 					Int("iteration", it.Retry.Iteration).
 					Time("start_time", it.Retry.StartTime).
@@ -135,7 +147,7 @@ func newLiveReverifier(
 						Time("start_time", it.Retry.StartTime).
 						Time("next_retry", it.Retry.NextRetry).
 						Int("num_failed_keys", len(it.PrimaryKeys)).
-						Msgf("did not reverify everything; retrying")
+						Msgf("not everything reverified successfully")
 				}
 			}
 		}
