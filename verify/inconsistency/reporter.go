@@ -69,7 +69,6 @@ func (l LogReporter) Report(obj ReportableObject) {
 			falseValues = falseValues.Str(string(col), obj.TargetVals[i].String())
 		}
 		l.Warn().
-			Str("culprit", string(obj.ConnID)).
 			Str("table_schema", string(obj.Schema)).
 			Str("table_name", string(obj.Table)).
 			Dict("truth_values", truthVals).
@@ -78,14 +77,12 @@ func (l LogReporter) Report(obj ReportableObject) {
 			Msgf("mismatching row value")
 	case MissingRow:
 		l.Warn().
-			Str("culprit", string(obj.ConnID)).
 			Str("table_schema", string(obj.Schema)).
 			Str("table_name", string(obj.Table)).
 			Strs("primary_key", zipPrimaryKeysForReporting(obj.PrimaryKeyValues)).
 			Msgf("missing row")
 	case ExtraneousRow:
 		l.Warn().
-			Str("culprit", string(obj.ConnID)).
 			Str("table_schema", string(obj.Schema)).
 			Str("table_name", string(obj.Table)).
 			Strs("primary_key", zipPrimaryKeysForReporting(obj.PrimaryKeyValues)).

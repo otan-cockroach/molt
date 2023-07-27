@@ -152,9 +152,7 @@ func verifyRows(
 			if !it.HasNext(ctx) {
 				if err := it.Error(); err == nil {
 					evl.OnMissingRow(inconsistency.MissingRow{
-						ConnID:            it.Conn().ID(),
-						Schema:            table.Schema,
-						Table:             table.Table,
+						TableName:         table.TableName,
 						PrimaryKeyColumns: table.PrimaryKeyColumns,
 						PrimaryKeyValues:  truthVals[:len(table.PrimaryKeyColumns)],
 						Columns:           table.Columns,
@@ -177,9 +175,7 @@ func verifyRows(
 				// Extraneous row. Log and continue.
 				it.Next(ctx)
 				evl.OnExtraneousRow(inconsistency.ExtraneousRow{
-					ConnID:            it.Conn().ID(),
-					Schema:            table.Schema,
-					Table:             table.Table,
+					TableName:         table.TableName,
 					PrimaryKeyColumns: table.PrimaryKeyColumns,
 					PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
 				})
@@ -187,9 +183,7 @@ func verifyRows(
 				// Matching primary key. Compare values and break loop.
 				targetVals = it.Next(ctx)
 				mismatches := inconsistency.MismatchingRow{
-					ConnID:            it.Conn().ID(),
-					Schema:            table.Schema,
-					Table:             table.Table,
+					TableName:         table.TableName,
 					PrimaryKeyColumns: table.PrimaryKeyColumns,
 					PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
 				}
@@ -208,9 +202,7 @@ func verifyRows(
 				break itLoop
 			case -1:
 				evl.OnMissingRow(inconsistency.MissingRow{
-					ConnID:            it.Conn().ID(),
-					Schema:            table.Schema,
-					Table:             table.Table,
+					TableName:         table.TableName,
 					PrimaryKeyColumns: table.PrimaryKeyColumns,
 					PrimaryKeyValues:  truthVals[:len(table.PrimaryKeyColumns)],
 					Columns:           table.Columns,
@@ -230,9 +222,7 @@ func verifyRows(
 			for it.HasNext(ctx) {
 				targetVals := it.Next(ctx)
 				evl.OnExtraneousRow(inconsistency.ExtraneousRow{
-					ConnID:            it.Conn().ID(),
-					Schema:            table.Schema,
-					Table:             table.Table,
+					TableName:         table.TableName,
 					PrimaryKeyColumns: table.PrimaryKeyColumns,
 					PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
 				})

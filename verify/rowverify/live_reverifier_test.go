@@ -113,9 +113,10 @@ func TestLiveReverifier(t *testing.T) {
 			},
 			expectedMissing: []inconsistency.MissingRow{
 				{
-					ConnID:            "crdb",
-					Schema:            "public",
-					Table:             "test_table",
+					TableName: verifybase.TableName{
+						Schema: "public",
+						Table:  "test_table",
+					},
 					PrimaryKeyColumns: []tree.Name{"id"},
 					PrimaryKeyValues:  tree.Datums{tree.NewDInt(2)},
 					Columns:           []tree.Name{"id", "text"},
