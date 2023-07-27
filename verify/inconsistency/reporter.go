@@ -44,19 +44,16 @@ func (l LogReporter) Report(obj ReportableObject) {
 	switch obj := obj.(type) {
 	case MissingTable:
 		l.Warn().
-			Str("culprit", string(obj.ConnID)).
 			Str("table_schema", string(obj.Schema)).
 			Str("table_name", string(obj.Table)).
 			Msgf("missing table detected")
 	case ExtraneousTable:
 		l.Warn().
-			Str("culprit", string(obj.ConnID)).
 			Str("table_schema", string(obj.Schema)).
 			Str("table_name", string(obj.Table)).
 			Msgf("extraneous table detected")
 	case MismatchingTableDefinition:
 		l.Warn().
-			Str("culprit", string(obj.ConnID)).
 			Str("table_schema", string(obj.Schema)).
 			Str("table_name", string(obj.Table)).
 			Str("mismatch_info", obj.Info).

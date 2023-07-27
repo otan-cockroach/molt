@@ -86,9 +86,9 @@ func TestTableCompare(t *testing.T) {
 			},
 			expected: Result{
 				MissingTables: []inconsistency.MissingTable{
-					{ConnID: conn2.ID(), DBTable: table1},
-					{ConnID: conn2.ID(), DBTable: table2},
-					{ConnID: conn2.ID(), DBTable: table3},
+					{DBTable: table1},
+					{DBTable: table2},
+					{DBTable: table3},
 				},
 			},
 		},
@@ -109,9 +109,9 @@ func TestTableCompare(t *testing.T) {
 			},
 			expected: Result{
 				ExtraneousTables: []inconsistency.ExtraneousTable{
-					{ConnID: conn2.ID(), DBTable: table1},
-					{ConnID: conn2.ID(), DBTable: table2},
-					{ConnID: conn2.ID(), DBTable: table3},
+					{DBTable: table1},
+					{DBTable: table2},
+					{DBTable: table3},
 				},
 			},
 		},
@@ -136,10 +136,10 @@ func TestTableCompare(t *testing.T) {
 					{table2, table2},
 				},
 				MissingTables: []inconsistency.MissingTable{
-					{ConnID: conn2.ID(), DBTable: table1},
+					{DBTable: table1},
 				},
 				ExtraneousTables: []inconsistency.ExtraneousTable{
-					{ConnID: conn2.ID(), DBTable: table3},
+					{DBTable: table3},
 				},
 			},
 		},

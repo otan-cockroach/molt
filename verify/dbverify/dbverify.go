@@ -4,7 +4,6 @@ package dbverify
 import (
 	"context"
 	"sort"
-	"strings"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
@@ -69,7 +68,7 @@ ORDER BY table_name`,
 				tm := verifybase.DBTable{
 					TableName: verifybase.TableName{
 						Schema: "public",
-						Table:  tree.Name(strings.ToLower(tn)),
+						Table:  tree.Name(tn),
 					},
 				}
 				tms = append(tms, tm)
@@ -144,7 +143,7 @@ func compare(iterators [2]tableVerificationIterator) Result {
 			// Extraneous row compared to source of truthIterator.
 			ret.ExtraneousTables = append(
 				ret.ExtraneousTables,
-				inconsistency.ExtraneousTable{ConnID: nonTruthIterator.tables.ID(), DBTable: nonTruthIterator.curr()},
+				inconsistency.ExtraneousTable{DBTable: nonTruthIterator.curr()},
 			)
 			nonTruthIterator.next()
 		case 0:
@@ -159,7 +158,7 @@ func compare(iterators [2]tableVerificationIterator) Result {
 			// Missing a row from source of truth.
 			ret.MissingTables = append(
 				ret.MissingTables,
-				inconsistency.MissingTable{ConnID: nonTruthIterator.tables.ID(), DBTable: truthIterator.curr()},
+				inconsistency.MissingTable{DBTable: truthIterator.curr()},
 			)
 			truthIterator.next()
 		}
@@ -168,7 +167,7 @@ func compare(iterators [2]tableVerificationIterator) Result {
 	for !nonTruthIterator.done() {
 		ret.ExtraneousTables = append(
 			ret.ExtraneousTables,
-			inconsistency.ExtraneousTable{ConnID: nonTruthIterator.tables.ID(), DBTable: nonTruthIterator.curr()},
+			inconsistency.ExtraneousTable{DBTable: nonTruthIterator.curr()},
 		)
 		nonTruthIterator.next()
 	}

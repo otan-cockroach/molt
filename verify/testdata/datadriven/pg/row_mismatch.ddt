@@ -158,8 +158,8 @@ INSERT INTO table_misaligned_columns VALUES
 
 verify
 ----
-{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"table_misaligned_columns","mismatch_info":"extraneous column not_common_b found","message":"mismatching table definition"}
-{"level":"warn","culprit":"crdb","table_schema":"public","table_name":"table_misaligned_columns","mismatch_info":"missing column not_common_a","message":"mismatching table definition"}
+{"level":"warn","table_schema":"public","table_name":"table_misaligned_columns","mismatch_info":"extraneous column not_common_b found","message":"mismatching table definition"}
+{"level":"warn","table_schema":"public","table_name":"table_misaligned_columns","mismatch_info":"missing column not_common_a","message":"mismatching table definition"}
 {"level":"info","message":"starting verify on public.table_misaligned_columns, shard 1/1"}
 {"level":"warn","culprit":"crdb","table_schema":"public","table_name":"table_misaligned_columns","truth_values":{"a":"3"},"compare_values":{"a":"4"},"primary_key":["2"],"message":"mismatching row value"}
 {"level":"info","message":"finished row verification on public.table_misaligned_columns (shard 1/1): truth rows seen: 2, success: 1, missing: 0, mismatch: 1, extraneous: 0, live_retry: 0"}

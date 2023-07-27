@@ -19,10 +19,10 @@ type DBTable struct {
 }
 
 func (tm DBTable) Compare(o DBTable) int {
-	if c := strings.Compare(string(tm.Schema), string(o.Schema)); c != 0 {
+	if c := strings.Compare(strings.ToLower(string(tm.Schema)), strings.ToLower(string(o.Schema))); c != 0 {
 		return c
 	}
-	return strings.Compare(string(tm.Table), string(o.Table))
+	return strings.Compare(strings.ToLower(string(tm.Table)), strings.ToLower(string(o.Table)))
 }
 
 func (tm DBTable) Less(o DBTable) bool {

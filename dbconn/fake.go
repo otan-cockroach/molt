@@ -7,11 +7,12 @@ import (
 )
 
 type FakeConn struct {
-	id ID
+	id     ID
+	typMap *pgtype.Map
 }
 
 func MakeFakeConn(id ID) FakeConn {
-	return FakeConn{id: id}
+	return FakeConn{id: id, typMap: pgtype.NewMap()}
 }
 
 func (f FakeConn) ID() ID {
@@ -27,5 +28,5 @@ func (f FakeConn) Clone(ctx context.Context) (Conn, error) {
 }
 
 func (f FakeConn) TypeMap() *pgtype.Map {
-	return nil
+	return f.typMap
 }
