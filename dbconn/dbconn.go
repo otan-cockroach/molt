@@ -104,7 +104,7 @@ func GetDataType(ctx context.Context, inConn Conn, oid oid.Oid) (*pgtype.Type, e
 	}
 	conn, ok := inConn.(*PGConn)
 	if !ok {
-		return nil, errors.AssertionFailedf("only postgres expected here")
+		return nil, errors.AssertionFailedf("only postgres types expected here, got %T, OID %d", conn, oid)
 	}
 	var typName string
 	if err := conn.QueryRow(ctx, "SELECT $1::oid::regtype", oid).Scan(&typName); err != nil {
