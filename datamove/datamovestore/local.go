@@ -13,14 +13,16 @@ import (
 )
 
 type localStore struct {
-	logger   zerolog.Logger
-	basePath string
+	logger     zerolog.Logger
+	basePath   string
+	cleanPaths map[string]struct{}
 }
 
 func NewLocalStore(logger zerolog.Logger, basePath string) (*localStore, error) {
 	return &localStore{
-		logger:   logger,
-		basePath: basePath,
+		logger:     logger,
+		basePath:   basePath,
+		cleanPaths: make(map[string]struct{}),
 	}, nil
 }
 
@@ -29,14 +31,7 @@ func (l *localStore) CreateFromReader(
 ) (Resource, error) {
 	baseDir := path.Join(l.basePath, table.SafeString())
 	if iteration == 1 {
-		if _, err := os.Stat(baseDir); err == nil {
-			l.logger.Debug().
-				Str("dir", baseDir).
-				Msg("removing existing directory")
-			if err := os.RemoveAll(baseDir); err != nil {
-				return nil, err
-			}
-		}
+		l.cleanPaths[baseDir] = struct{}{}
 		if err := os.MkdirAll(baseDir, os.ModePerm); err != nil {
 			return nil, err
 		}
@@ -69,7 +64,12 @@ func (l *localStore) DefaultFlushBatchSize() int {
 }
 
 func (l *localStore) Cleanup(ctx context.Context) error {
-	return os.RemoveAll(l.basePath)
+	for path := range l.cleanPaths {
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (l *localStore) CanBeTarget() bool {
@@ -85,5 +85,5 @@ func (l localResource) ImportURL() (string, error) {
 }
 
 func (l localResource) MarkForCleanup(ctx context.Context) error {
-	return nil
+	return os.Remove(l.path)
 }
