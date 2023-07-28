@@ -62,8 +62,8 @@ func Export(
 		pipe := newCSVPipe(sqlRead, flushSize, func() io.WriteCloser {
 			runWG.Wait()
 			forwardRead, forwardWrite := io.Pipe()
+			runWG.Add(1)
 			go func() {
-				runWG.Add(1)
 				defer runWG.Done()
 				itNum++
 				if err := func() error {

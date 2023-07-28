@@ -8,7 +8,7 @@ This repo contains any open-source MOLT tooling.
 Certain packages can be re-used by external tools and are subject to the
 [Apache License](LICENSE).
 
-## Tools
+## Build
 
 All commands require `molt` to be built. Example:
 
@@ -20,7 +20,7 @@ go build -o artifacts/molt .
 GOOS=linux GOARCH=amd64 go build -v -o artifacts/molt .
 ```
 
-### Verification
+## Verification
 
 `molt verify` does the following:
 * Verifies that tables between the two data sources are the same.
@@ -47,18 +47,56 @@ molt verify \
 
 See `molt verify --help` for all available parameters.
 
-#### Continuous verification
+### Continuous verification
 If you want all tables to be verified in a loop, you can use `--continuous`.
 
-#### Live verification
+### Live verification
 If you expect data to change as you do data verification, you can use `--live`.
 This makes verifier re-check rows before marking them as problematic.
 
-#### Limitations
+### Limitations
 * MySQL enums and set types are not supported.
 * Supports only comparing one MySQL database vs a whole CRDB schema (which is assumed to be "public").
 * Geospatial types cannot yet be compared.
 * We do not handle schema changes between commands well.
+
+## Data move
+
+`molt datamove` is able to migrate your PG tables to CockroachDB.
+
+It currently supports the following:
+* Pulling a table, uploading CSVs to S3 and running IMPORT on Cockroach for you.
+* Pulling a table and running COPY TO directly onto the CRDB table.
+
+For now, schemas must be identical on both sides. 
+
+```sh
+# For S3
+export AWS_REGION='us-east-1'
+export AWS_SECRET_ACCESS_KEY='key'
+export AWS_ACCESS_KEY_ID='id'
+go run . datamove \
+  --source 'postgres://postgres@pgurl:5432/replicationload' \
+  --target 'postgres://root@35.229.89.45:26257/defaultdb?sslmode=disable' \
+  --table 'good_table' \
+  --s3-bucket 'otan-test-bucket'
+```
+```sh
+# For COPY
+go run . datamove \
+  --source 'postgres://postgres@pgurl:5432/replicationload' \
+  --target 'postgres://root@35.229.89.45:26257/defaultdb?sslmode=disable' \
+  --table 'good_table' \
+  --direct-copy
+```
+```sh
+# Look at files locally
+go run . datamove \
+  --source 'postgres://postgres@pgurl:5432/replicationload' \
+  --target 'postgres://root@35.229.89.45:26257/defaultdb?sslmode=disable' \
+  --table 'good_table' \
+  --local-path /tmp/basic
+```
 
 ## Local Setup
 

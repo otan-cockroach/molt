@@ -149,7 +149,7 @@ func Command() *cobra.Command {
 		&target,
 		"target",
 		"",
-		"URL of the source database",
+		"URL of the target database",
 	)
 	cmd.PersistentFlags().StringVar(
 		&localPath,
