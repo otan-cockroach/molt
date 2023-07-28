@@ -29,7 +29,7 @@ func Export(
 	logger zerolog.Logger,
 	bucket string,
 	table dbtable.Name,
-	copy bool,
+	targetCopyConn dbconn.Conn,
 ) (ExportResult, error) {
 	conn := baseConn.(*dbconn.PGConn)
 	ret := ExportResult{
@@ -57,24 +57,34 @@ func Export(
 	go func() {
 		fileIt := 1
 		writerErrorCh := make(chan error)
-		pipe := newCSVPipe(sqlRead, 100*1024*1024, func() io.WriteCloser {
+		pipe := newCSVPipe(sqlRead, 512*1024*1024, func() io.WriteCloser {
 			forwardRead, forwardWrite := io.Pipe()
 			go func() {
 				<-prevClosed
-				fileName := fmt.Sprintf("%s/part_%80d.csv", table.SafeString(), fileIt)
-				logger.Debug().Str("file", fileName).Msgf("creating new file")
-				ret.Files = append(ret.Files, fileName)
-				fileIt++
-				if _, err := uploader.Upload(&s3manager.UploadInput{
-					Bucket: aws.String(bucket),
-					Key:    aws.String(fileName),
-					Body:   forwardRead,
-				}); err != nil {
-					logger.Err(err).Msgf("error uploading to s3")
-					writerErrorCh <- err
-					return
+				if targetCopyConn != nil {
+					target := targetCopyConn.(*dbconn.PGConn)
+					if _, err := target.PgConn().CopyFrom(ctx, forwardRead, "COPY "+table.SafeString()+" FROM STDIN CSV"); err != nil {
+						logger.Err(err).Msgf("error running COPY FROM STDIN")
+						writerErrorCh <- err
+						return
+					}
+					logger.Debug().Msgf("csv complete")
+				} else {
+					fileName := fmt.Sprintf("%s/part_%08d.csv", table.SafeString(), fileIt)
+					logger.Debug().Str("file", fileName).Msgf("creating new file")
+					ret.Files = append(ret.Files, fileName)
+					fileIt++
+					if _, err := uploader.Upload(&s3manager.UploadInput{
+						Bucket: aws.String(bucket),
+						Key:    aws.String(fileName),
+						Body:   forwardRead,
+					}); err != nil {
+						logger.Err(err).Msgf("error uploading to s3")
+						writerErrorCh <- err
+						return
+					}
+					logger.Debug().Str("file", fileName).Msgf("file creation complete")
 				}
-				logger.Debug().Str("file", fileName).Msgf("file creation complete")
 				prevClosed <- struct{}{}
 			}()
 			return forwardWrite
@@ -99,9 +109,13 @@ func Export(
 		return ret, err
 	}
 	<-prevClosed
-	logger.Debug().
-		Strs("files", ret.Files).
-		Dur("duration", ret.EndTime.Sub(ret.StartTime)).
-		Msgf("files stored in s3 successfully")
+	if targetCopyConn != nil {
+		logger.Debug().Msgf("copied all rows successfully")
+	} else {
+		logger.Debug().
+			Strs("files", ret.Files).
+			Dur("duration", ret.EndTime.Sub(ret.StartTime)).
+			Msgf("files stored in s3 successfully")
+	}
 	return ret, nil
 }
