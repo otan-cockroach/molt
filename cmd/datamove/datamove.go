@@ -2,9 +2,14 @@ package datamove
 
 import (
 	"context"
+	"fmt"
+	"time"
 
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/datamove"
+	"github.com/cockroachdb/molt/datamove/datamovestore"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/rs/zerolog"
@@ -13,11 +18,13 @@ import (
 
 func Command() *cobra.Command {
 	var (
-		bucket     string
-		tableName  string
-		source     string
-		target     string
-		useSQLCopy bool
+		bucket         string
+		tableName      string
+		source         string
+		target         string
+		localPath      string
+		directCRDBCopy bool
+		flushSize      int
 	)
 	cmd := &cobra.Command{
 		Use:  "datamove",
@@ -38,29 +45,63 @@ func Command() *cobra.Command {
 				return err
 			}
 			table := dbtable.Name{Schema: "public", Table: tree.Name(tableName)}
-			var copyConn dbconn.Conn
-			if useSQLCopy {
-				copyConn = target
+
+			var src datamovestore.Store
+			switch {
+			case directCRDBCopy:
+				src = datamovestore.NewCopyCRDBDirect(logger, target.(*dbconn.PGConn).Conn)
+			case bucket != "":
+				sess := session.Must(session.NewSession())
+				src = datamovestore.NewS3Store(logger, sess, bucket)
+			case localPath != "":
+				src, err = datamovestore.NewLocalStore(logger, localPath)
+				if err != nil {
+					return err
+				}
+			default:
+				return errors.AssertionFailedf("data source must be configured (--s3-bucket, --direct-copy)")
 			}
-			e, err := datamove.Export(ctx, source, logger, bucket, table, copyConn)
+			if flushSize == 0 {
+				flushSize = src.DefaultFlushBatchSize()
+			}
+
+			logger.Debug().
+				Int("flush_size", flushSize).
+				Str("table", table.SafeString()).
+				Str("store", fmt.Sprintf("%T", src)).
+				Msg("initial config")
+
+			startTime := time.Now()
+			e, err := datamove.Export(ctx, source, logger, src, table, flushSize)
 			if err != nil {
 				return err
 			}
-			if !useSQLCopy {
-				_, err := datamove.Import(ctx, target, logger, bucket, table, e.Files)
+			if src.CanBeTarget() {
+				_, err := datamove.Import(ctx, target, logger, table, e.Files)
 				if err != nil {
 					return err
 				}
 			}
+
+			logger.Info().
+				Dur("duration", time.Since(startTime)).
+				Str("snapshot_id", e.SnapshotID).
+				Msg("data movement complete")
 			return nil
 		},
 	}
 
 	cmd.PersistentFlags().BoolVar(
-		&useSQLCopy,
-		"copy",
+		&directCRDBCopy,
+		"direct-copy",
 		false,
-		"whether to use useSQLCopy mode instead",
+		"whether to use direct copy mode",
+	)
+	cmd.PersistentFlags().IntVar(
+		&flushSize,
+		"flush-size",
+		0,
+		"if set, size (in bytes) before the data source is flushed",
 	)
 	cmd.PersistentFlags().StringVar(
 		&bucket,
@@ -85,6 +126,12 @@ func Command() *cobra.Command {
 		"target",
 		"",
 		"URL of the source database",
+	)
+	cmd.PersistentFlags().StringVar(
+		&localPath,
+		"local-path",
+		"",
+		"path to upload files to locally",
 	)
 	return cmd
 }
