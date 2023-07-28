@@ -55,12 +55,17 @@ func Export(
 	sqlRead, sqlWrite := io.Pipe()
 	prevClosed := make(chan struct{})
 	go func() {
-		fileIt := 1
+		itNum := 0
 		writerErrorCh := make(chan error)
-		pipe := newCSVPipe(sqlRead, 512*1024*1024, func() io.WriteCloser {
+		flushSize := 512 * 1024 * 1024
+		if targetCopyConn != nil {
+			flushSize = 4 * 1024 * 1024
+		}
+		pipe := newCSVPipe(sqlRead, flushSize, func() io.WriteCloser {
 			forwardRead, forwardWrite := io.Pipe()
 			go func() {
 				<-prevClosed
+				itNum++
 				if targetCopyConn != nil {
 					target := targetCopyConn.(*dbconn.PGConn)
 					if _, err := target.PgConn().CopyFrom(ctx, forwardRead, "COPY "+table.SafeString()+" FROM STDIN CSV"); err != nil {
@@ -68,12 +73,11 @@ func Export(
 						writerErrorCh <- err
 						return
 					}
-					logger.Debug().Msgf("csv complete")
+					logger.Debug().Int("batch", itNum).Msgf("csv batch complete")
 				} else {
-					fileName := fmt.Sprintf("%s/part_%08d.csv", table.SafeString(), fileIt)
+					fileName := fmt.Sprintf("%s/part_%08d.csv", table.SafeString(), itNum)
 					logger.Debug().Str("file", fileName).Msgf("creating new file")
 					ret.Files = append(ret.Files, fileName)
-					fileIt++
 					if _, err := uploader.Upload(&s3manager.UploadInput{
 						Bucket: aws.String(bucket),
 						Key:    aws.String(fileName),
@@ -110,7 +114,9 @@ func Export(
 	}
 	<-prevClosed
 	if targetCopyConn != nil {
-		logger.Debug().Msgf("copied all rows successfully")
+		logger.Debug().
+			Dur("duration", ret.EndTime.Sub(ret.StartTime)).
+			Msgf("copied all rows successfully")
 	} else {
 		logger.Debug().
 			Strs("files", ret.Files).
