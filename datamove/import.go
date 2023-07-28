@@ -3,6 +3,7 @@ package datamove
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -22,6 +23,7 @@ func Import(
 	logger zerolog.Logger,
 	bucket string,
 	table dbtable.Name,
+	files []string,
 ) (ImportResult, error) {
 	ret := ImportResult{
 		StartTime: time.Now(),
@@ -33,14 +35,20 @@ func Import(
 	if err != nil {
 		return ret, err
 	}
-	loc := fmt.Sprintf(
-		"s3://%s/%s.dump?AWS_ACCESS_KEY_ID=%s&AWS_SECRET_ACCESS_KEY=%s",
-		bucket,
-		table.SafeString(),
-		creds.AccessKeyID,
-		creds.SecretAccessKey,
-	)
-	if _, err := conn.Exec(ctx, "IMPORT INTO "+table.SafeString()+" CSV DATA ('"+loc+"')"); err != nil {
+	var locs []string
+	for _, file := range files {
+		locs = append(
+			locs,
+			fmt.Sprintf(
+				"'s3://%s/%s?AWS_ACCESS_KEY_ID=%s&AWS_SECRET_ACCESS_KEY=%s'",
+				bucket,
+				file,
+				creds.AccessKeyID,
+				creds.SecretAccessKey,
+			),
+		)
+	}
+	if _, err := conn.Exec(ctx, "IMPORT INTO "+table.SafeString()+" CSV DATA ("+strings.Join(locs, ",")+")"); err != nil {
 		return ret, err
 	}
 	ret.EndTime = time.Now()

@@ -17,6 +17,7 @@ func Command() *cobra.Command {
 		tableName string
 		source    string
 		target    string
+		copy      bool
 	)
 	cmd := &cobra.Command{
 		Use:  "datamove",
@@ -37,16 +38,26 @@ func Command() *cobra.Command {
 				return err
 			}
 			table := dbtable.Name{Schema: "public", Table: tree.Name(tableName)}
-			e, err := datamove.Export(ctx, source, logger, bucket, table)
+			e, err := datamove.Export(ctx, source, logger, bucket, table, copy)
 			if err != nil {
 				return err
 			}
-			_ = e
-			_, err = datamove.Import(ctx, target, logger, bucket, table)
-			return err
+			if !copy {
+				_, err := datamove.Import(ctx, target, logger, bucket, table, e.Files)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
 		},
 	}
 
+	cmd.PersistentFlags().BoolVar(
+		&copy,
+		"copy",
+		false,
+		"whether to use copy mode instead",
+	)
 	cmd.PersistentFlags().StringVar(
 		&bucket,
 		"s3-bucket",

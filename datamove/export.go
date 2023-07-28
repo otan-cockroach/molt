@@ -2,6 +2,7 @@ package datamove
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 )
 
 type ExportResult struct {
-	Location   string
+	Files      []string
 	SnapshotID string
 	StartTime  time.Time
 	EndTime    time.Time
@@ -28,6 +29,7 @@ func Export(
 	logger zerolog.Logger,
 	bucket string,
 	table dbtable.Name,
+	copy bool,
 ) (ExportResult, error) {
 	conn := baseConn.(*dbconn.PGConn)
 	ret := ExportResult{
@@ -49,36 +51,57 @@ func Export(
 	sess := session.Must(session.NewSession())
 	uploader := s3manager.NewUploader(sess)
 
-	type s3Result struct {
-		out *s3manager.UploadOutput
-		err error
-	}
-	resultCh := make(chan s3Result)
-	r, w := io.Pipe()
+	errorCh := make(chan error)
+	sqlRead, sqlWrite := io.Pipe()
+	prevClosed := make(chan struct{})
 	go func() {
-		result, err := uploader.Upload(&s3manager.UploadInput{
-			Bucket: aws.String(bucket),
-			Key:    aws.String(table.SafeString() + ".dump"),
-			Body:   r,
+		fileIt := 1
+		writerErrorCh := make(chan error)
+		pipe := newCSVPipe(sqlRead, 100*1024*1024, func() io.WriteCloser {
+			forwardRead, forwardWrite := io.Pipe()
+			go func() {
+				<-prevClosed
+				fileName := fmt.Sprintf("%s/part_%80d.csv", table.SafeString(), fileIt)
+				logger.Debug().Str("file", fileName).Msgf("creating new file")
+				ret.Files = append(ret.Files, fileName)
+				fileIt++
+				if _, err := uploader.Upload(&s3manager.UploadInput{
+					Bucket: aws.String(bucket),
+					Key:    aws.String(fileName),
+					Body:   forwardRead,
+				}); err != nil {
+					logger.Err(err).Msgf("error uploading to s3")
+					writerErrorCh <- err
+					return
+				}
+				logger.Debug().Str("file", fileName).Msgf("file creation complete")
+				prevClosed <- struct{}{}
+			}()
+			return forwardWrite
 		})
-		resultCh <- s3Result{out: result, err: err}
+		go func() {
+			prevClosed <- struct{}{}
+		}()
+		select {
+		case err := <-writerErrorCh:
+			errorCh <- err
+		case errorCh <- pipe.Pipe():
+		}
 	}()
-	if _, err := tx.Conn().PgConn().CopyTo(ctx, w, "COPY "+table.SafeString()+" TO STDOUT CSV"); err != nil {
+	if _, err := tx.Conn().PgConn().CopyTo(ctx, sqlWrite, "COPY "+table.SafeString()+" TO STDOUT CSV"); err != nil {
 		return ret, errors.Wrap(err, "failed to export to stdout")
 	}
-	if err := w.Close(); err != nil {
+	if err := sqlWrite.Close(); err != nil {
 		return ret, err
 	}
-	resultS := <-resultCh
 	ret.EndTime = time.Now()
-	result, err := resultS.out, resultS.err
-	if err != nil {
+	if err := <-errorCh; err != nil {
 		return ret, err
 	}
+	<-prevClosed
 	logger.Debug().
-		Str("location", result.Location).
+		Strs("files", ret.Files).
 		Dur("duration", ret.EndTime.Sub(ret.StartTime)).
-		Msgf("s3 stored")
-	ret.Location = result.Location
+		Msgf("files stored in s3 successfully")
 	return ret, nil
 }
