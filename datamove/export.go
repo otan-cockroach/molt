@@ -15,7 +15,7 @@ import (
 )
 
 type ExportResult struct {
-	Files      []string
+	Resources  []datamovestore.Resource
 	SnapshotID string
 	StartTime  time.Time
 	EndTime    time.Time
@@ -67,11 +67,11 @@ func Export(
 				defer runWG.Done()
 				itNum++
 				if err := func() error {
-					path, err := datasource.CreateFromReader(ctx, forwardRead, table, itNum)
+					resource, err := datasource.CreateFromReader(ctx, forwardRead, table, itNum)
 					if err != nil {
 						return err
 					}
-					ret.Files = append(ret.Files, path)
+					ret.Resources = append(ret.Resources, resource)
 					return nil
 				}(); err != nil {
 					logger.Err(err).Msgf("error during write")

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/rs/zerolog"
 )
@@ -25,7 +26,7 @@ func NewLocalStore(logger zerolog.Logger, basePath string) (*localStore, error) 
 
 func (l *localStore) CreateFromReader(
 	ctx context.Context, r io.Reader, table dbtable.Name, iteration int,
-) (string, error) {
+) (Resource, error) {
 	baseDir := path.Join(l.basePath, table.SafeString())
 	if iteration == 1 {
 		if _, err := os.Stat(baseDir); err == nil {
@@ -33,11 +34,11 @@ func (l *localStore) CreateFromReader(
 				Str("dir", baseDir).
 				Msg("removing existing directory")
 			if err := os.RemoveAll(baseDir); err != nil {
-				return "", err
+				return nil, err
 			}
 		}
 		if err := os.MkdirAll(baseDir, os.ModePerm); err != nil {
-			return "", err
+			return nil, err
 		}
 	}
 	fileName := path.Join(baseDir, fmt.Sprintf("part_%08d.csv", iteration))
@@ -45,7 +46,7 @@ func (l *localStore) CreateFromReader(
 	logger.Debug().Msgf("creating file")
 	f, err := os.Create(fileName)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	buf := make([]byte, 1024*1024)
 	for {
@@ -53,12 +54,12 @@ func (l *localStore) CreateFromReader(
 		if err != nil {
 			if err == io.EOF {
 				logger.Debug().Msgf("wrote file")
-				return fileName, nil
+				return &localResource{path: fileName}, nil
 			}
-			return "", err
+			return nil, err
 		}
 		if _, err := f.Write(buf[:n]); err != nil {
-			return "", err
+			return nil, err
 		}
 	}
 }
@@ -69,4 +70,16 @@ func (l *localStore) DefaultFlushBatchSize() int {
 
 func (l *localStore) CanBeTarget() bool {
 	return false
+}
+
+type localResource struct {
+	path string
+}
+
+func (l localResource) ImportURL() (string, error) {
+	return "", errors.AssertionFailedf("cannot IMPORT from a local path")
+}
+
+func (l localResource) Cleanup(ctx context.Context) error {
+	return os.RemoveAll(l.path)
 }

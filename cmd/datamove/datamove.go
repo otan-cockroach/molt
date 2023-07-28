@@ -77,7 +77,7 @@ func Command() *cobra.Command {
 				return err
 			}
 			if src.CanBeTarget() {
-				_, err := datamove.Import(ctx, target, logger, table, e.Files)
+				_, err := datamove.Import(ctx, target, logger, table, e.Resources)
 				if err != nil {
 					return err
 				}

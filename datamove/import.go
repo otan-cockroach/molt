@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/molt/datamove/datamovestore"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/rs/zerolog"
@@ -21,17 +22,21 @@ func Import(
 	baseConn dbconn.Conn,
 	logger zerolog.Logger,
 	table dbtable.Name,
-	files []string,
+	resources []datamovestore.Resource,
 ) (ImportResult, error) {
 	ret := ImportResult{
 		StartTime: time.Now(),
 	}
 
 	var locs []string
-	for _, file := range files {
+	for _, resource := range resources {
+		u, err := resource.ImportURL()
+		if err != nil {
+			return ImportResult{}, err
+		}
 		locs = append(
 			locs,
-			fmt.Sprintf("'%s'", file),
+			fmt.Sprintf("'%s'", u),
 		)
 	}
 	//s3manager.NewDownloader(session.Must(session.NewSession())).DownloadWithContext(ctx, w, s3.GetObjectInput{})

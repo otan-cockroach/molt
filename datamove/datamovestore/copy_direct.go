@@ -16,13 +16,13 @@ type copyCRDBDirect struct {
 
 func (c *copyCRDBDirect) CreateFromReader(
 	ctx context.Context, r io.Reader, table dbtable.Name, iteration int,
-) (string, error) {
+) (Resource, error) {
 	c.logger.Debug().Int("batch", iteration).Msgf("csv batch starting")
 	if _, err := c.target.PgConn().CopyFrom(ctx, r, "COPY "+table.SafeString()+" FROM STDIN CSV"); err != nil {
-		return "", err
+		return nil, err
 	}
 	c.logger.Debug().Int("batch", iteration).Msgf("csv batch complete")
-	return "", nil
+	return nil, nil
 }
 
 func (c *copyCRDBDirect) CanBeTarget() bool {
