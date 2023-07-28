@@ -8,21 +8,22 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/rs/zerolog"
 )
 
 type s3Store struct {
-	logger  zerolog.Logger
-	bucket  string
-	session *session.Session
+	logger      zerolog.Logger
+	bucket      string
+	session     *session.Session
+	batchDelete []s3manager.BatchDeleteObject
 }
 
 type s3Resource struct {
 	session *session.Session
-	bucket  string
+	store   *s3Store
 	key     string
 }
 
@@ -33,15 +34,21 @@ func (s *s3Resource) ImportURL() (string, error) {
 	}
 	return fmt.Sprintf(
 		"s3://%s/%s?AWS_ACCESS_KEY_ID=%s&AWS_SECRET_ACCESS_KEY=%s",
-		s.bucket,
+		s.store.bucket,
 		s.key,
 		url.QueryEscape(creds.AccessKeyID),
 		url.QueryEscape(creds.SecretAccessKey),
 	), nil
 }
 
-func (s *s3Resource) Cleanup(ctx context.Context) error {
-	return errors.Newf("unimplemented")
+func (s *s3Resource) MarkForCleanup(ctx context.Context) error {
+	s.store.batchDelete = append(s.store.batchDelete, s3manager.BatchDeleteObject{
+		Object: &s3.DeleteObjectInput{
+			Key:    aws.String(s.key),
+			Bucket: aws.String(s.store.bucket),
+		},
+	})
+	return nil
 }
 
 func NewS3Store(logger zerolog.Logger, session *session.Session, bucket string) *s3Store {
@@ -68,7 +75,7 @@ func (s *s3Store) CreateFromReader(
 	s.logger.Debug().Str("file", key).Msgf("s3 file creation batch complete")
 	return &s3Resource{
 		session: s.session,
-		bucket:  s.bucket,
+		store:   s,
 		key:     key,
 	}, nil
 }
@@ -79,4 +86,16 @@ func (s *s3Store) CanBeTarget() bool {
 
 func (s *s3Store) DefaultFlushBatchSize() int {
 	return 512 * 1024 * 1024
+}
+
+func (s *s3Store) Cleanup(ctx context.Context) error {
+	batcher := s3manager.NewBatchDelete(s.session)
+	if err := batcher.Delete(
+		aws.BackgroundContext(),
+		&s3manager.DeleteObjectsIterator{Objects: s.batchDelete},
+	); err != nil {
+		return err
+	}
+	s.batchDelete = s.batchDelete[:0]
+	return nil
 }

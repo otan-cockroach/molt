@@ -11,9 +11,10 @@ type Store interface {
 	CreateFromReader(ctx context.Context, r io.Reader, table dbtable.Name, iteration int) (Resource, error)
 	CanBeTarget() bool
 	DefaultFlushBatchSize() int
+	Cleanup(ctx context.Context) error
 }
 
 type Resource interface {
 	ImportURL() (string, error)
-	Cleanup(ctx context.Context) error
+	MarkForCleanup(ctx context.Context) error
 }

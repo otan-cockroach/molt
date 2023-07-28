@@ -24,6 +24,7 @@ func Command() *cobra.Command {
 		target         string
 		localPath      string
 		directCRDBCopy bool
+		cleanup        bool
 		flushSize      int
 	)
 	cmd := &cobra.Command{
@@ -64,7 +65,13 @@ func Command() *cobra.Command {
 			if flushSize == 0 {
 				flushSize = src.DefaultFlushBatchSize()
 			}
-
+			defer func() {
+				if cleanup {
+					if err := src.Cleanup(ctx); err != nil {
+						logger.Err(err).Msgf("error marking object for cleanup")
+					}
+				}
+			}()
 			logger.Debug().
 				Int("flush_size", flushSize).
 				Str("table", table.SafeString()).
@@ -76,6 +83,15 @@ func Command() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			defer func() {
+				if cleanup {
+					for _, r := range e.Resources {
+						if err := r.MarkForCleanup(ctx); err != nil {
+							logger.Err(err).Msgf("error cleaning up resource")
+						}
+					}
+				}
+			}()
 			if src.CanBeTarget() {
 				_, err := datamove.Import(ctx, target, logger, table, e.Resources)
 				if err != nil {
@@ -87,6 +103,7 @@ func Command() *cobra.Command {
 				Dur("duration", time.Since(startTime)).
 				Str("snapshot_id", e.SnapshotID).
 				Msg("data movement complete")
+
 			return nil
 		},
 	}
@@ -96,6 +113,13 @@ func Command() *cobra.Command {
 		"direct-copy",
 		false,
 		"whether to use direct copy mode",
+	)
+
+	cmd.PersistentFlags().BoolVar(
+		&cleanup,
+		"cleanup",
+		false,
+		"whether any file resources created should be deleted",
 	)
 	cmd.PersistentFlags().IntVar(
 		&flushSize,

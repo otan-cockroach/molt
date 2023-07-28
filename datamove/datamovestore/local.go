@@ -68,6 +68,10 @@ func (l *localStore) DefaultFlushBatchSize() int {
 	return 128 * 1024 * 1024
 }
 
+func (l *localStore) Cleanup(ctx context.Context) error {
+	return os.RemoveAll(l.basePath)
+}
+
 func (l *localStore) CanBeTarget() bool {
 	return false
 }
@@ -80,6 +84,6 @@ func (l localResource) ImportURL() (string, error) {
 	return "", errors.AssertionFailedf("cannot IMPORT from a local path")
 }
 
-func (l localResource) Cleanup(ctx context.Context) error {
-	return os.RemoveAll(l.path)
+func (l localResource) MarkForCleanup(ctx context.Context) error {
+	return nil
 }

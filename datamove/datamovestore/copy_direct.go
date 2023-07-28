@@ -33,6 +33,10 @@ func (c *copyCRDBDirect) DefaultFlushBatchSize() int {
 	return 1 * 1024 * 1024
 }
 
+func (c *copyCRDBDirect) Cleanup(ctx context.Context) error {
+	return nil
+}
+
 func NewCopyCRDBDirect(logger zerolog.Logger, target *pgx.Conn) *copyCRDBDirect {
 	return &copyCRDBDirect{
 		logger: logger,
