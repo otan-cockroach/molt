@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -51,53 +52,61 @@ func Export(
 	sess := session.Must(session.NewSession())
 	uploader := s3manager.NewUploader(sess)
 
-	errorCh := make(chan error)
-	sqlRead, sqlWrite := io.Pipe()
-	prevClosed := make(chan struct{})
 	cancellableCtx, cancelFunc := context.WithCancel(ctx)
 	defer cancelFunc()
+
+	// Run the pipe from SQL to the relevant data store concurrently.
+	errorCh := make(chan error)
+	sqlRead, sqlWrite := io.Pipe()
 	go func() {
+		defer close(errorCh)
+
 		itNum := 0
 		writerErrorCh := make(chan error)
 		flushSize := 512 * 1024 * 1024
 		if targetCopyConn != nil {
-			flushSize = 1 * 1024 * 1024
+			flushSize = 4 * 1024 * 1024
 		}
+		var runWG sync.WaitGroup
 		pipe := newCSVPipe(sqlRead, flushSize, func() io.WriteCloser {
 			forwardRead, forwardWrite := io.Pipe()
 			go func() {
-				<-prevClosed
+				runWG.Wait()
+				runWG.Add(1)
+				defer runWG.Done()
 				itNum++
-				if targetCopyConn != nil {
-					target := targetCopyConn.(*dbconn.PGConn)
-					if _, err := target.PgConn().CopyFrom(ctx, forwardRead, "COPY "+table.SafeString()+" FROM STDIN CSV"); err != nil {
-						logger.Err(err).Msgf("error running COPY FROM STDIN")
-						writerErrorCh <- err
-						return
+				if err := func() error {
+					if targetCopyConn != nil {
+						target := targetCopyConn.(*dbconn.PGConn)
+						if _, err := target.PgConn().CopyFrom(ctx, forwardRead, "COPY "+table.SafeString()+" FROM STDIN CSV"); err != nil {
+							return err
+						}
+						logger.Debug().Int("batch", itNum).Msgf("csv batch complete")
+					} else {
+						fileName := fmt.Sprintf("%s/part_%08d.csv", table.SafeString(), itNum)
+						logger.Debug().Str("file", fileName).Msgf("creating new file")
+						ret.Files = append(ret.Files, fileName)
+						if _, err := uploader.Upload(&s3manager.UploadInput{
+							Bucket: aws.String(bucket),
+							Key:    aws.String(fileName),
+							Body:   forwardRead,
+						}); err != nil {
+							return err
+						}
+						logger.Debug().Str("file", fileName).Msgf("s3 file creation batch complete")
 					}
-					logger.Debug().Int("batch", itNum).Msgf("csv batch complete")
-				} else {
-					fileName := fmt.Sprintf("%s/part_%08d.csv", table.SafeString(), itNum)
-					logger.Debug().Str("file", fileName).Msgf("creating new file")
-					ret.Files = append(ret.Files, fileName)
-					if _, err := uploader.Upload(&s3manager.UploadInput{
-						Bucket: aws.String(bucket),
-						Key:    aws.String(fileName),
-						Body:   forwardRead,
-					}); err != nil {
-						logger.Err(err).Msgf("error uploading to s3")
-						writerErrorCh <- err
-						return
+					return nil
+				}(); err != nil {
+					logger.Err(err).Msgf("error during write")
+					if err := forwardRead.Close(); err != nil {
+						logger.Err(err).Msgf("error closing write goroutine")
 					}
-					logger.Debug().Str("file", fileName).Msgf("file creation complete")
+					writerErrorCh <- err
+					return
 				}
-				prevClosed <- struct{}{}
 			}()
 			return forwardWrite
 		})
-		go func() {
-			prevClosed <- struct{}{}
-		}()
 		select {
 		case err := <-writerErrorCh:
 			cancelFunc()
@@ -105,17 +114,36 @@ func Export(
 		case errorCh <- pipe.Pipe():
 		}
 	}()
-	if _, err := tx.Conn().PgConn().CopyTo(cancellableCtx, sqlWrite, "COPY "+table.SafeString()+" TO STDOUT CSV"); err != nil {
-		return ret, errors.Wrap(err, "failed to export to stdout")
-	}
-	if err := sqlWrite.Close(); err != nil {
+
+	// Run the COPY TO, which feeds into the pipe concurrently as well.
+	copyFinishCh := make(chan error)
+	go func() {
+		defer close(copyFinishCh)
+		if err := func() error {
+			if _, err := tx.Conn().PgConn().CopyTo(cancellableCtx, sqlWrite, "COPY "+table.SafeString()+" TO STDOUT CSV"); err != nil {
+				return err
+			}
+			return sqlWrite.Close()
+		}(); err != nil {
+			copyFinishCh <- err
+		}
+	}()
+
+	select {
+	case err, ok := <-errorCh:
+		if !ok {
+			return ret, errors.AssertionFailedf("unexpected channel closure")
+		}
 		return ret, err
+	case err, ok := <-copyFinishCh:
+		if !ok {
+			break
+		}
+		if err != nil {
+			return ret, err
+		}
 	}
 	ret.EndTime = time.Now()
-	if err := <-errorCh; err != nil {
-		return ret, err
-	}
-	<-prevClosed
 	if targetCopyConn != nil {
 		logger.Debug().
 			Dur("duration", ret.EndTime.Sub(ret.StartTime)).
