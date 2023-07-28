@@ -54,12 +54,14 @@ func Export(
 	errorCh := make(chan error)
 	sqlRead, sqlWrite := io.Pipe()
 	prevClosed := make(chan struct{})
+	cancellableCtx, cancelFunc := context.WithCancel(ctx)
+	defer cancelFunc()
 	go func() {
 		itNum := 0
 		writerErrorCh := make(chan error)
 		flushSize := 512 * 1024 * 1024
 		if targetCopyConn != nil {
-			flushSize = 4 * 1024 * 1024
+			flushSize = 1 * 1024 * 1024
 		}
 		pipe := newCSVPipe(sqlRead, flushSize, func() io.WriteCloser {
 			forwardRead, forwardWrite := io.Pipe()
@@ -98,11 +100,12 @@ func Export(
 		}()
 		select {
 		case err := <-writerErrorCh:
+			cancelFunc()
 			errorCh <- err
 		case errorCh <- pipe.Pipe():
 		}
 	}()
-	if _, err := tx.Conn().PgConn().CopyTo(ctx, sqlWrite, "COPY "+table.SafeString()+" TO STDOUT CSV"); err != nil {
+	if _, err := tx.Conn().PgConn().CopyTo(cancellableCtx, sqlWrite, "COPY "+table.SafeString()+" TO STDOUT CSV"); err != nil {
 		return ret, errors.Wrap(err, "failed to export to stdout")
 	}
 	if err := sqlWrite.Close(); err != nil {
