@@ -21,7 +21,7 @@ func TestVerifyTable(t *testing.T) {
 		desc      string
 		cmpTables [2]dbtable.DBTable
 		pkCols    [2][]tree.Name
-		columns   [2][]columnMetadata
+		columns   [2][]Column
 		expected  Result
 	}{
 		{
@@ -34,14 +34,14 @@ func TestVerifyTable(t *testing.T) {
 				{"id"},
 				{"id"},
 			},
-			columns: [2][]columnMetadata{
+			columns: [2][]Column{
 				{
-					{columnName: "id", typeOID: oid.T_int4, notNull: true},
-					{columnName: "txt", typeOID: oid.T_text, notNull: true},
+					{Name: "id", OID: oid.T_int4, NotNull: true},
+					{Name: "txt", OID: oid.T_text, NotNull: true},
 				},
 				{
-					{columnName: "id", typeOID: oid.T_int4, notNull: true},
-					{columnName: "txt", typeOID: oid.T_text, notNull: true},
+					{Name: "id", OID: oid.T_int4, NotNull: true},
+					{Name: "txt", OID: oid.T_text, NotNull: true},
 				},
 			},
 			expected: Result{
@@ -64,14 +64,14 @@ func TestVerifyTable(t *testing.T) {
 				{},
 				{"id"},
 			},
-			columns: [2][]columnMetadata{
+			columns: [2][]Column{
 				{
-					{columnName: "id", typeOID: oid.T_int4, notNull: true},
-					{columnName: "txt", typeOID: oid.T_text, notNull: true},
+					{Name: "id", OID: oid.T_int4, NotNull: true},
+					{Name: "txt", OID: oid.T_text, NotNull: true},
 				},
 				{
-					{columnName: "id", typeOID: oid.T_int4, notNull: true},
-					{columnName: "txt", typeOID: oid.T_text, notNull: true},
+					{Name: "id", OID: oid.T_int4, NotNull: true},
+					{Name: "txt", OID: oid.T_text, NotNull: true},
 				},
 			},
 			expected: Result{

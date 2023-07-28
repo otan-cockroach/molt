@@ -1,4 +1,4 @@
-package cmd
+package verify
 
 import (
 	"context"
@@ -16,27 +16,29 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
+func Command() *cobra.Command {
 	// TODO: sanity check bounds.
-	verifyConcurrency              int
-	verifyTableSplits              int
-	verifyRowBatchSize             int
-	verifyFixup                    bool
-	verifyContinuousPause          time.Duration
-	verifyContinuous               bool
-	verifyLive                     bool
-	verifyLiveVerificationSettings = rowverify.LiveReverificationSettings{
-		MaxBatchSize:  100,
-		FlushInterval: time.Second,
-		RetrySettings: retry.Settings{
-			InitialBackoff: 250 * time.Millisecond,
-			Multiplier:     2,
-			MaxBackoff:     time.Second,
-			MaxRetries:     5,
-		},
-	}
+	var (
+		verifyConcurrency              int
+		verifyTableSplits              int
+		verifyRowBatchSize             int
+		verifyFixup                    bool
+		verifyContinuousPause          time.Duration
+		verifyContinuous               bool
+		verifyLive                     bool
+		verifyLiveVerificationSettings = rowverify.LiveReverificationSettings{
+			MaxBatchSize:  100,
+			FlushInterval: time.Second,
+			RetrySettings: retry.Settings{
+				InitialBackoff: 250 * time.Millisecond,
+				Multiplier:     2,
+				MaxBackoff:     time.Second,
+				MaxRetries:     5,
+			},
+		}
+	)
 
-	verifyCmd = &cobra.Command{
+	verifyCmd := &cobra.Command{
 		Use:   "verify",
 		Short: "Verify table schemas and row data align.",
 		Long:  `Verify ensure table schemas and row data between the two databases are aligned.`,
@@ -96,9 +98,7 @@ var (
 			return nil
 		},
 	}
-)
 
-func init() {
 	verifyCmd.PersistentFlags().IntVar(
 		&verifyConcurrency,
 		"concurrency",
@@ -177,10 +177,10 @@ func init() {
 		verifyLiveVerificationSettings.RetrySettings.Multiplier,
 		"multiplier applied to retry after each unsuccessful live reverification run",
 	)
-	rootCmd.AddCommand(verifyCmd)
 	for _, hidden := range []string{"fixup", "table-splits"} {
 		if err := verifyCmd.PersistentFlags().MarkHidden(hidden); err != nil {
 			panic(err)
 		}
 	}
+	return verifyCmd
 }

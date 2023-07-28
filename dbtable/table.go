@@ -19,6 +19,10 @@ type DBTable struct {
 	OID oid.Oid
 }
 
+func (n Name) SafeString() string {
+	return fmt.Sprintf("%s.%s", n.Schema, n.Table)
+}
+
 func (tm DBTable) Compare(o DBTable) int {
 	if c := strings.Compare(strings.ToLower(string(tm.Schema)), strings.ToLower(string(o.Schema))); c != 0 {
 		return c

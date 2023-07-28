@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/cockroachdb/molt/cmd/datamove"
+	"github.com/cockroachdb/molt/cmd/verify"
 	"github.com/spf13/cobra"
 )
 
@@ -18,4 +20,9 @@ func Execute() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func init() {
+	rootCmd.AddCommand(verify.Command())
+	rootCmd.AddCommand(datamove.Command())
 }

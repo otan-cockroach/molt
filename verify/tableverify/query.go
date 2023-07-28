@@ -12,16 +12,14 @@ import (
 	"github.com/lib/pq/oid"
 )
 
-type columnMetadata struct {
-	columnName tree.Name
-	typeOID    oid.Oid
-	notNull    bool
+type Column struct {
+	Name    tree.Name
+	OID     oid.Oid
+	NotNull bool
 }
 
-func getColumns(
-	ctx context.Context, conn dbconn.Conn, table dbtable.DBTable,
-) ([]columnMetadata, error) {
-	var ret []columnMetadata
+func GetColumns(ctx context.Context, conn dbconn.Conn, table dbtable.DBTable) ([]Column, error) {
+	var ret []Column
 
 	switch conn := conn.(type) {
 	case *dbconn.PGConn:
@@ -35,8 +33,8 @@ func getColumns(
 		}
 
 		for rows.Next() {
-			var cm columnMetadata
-			if err := rows.Scan(&cm.columnName, &cm.typeOID, &cm.notNull); err != nil {
+			var cm Column
+			if err := rows.Scan(&cm.Name, &cm.OID, &cm.NotNull); err != nil {
 				return ret, errors.Wrap(err, "error decoding column metadata")
 			}
 			ret = append(ret, cm)
@@ -66,10 +64,10 @@ ORDER BY ordinal_position`,
 			if err := rows.Scan(&cn, &dt, &ct, &isNullable); err != nil {
 				return ret, errors.Wrap(err, "error decoding column metadata")
 			}
-			var cm columnMetadata
-			cm.columnName = tree.Name(strings.ToLower(cn))
-			cm.typeOID = mysqlconv.DataTypeToOID(dt, ct)
-			cm.notNull = isNullable == "NO"
+			var cm Column
+			cm.Name = tree.Name(strings.ToLower(cn))
+			cm.OID = mysqlconv.DataTypeToOID(dt, ct)
+			cm.NotNull = isNullable == "NO"
 			ret = append(ret, cm)
 		}
 		if rows.Err() != nil {
@@ -83,11 +81,11 @@ ORDER BY ordinal_position`,
 
 func getColumnsForTables(
 	ctx context.Context, conns dbconn.OrderedConns, tbls [2]dbtable.DBTable,
-) ([2][]columnMetadata, error) {
-	var ret [2][]columnMetadata
+) ([2][]Column, error) {
+	var ret [2][]Column
 	for i, conn := range conns {
 		var err error
-		ret[i], err = getColumns(ctx, conn, tbls[i])
+		ret[i], err = GetColumns(ctx, conn, tbls[i])
 		if err != nil {
 			return ret, err
 		}
@@ -176,10 +174,10 @@ WHERE t.constraint_type = 'PRIMARY KEY'
 	return ret, nil
 }
 
-func mapColumns(cols []columnMetadata) map[tree.Name]columnMetadata {
-	ret := make(map[tree.Name]columnMetadata, len(cols))
+func mapColumns(cols []Column) map[tree.Name]Column {
+	ret := make(map[tree.Name]Column, len(cols))
 	for _, col := range cols {
-		ret[col.columnName] = col
+		ret[col.Name] = col
 	}
 	return ret
 }
