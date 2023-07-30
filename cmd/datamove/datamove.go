@@ -66,15 +66,22 @@ func Command() *cobra.Command {
 				}
 				src = datamovestore.NewGCPStore(logger, gcpClient, creds, gcpBucket)
 			case s3Bucket != "":
-				sess := session.Must(session.NewSession())
-				src = datamovestore.NewS3Store(logger, sess, s3Bucket)
+				sess, err := session.NewSession()
+				if err != nil {
+					return err
+				}
+				creds, err := sess.Config.Credentials.Get()
+				if err != nil {
+					return err
+				}
+				src = datamovestore.NewS3Store(logger, sess, creds, s3Bucket)
 			case localPath != "":
 				src, err = datamovestore.NewLocalStore(logger, localPath)
 				if err != nil {
 					return err
 				}
 			default:
-				return errors.AssertionFailedf("data source must be configured (--s3-bucket, --direct-copy)")
+				return errors.AssertionFailedf("data source must be configured (--s3-bucket, --gcp-bucket, --direct-copy)")
 			}
 			if flushSize == 0 {
 				flushSize = src.DefaultFlushBatchSize()
@@ -189,5 +196,11 @@ func Command() *cobra.Command {
 		"",
 		"path to upload files to locally",
 	)
+
+	for _, required := range []string{"source", "target"} {
+		if err := cmd.MarkPersistentFlagRequired(required); err != nil {
+			panic(err)
+		}
+	}
 	return cmd
 }

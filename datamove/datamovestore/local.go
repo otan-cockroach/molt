@@ -64,8 +64,8 @@ func (l *localStore) DefaultFlushBatchSize() int {
 }
 
 func (l *localStore) Cleanup(ctx context.Context) error {
-	for path := range l.cleanPaths {
-		if err := os.Remove(path); err != nil {
+	for p := range l.cleanPaths {
+		if err := os.Remove(p); err != nil {
 			return err
 		}
 	}

@@ -9,6 +9,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// copyCRDBDirect represents a store in which any output is directly input
+// into CockroachDB, instead of storing it as an intermediate file.
+// This is only compatible with "COPY", and does not utilise IMPORT.
 type copyCRDBDirect struct {
 	logger zerolog.Logger
 	target *pgx.Conn

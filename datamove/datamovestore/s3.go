@@ -8,6 +8,7 @@ import (
 	"net/url"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -19,6 +20,7 @@ type s3Store struct {
 	logger      zerolog.Logger
 	bucket      string
 	session     *session.Session
+	creds       credentials.Value
 	batchDelete []s3manager.BatchDeleteObject
 }
 
@@ -29,16 +31,12 @@ type s3Resource struct {
 }
 
 func (s *s3Resource) ImportURL() (string, error) {
-	creds, err := s.session.Config.Credentials.Get()
-	if err != nil {
-		return "", err
-	}
 	return fmt.Sprintf(
 		"s3://%s/%s?AWS_ACCESS_KEY_ID=%s&AWS_SECRET_ACCESS_KEY=%s",
 		s.store.bucket,
 		s.key,
-		url.QueryEscape(creds.AccessKeyID),
-		url.QueryEscape(creds.SecretAccessKey),
+		url.QueryEscape(s.store.creds.AccessKeyID),
+		url.QueryEscape(s.store.creds.SecretAccessKey),
 	), nil
 }
 
@@ -75,11 +73,14 @@ func (r s3Reader) Close() error {
 	return nil
 }
 
-func NewS3Store(logger zerolog.Logger, session *session.Session, bucket string) *s3Store {
+func NewS3Store(
+	logger zerolog.Logger, session *session.Session, creds credentials.Value, bucket string,
+) *s3Store {
 	return &s3Store{
 		bucket:  bucket,
 		session: session,
 		logger:  logger,
+		creds:   creds,
 	}
 }
 
