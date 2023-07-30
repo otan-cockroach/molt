@@ -9,6 +9,7 @@ import (
 	"github.com/cockroachdb/molt/datamove/dataquery"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
+	"github.com/cockroachdb/molt/retry"
 	"github.com/rs/zerolog"
 )
 
@@ -37,11 +38,33 @@ func Import(
 		locs = append(locs, u)
 	}
 	conn := baseConn.(*dbconn.PGConn)
-	if _, err := conn.Exec(
-		ctx,
-		dataquery.ImportInto(table, locs),
-	); err != nil {
-		return ret, errors.Wrap(err, "error importing data")
+	r, err := retry.NewRetry(retry.Settings{
+		InitialBackoff: time.Second,
+		Multiplier:     2,
+		MaxRetries:     4,
+	})
+	if err != nil {
+		return ret, err
+	}
+	for {
+		err := func() error {
+			if _, err := conn.Exec(
+				ctx,
+				dataquery.ImportInto(table, locs),
+			); err != nil {
+				return errors.Wrap(err, "error importing data")
+			}
+			return nil
+		}()
+		if err == nil {
+			break
+		}
+		if !r.ShouldContinue() {
+			return ret, err
+		}
+		logger.Err(err).Msgf("error importing data, retrying")
+		r.Next()
+		time.Sleep(time.Until(r.NextRetry))
 	}
 	ret.EndTime = time.Now()
 	logger.Info().
