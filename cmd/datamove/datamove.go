@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"cloud.google.com/go/storage"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
@@ -14,11 +15,13 @@ import (
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
+	"golang.org/x/oauth2/google"
 )
 
 func Command() *cobra.Command {
 	var (
-		bucket         string
+		s3Bucket       string
+		gcpBucket      string
 		tableName      string
 		source         string
 		target         string
@@ -51,9 +54,19 @@ func Command() *cobra.Command {
 			switch {
 			case directCRDBCopy:
 				src = datamovestore.NewCopyCRDBDirect(logger, target.(*dbconn.PGConn).Conn)
-			case bucket != "":
+			case gcpBucket != "":
+				creds, err := google.FindDefaultCredentials(ctx)
+				if err != nil {
+					return err
+				}
+				gcpClient, err := storage.NewClient(context.Background())
+				if err != nil {
+					return err
+				}
+				src = datamovestore.NewGCPStore(logger, gcpClient, creds, gcpBucket)
+			case s3Bucket != "":
 				sess := session.Must(session.NewSession())
-				src = datamovestore.NewS3Store(logger, sess, bucket)
+				src = datamovestore.NewS3Store(logger, sess, s3Bucket)
 			case localPath != "":
 				src, err = datamovestore.NewLocalStore(logger, localPath)
 				if err != nil {
@@ -128,10 +141,16 @@ func Command() *cobra.Command {
 		"if set, size (in bytes) before the data source is flushed",
 	)
 	cmd.PersistentFlags().StringVar(
-		&bucket,
+		&s3Bucket,
 		"s3-bucket",
 		"",
 		"s3 bucket",
+	)
+	cmd.PersistentFlags().StringVar(
+		&gcpBucket,
+		"gcp-bucket",
+		"",
+		"gcp bucket",
 	)
 	cmd.PersistentFlags().StringVar(
 		&tableName,
