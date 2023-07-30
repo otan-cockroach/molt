@@ -1,6 +1,7 @@
 package datamovestore
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -48,6 +49,29 @@ func (s *s3Resource) MarkForCleanup(ctx context.Context) error {
 			Bucket: aws.String(s.store.bucket),
 		},
 	})
+	return nil
+}
+
+func (s *s3Resource) Reader(ctx context.Context) (io.ReadCloser, error) {
+	b := aws.NewWriteAtBuffer(nil)
+	if _, err := s3manager.NewDownloader(s.store.session).DownloadWithContext(
+		ctx,
+		b,
+		&s3.GetObjectInput{
+			Key:    aws.String(s.key),
+			Bucket: aws.String(s.store.bucket),
+		},
+	); err != nil {
+		return nil, err
+	}
+	return s3Reader{Reader: bytes.NewReader(b.Bytes())}, nil
+}
+
+type s3Reader struct {
+	*bytes.Reader
+}
+
+func (r s3Reader) Close() error {
 	return nil
 }
 

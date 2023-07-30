@@ -77,6 +77,10 @@ func (r *gcpResource) ImportURL() (string, error) {
 	), nil
 }
 
+func (r *gcpResource) Reader(ctx context.Context) (io.ReadCloser, error) {
+	return r.store.client.Bucket(r.store.bucket).Object(r.key).NewReader(ctx)
+}
+
 func (r *gcpResource) MarkForCleanup(ctx context.Context) error {
 	return r.store.client.Bucket(r.store.bucket).Object(r.key).Delete(ctx)
 }

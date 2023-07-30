@@ -73,17 +73,21 @@ func (l *localStore) Cleanup(ctx context.Context) error {
 }
 
 func (l *localStore) CanBeTarget() bool {
-	return false
+	return true
 }
 
 type localResource struct {
 	path string
 }
 
-func (l localResource) ImportURL() (string, error) {
+func (l *localResource) Reader(ctx context.Context) (io.ReadCloser, error) {
+	return os.Open(l.path)
+}
+
+func (l *localResource) ImportURL() (string, error) {
 	return "", errors.AssertionFailedf("cannot IMPORT from a local path")
 }
 
-func (l localResource) MarkForCleanup(ctx context.Context) error {
+func (l *localResource) MarkForCleanup(ctx context.Context) error {
 	return os.Remove(l.path)
 }

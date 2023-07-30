@@ -28,6 +28,7 @@ func Command() *cobra.Command {
 		localPath      string
 		directCRDBCopy bool
 		cleanup        bool
+		live           bool
 		flushSize      int
 	)
 	cmd := &cobra.Command{
@@ -106,9 +107,16 @@ func Command() *cobra.Command {
 				}
 			}()
 			if src.CanBeTarget() {
-				_, err := datamove.Import(ctx, target, logger, table, e.Resources)
-				if err != nil {
-					return err
+				if !live {
+					_, err := datamove.Import(ctx, target, logger, table, e.Resources)
+					if err != nil {
+						return err
+					}
+				} else {
+					_, err := datamove.Copy(ctx, target, logger, table, e.Resources)
+					if err != nil {
+						return err
+					}
 				}
 			}
 
@@ -127,12 +135,17 @@ func Command() *cobra.Command {
 		false,
 		"whether to use direct copy mode",
 	)
-
 	cmd.PersistentFlags().BoolVar(
 		&cleanup,
 		"cleanup",
 		false,
 		"whether any file resources created should be deleted",
+	)
+	cmd.PersistentFlags().BoolVar(
+		&live,
+		"live",
+		false,
+		"whether the table must be queriable during data movement",
 	)
 	cmd.PersistentFlags().IntVar(
 		&flushSize,

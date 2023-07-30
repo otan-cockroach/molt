@@ -39,7 +39,6 @@ func Import(
 			fmt.Sprintf("'%s'", u),
 		)
 	}
-	//s3manager.NewDownloader(session.Must(session.NewSession())).DownloadWithContext(ctx, w, s3.GetObjectInput{})
 	conn := baseConn.(*dbconn.PGConn)
 	if _, err := conn.Exec(
 		ctx,
