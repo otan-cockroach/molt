@@ -110,7 +110,7 @@ func (s *s3Store) CanBeTarget() bool {
 }
 
 func (s *s3Store) DefaultFlushBatchSize() int {
-	return 512 * 1024 * 1024
+	return 256 * 1024 * 1024
 }
 
 func (s *s3Store) Cleanup(ctx context.Context) error {

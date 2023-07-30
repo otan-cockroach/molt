@@ -9,13 +9,13 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/molt/cmd/internal/cmdutil"
 	"github.com/cockroachdb/molt/datamove"
 	"github.com/cockroachdb/molt/datamove/datamovestore"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/cockroachdb/molt/verify/dbverify"
 	"github.com/cockroachdb/molt/verify/tableverify"
-	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"golang.org/x/oauth2/google"
 )
@@ -25,8 +25,6 @@ func Command() *cobra.Command {
 		s3Bucket       string
 		gcpBucket      string
 		tableName      string
-		source         string
-		target         string
 		localPath      string
 		directCRDBCopy bool
 		cleanup        bool
@@ -38,22 +36,18 @@ func Command() *cobra.Command {
 		Long: `Moves data from a source to a target.`,
 
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cw := zerolog.NewConsoleWriter()
-			logger := zerolog.New(cw)
-
 			ctx := context.Background()
 
-			source, err := dbconn.Connect(ctx, "source", source)
-			if err != nil {
-				return err
-			}
-			target, err := dbconn.Connect(ctx, "target", target)
-			if err != nil {
-				return err
-			}
 			tableName := dbtable.Name{Schema: "public", Table: tree.Name(tableName)}
 
-			conns := dbconn.OrderedConns{source, target}
+			conns, err := cmdutil.LoadDBConns(ctx)
+			if err != nil {
+				return err
+			}
+			logger, err := cmdutil.Logger()
+			if err != nil {
+				return err
+			}
 
 			// TODO: optimise for single table
 			logger.Info().Msgf("verifying database details")
@@ -88,7 +82,7 @@ func Command() *cobra.Command {
 			var src datamovestore.Store
 			switch {
 			case directCRDBCopy:
-				src = datamovestore.NewCopyCRDBDirect(logger, target.(*dbconn.PGConn).Conn)
+				src = datamovestore.NewCopyCRDBDirect(logger, conns[1].(*dbconn.PGConn).Conn)
 			case gcpBucket != "":
 				creds, err := google.FindDefaultCredentials(ctx)
 				if err != nil {
@@ -137,7 +131,7 @@ func Command() *cobra.Command {
 				Msgf("data extraction phase starting")
 
 			startTime := time.Now()
-			e, err := datamove.Export(ctx, source, logger, src, table, flushSize)
+			e, err := datamove.Export(ctx, conns[0], logger, src, table, flushSize)
 			if err != nil {
 				return err
 			}
@@ -157,12 +151,12 @@ func Command() *cobra.Command {
 
 			if src.CanBeTarget() {
 				if !live {
-					_, err := datamove.Import(ctx, target, logger, table, e.Resources)
+					_, err := datamove.Import(ctx, conns[1], logger, table, e.Resources)
 					if err != nil {
 						return err
 					}
 				} else {
-					_, err := datamove.Copy(ctx, target, logger, table, e.Resources)
+					_, err := datamove.Copy(ctx, conns[1], logger, table, e.Resources)
 					if err != nil {
 						return err
 					}
@@ -221,28 +215,12 @@ func Command() *cobra.Command {
 		"table to migrate",
 	)
 	cmd.PersistentFlags().StringVar(
-		&source,
-		"source",
-		"",
-		"URL of the source database",
-	)
-	cmd.PersistentFlags().StringVar(
-		&target,
-		"target",
-		"",
-		"URL of the target database",
-	)
-	cmd.PersistentFlags().StringVar(
 		&localPath,
 		"local-path",
 		"",
 		"path to upload files to locally",
 	)
-
-	for _, required := range []string{"source", "target"} {
-		if err := cmd.MarkPersistentFlagRequired(required); err != nil {
-			panic(err)
-		}
-	}
+	cmdutil.RegisterDBConnFlags(cmd)
+	cmdutil.RegisterLoggerFlags(cmd)
 	return cmd
 }

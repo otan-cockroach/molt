@@ -28,21 +28,19 @@ GOOS=linux GOARCH=amd64 go build -v -o artifacts/molt .
 * Verifies that tables contain the row values between data sources.
 
 It currently supports PostgreSQL and MySQL comparisons with CockroachDB.
-
-It takes in two connection strings as arguments.
-For names that are easy to read, append `<name>===` in front of the string.
-The first argument is considered as the "source of truth".
+It takes in two connection strings as arguments: `source` and `target`. `source`
+is assumed to be the source of truth.
 
 ```shell
 # Compare postgres and CRDB instance.
 molt verify \
-  'pg_truth===postgres://user:pass@url:5432/db' \
-  'crdb_compare===postgres://root@localhost:26257?sslmode=disable'
+  --source 'postgres://user:pass@url:5432/db' \
+  --target 'postgres://root@localhost:26257?sslmode=disable'
 
 # Compare mysql and CRDB instance.
 molt verify \
-  'mysql===jdbc:mysql://root@tcp(localhost:3306)/defaultdb' \
-  'postgresql://root@127.0.0.1:26257/defaultdb?sslmode=disable'
+  --source 'jdbc:mysql://root@tcp(localhost:3306)/defaultdb' \
+  --target 'postgresql://root@127.0.0.1:26257/defaultdb?sslmode=disable'
 ```
 
 See `molt verify --help` for all available parameters.
@@ -78,7 +76,7 @@ For now, schemas must be identical on both sides.
 export AWS_REGION='us-east-1'
 export AWS_SECRET_ACCESS_KEY='key'
 export AWS_ACCESS_KEY_ID='id'
-go run . datamove \
+molt datamove \
   --source 'postgres://postgres@pgurl:5432/replicationload' \
   --target 'postgres://root@35.229.89.45:26257/defaultdb?sslmode=disable' \
   --table 'good_table' \
@@ -87,7 +85,7 @@ go run . datamove \
 ```sh
 # For gcp
 # Ensure credentials are loaded using `gcloud init`
-go run . datamove \
+molt datamove \
   --source 'postgres://postgres@pgurl:5432/replicationload' \
   --target 'postgres://root@35.229.89.45:26257/defaultdb?sslmode=disable' \
   --table 'good_table' \
@@ -95,7 +93,7 @@ go run . datamove \
 ```
 ```sh
 # For COPY
-go run . datamove \
+mol5 datamove \
   --source 'postgres://postgres@pgurl:5432/replicationload' \
   --target 'postgres://root@35.229.89.45:26257/defaultdb?sslmode=disable' \
   --table 'good_table' \
@@ -103,7 +101,7 @@ go run . datamove \
 ```
 ```sh
 # Look at files locally
-go run . datamove \
+molt datamove \
   --source 'postgres://postgres@pgurl:5432/replicationload' \
   --target 'postgres://root@35.229.89.45:26257/defaultdb?sslmode=disable' \
   --table 'good_table' \
