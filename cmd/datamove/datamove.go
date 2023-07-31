@@ -134,76 +134,92 @@ func Command() *cobra.Command {
 			importErrCh := make(chan error)
 			var numImported int
 			for idx, table := range tables {
-				table := table
-				for _, col := range table.MismatchingTableDefinitions {
-					logger.Warn().
-						Str("reason", col.Info).
-						Msgf("not migrating column %s as it mismatches", col.Name)
-				}
-				if !table.RowVerifiable {
-					logger.Error().Msgf("table %s do not have matching primary keys, cannot migrate", table.SafeString())
-					continue
-				}
+				// Stick in a defer so defers close ASAP.
+				if err := func() error {
+					table := table
+					for _, col := range table.MismatchingTableDefinitions {
+						logger.Warn().
+							Str("reason", col.Info).
+							Msgf("not migrating column %s as it mismatches", col.Name)
+					}
+					if !table.RowVerifiable {
+						logger.Error().Msgf("table %s do not have matching primary keys, cannot migrate", table.SafeString())
+						return nil
+					}
 
-				logger.Info().
-					Str("table", table.SafeString()).
-					Msgf("data extraction phase starting")
+					logger.Info().
+						Str("table", table.SafeString()).
+						Msgf("data extraction phase starting")
 
-				startTime := time.Now()
-				e, err := datamove.Export(ctx, logger, sqlSrc, src, table.VerifiedTable, flushSize)
-				if err != nil {
-					return err
-				}
-				defer func() {
-					if cleanup {
-						for _, r := range e.Resources {
-							if err := r.MarkForCleanup(ctx); err != nil {
-								logger.Err(err).Msgf("error cleaning up resource")
+					startTime := time.Now()
+					e, err := datamove.Export(ctx, logger, sqlSrc, src, table.VerifiedTable, flushSize)
+					if err != nil {
+						return err
+					}
+
+					logger.Info().
+						Str("table", table.SafeString()).
+						Int("num_rows", e.NumRows).
+						Dur("duration", e.EndTime.Sub(e.StartTime)).
+						Msgf("data extraction from source complete")
+
+					if src.CanBeTarget() {
+						if idx > 0 {
+							if err := <-importErrCh; err != nil {
+								return errors.Wrapf(err, "error importing %s", tables[idx-1].SafeString())
 							}
 						}
-					}
-				}()
-
-				logger.Info().
-					Str("table", table.SafeString()).
-					Int("num_rows", e.NumRows).
-					Dur("duration", e.EndTime.Sub(e.StartTime)).
-					Msgf("data extraction from source complete")
-
-				if src.CanBeTarget() {
-					if idx > 0 {
-						if err := <-importErrCh; err != nil {
-							return errors.Wrapf(err, "error importing %s", tables[idx-1].SafeString())
-						}
-					}
-					// Start async goroutine to export concurrently.
-					go func() {
-						importErrCh <- func() error {
-							logger.Info().
-								Str("table", table.SafeString()).
-								Dur("duration", e.EndTime.Sub(e.StartTime)).
-								Msgf("starting data import on target")
-
-							if !live {
-								_, err := datamove.Import(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
-								if err != nil {
-									return err
+						// Start async goroutine to import in data concurrently.
+						go func() {
+							defer func() {
+								if cleanup {
+									for _, r := range e.Resources {
+										if err := r.MarkForCleanup(ctx); err != nil {
+											logger.Err(err).Msgf("error cleaning up resource")
+										}
+									}
 								}
-							} else {
-								_, err := datamove.Copy(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
-								if err != nil {
-									return err
+							}()
+							importErrCh <- func() error {
+								logger.Info().
+									Str("table", table.SafeString()).
+									Dur("duration", e.EndTime.Sub(e.StartTime)).
+									Msgf("starting data import on target")
+
+								if !live {
+									_, err := datamove.Import(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
+									if err != nil {
+										return err
+									}
+								} else {
+									_, err := datamove.Copy(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
+									if err != nil {
+										return err
+									}
 								}
-							}
-							numImported++
-							logger.Info().
-								Str("table", table.SafeString()).
-								Dur("duration", time.Since(startTime)).
-								Str("snapshot_id", e.SnapshotID).
-								Msgf("data import on target for table complete")
-							return nil
+								numImported++
+								logger.Info().
+									Str("table", table.SafeString()).
+									Dur("duration", time.Since(startTime)).
+									Str("snapshot_id", e.SnapshotID).
+									Msgf("data import on target for table complete")
+								return nil
+							}()
 						}()
-					}()
+					} else {
+						defer func() {
+							if cleanup {
+								for _, r := range e.Resources {
+									if err := r.MarkForCleanup(ctx); err != nil {
+										logger.Err(err).Msgf("error cleaning up resource")
+									}
+								}
+							}
+						}()
+					}
+					return nil
+				}(); err != nil {
+					return err
 				}
 			}
 			if len(tables) > 0 {
