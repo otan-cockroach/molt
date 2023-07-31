@@ -13,6 +13,18 @@ type Name struct {
 	Table  tree.Name
 }
 
+func (n Name) MakeTableName() tree.TableName {
+	return tree.MakeTableNameFromPrefix(tree.ObjectNamePrefix{
+		SchemaName:     n.Schema,
+		ExplicitSchema: true,
+	}, n.Table)
+}
+
+func (n Name) NewTableName() *tree.TableName {
+	tn := n.MakeTableName()
+	return &tn
+}
+
 // DBTable represents a basic table object with OID from the relevant table.
 type DBTable struct {
 	Name

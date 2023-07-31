@@ -66,17 +66,19 @@ func Export(
 						logger.Err(err).Msgf("error closing write goroutine")
 					}
 					writerErrorCh <- err
-					return
 				}
 			}()
 			return forwardWrite
 		})
 		pipeCh := make(chan error)
 		go func() {
-			pipeCh <- pipe.Pipe()
+			err := pipe.Pipe()
+			pipeCh <- err
 		}()
+		logger.Trace().Msgf("writer thread is waiting")
 		select {
 		case err := <-writerErrorCh:
+			logger.Debug().Msgf("writer thread has cancelled")
 			cancelFunc()
 			errorCh <- err
 		case err := <-pipeCh:

@@ -25,9 +25,8 @@ func NewPGCopyTo(table dbtable.VerifiedTable) string {
 
 func ImportInto(table dbtable.VerifiedTable, locs []string) string {
 	importInto := &tree.Import{
-		Into: true,
-		// TODO: schema name
-		Table:      tree.NewUnqualifiedTableName(table.Table),
+		Into:       true,
+		Table:      table.NewTableName(),
 		FileFormat: "CSV",
 		IntoCols:   table.Columns,
 	}
@@ -43,16 +42,16 @@ func ImportInto(table dbtable.VerifiedTable, locs []string) string {
 }
 
 func CopyFrom(table dbtable.VerifiedTable) string {
-	importInto := &tree.CopyFrom{
-		// TODO: schema name
-		Table:   tree.MakeUnqualifiedTableName(table.Table),
+	copyFrom := &tree.CopyFrom{
+		Table:   table.MakeTableName(),
 		Columns: table.Columns,
+		Stdin:   true,
 		Options: tree.CopyOptions{
 			CopyFormat: tree.CopyFormatCSV,
 			HasFormat:  true,
 		},
 	}
 	f := tree.NewFmtCtx(tree.FmtParsableNumerics)
-	f.FormatNode(importInto)
+	f.FormatNode(copyFrom)
 	return f.CloseAndGetString()
 }
