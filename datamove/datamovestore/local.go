@@ -87,10 +87,10 @@ func (l *localStore) CreateFromReader(
 			return nil, err
 		}
 	}
-	fileName := path.Join(baseDir, fmt.Sprintf("part_%08d.csv", iteration))
-	logger := l.logger.With().Str("path", fileName).Logger()
+	path := path.Join(baseDir, fmt.Sprintf("part_%08d.csv", iteration))
+	logger := l.logger.With().Str("path", path).Logger()
 	logger.Debug().Msgf("creating file")
-	f, err := os.Create(fileName)
+	f, err := os.Create(path)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func (l *localStore) CreateFromReader(
 		if err != nil {
 			if err == io.EOF {
 				logger.Debug().Msgf("wrote file")
-				return &localResource{path: fileName, store: l}, nil
+				return &localResource{path: path, store: l}, nil
 			}
 			return nil, err
 		}
@@ -148,5 +148,6 @@ func (l *localResource) ImportURL() (string, error) {
 }
 
 func (l *localResource) MarkForCleanup(ctx context.Context) error {
+	l.store.logger.Debug().Msgf("removing %s", l.path)
 	return os.Remove(l.path)
 }

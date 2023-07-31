@@ -185,7 +185,6 @@ func Command() *cobra.Command {
 						// Start async goroutine to import in data concurrently.
 						go func() {
 							// It is important that we only cleanup when the import of data is complete.
-							defer cleanupFunc()
 							importErrCh <- func() error {
 								if truncate {
 									logger.Info().
@@ -195,6 +194,7 @@ func Command() *cobra.Command {
 										return err
 									}
 								}
+								defer cleanupFunc()
 
 								logger.Info().
 									Msgf("starting data import on target")

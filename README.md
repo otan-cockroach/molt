@@ -158,8 +158,7 @@ molt datamove \
   --target 'postgres://root@localhost:26257/defaultdb?sslmode=disable' \
   --table-filter 'good_table' \
   --local-path /tmp/basic \
-  --local-path-listen-addr '0.0.0.0:9005' \
-  --live
+  --local-path-listen-addr '0.0.0.0:9005'
 ```
 
 ## Local Setup
