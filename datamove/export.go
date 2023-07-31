@@ -38,14 +38,13 @@ func Export(
 	defer cancelFunc()
 
 	// Run the pipe from SQL to the relevant data store concurrently.
-	errorCh := make(chan error)
+	pipeErrorCh := make(chan error)
 	sqlRead, sqlWrite := io.Pipe()
 	var runWG sync.WaitGroup
 	go func() {
-		defer close(errorCh)
-
 		itNum := 0
-		writerErrorCh := make(chan error)
+		// Errors must be buffered, as pipe can exit without taking the error channel.
+		writerErrCh := make(chan error, 1)
 		pipe := newCSVPipe(sqlRead, flushSize, func() io.WriteCloser {
 			runWG.Wait()
 			forwardRead, forwardWrite := io.Pipe()
@@ -61,39 +60,39 @@ func Export(
 					ret.Resources = append(ret.Resources, resource)
 					return nil
 				}(); err != nil {
-					logger.Err(err).Msgf("error during write")
-					if err := forwardRead.Close(); err != nil {
+					logger.Err(err).Msgf("error during data store write")
+					if err := forwardRead.CloseWithError(err); err != nil {
 						logger.Err(err).Msgf("error closing write goroutine")
 					}
-					writerErrorCh <- err
+					writerErrCh <- err
 				}
 			}()
 			return forwardWrite
 		})
-		pipeCh := make(chan error)
-		go func() {
-			err := pipe.Pipe()
-			pipeCh <- err
-		}()
-		logger.Trace().Msgf("writer thread is waiting")
+		err := pipe.Pipe()
+		// Wait for all routines to exit.
+		runWG.Wait()
+		// Check any errors are not left behind.
 		select {
-		case err := <-writerErrorCh:
-			logger.Debug().Msgf("writer thread has cancelled")
-			cancelFunc()
-			errorCh <- err
-		case err := <-pipeCh:
-			ret.NumRows = pipe.numRows
-			errorCh <- err
+		case werr := <-writerErrCh:
+			if werr != nil {
+				cancelFunc()
+				err = errors.CombineErrors(err, werr)
+			}
+		default:
 		}
+		if err != nil {
+			ret.NumRows = pipe.numRows
+		}
+		pipeErrorCh <- err
 	}()
 
-	// Run the COPY TO, which feeds into the pipe concurrently as well.
+	// Run the COPY TO, which feeds into the pipe, concurrently.
 	copyFinishCh := make(chan error)
 	go func() {
-		defer close(copyFinishCh)
 		if err := func() error {
 			if err := sqlSrc.Export(cancellableCtx, sqlWrite, table); err != nil {
-				return err
+				return errors.CombineErrors(err, sqlWrite.CloseWithError(err))
 			}
 			return sqlWrite.Close()
 		}(); err != nil {
@@ -101,21 +100,24 @@ func Export(
 		}
 	}()
 
-	select {
-	case err, ok := <-errorCh:
-		if !ok {
-			return ret, errors.AssertionFailedf("unexpected channel closure")
-		}
-		return ret, err
-	case err, ok := <-copyFinishCh:
-		if !ok {
-			break
-		}
-		if err != nil {
+	// Wait until pipeErrorCh returns.
+	var copyErr error
+waitLoop:
+	for {
+		select {
+		case err := <-pipeErrorCh:
+			if err == nil {
+				break waitLoop
+			}
 			return ret, err
+		case err := <-copyFinishCh:
+			logger.Err(err).Msgf("error during copy")
+			copyErr = err
 		}
 	}
+	if copyErr != nil {
+		return ret, copyErr
+	}
 	ret.EndTime = time.Now()
-	runWG.Wait()
 	return ret, nil
 }

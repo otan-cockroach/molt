@@ -138,6 +138,7 @@ func Command() *cobra.Command {
 				// Stick in a defer so defers close ASAP.
 				if err := func() error {
 					table := table
+					logger := logger.With().Str("table", table.SafeString()).Logger()
 					for _, col := range table.MismatchingTableDefinitions {
 						logger.Warn().
 							Str("reason", col.Info).
@@ -149,7 +150,6 @@ func Command() *cobra.Command {
 					}
 
 					logger.Info().
-						Str("table", table.SafeString()).
 						Msgf("data extraction phase starting")
 
 					startTime := time.Now()
@@ -169,7 +169,6 @@ func Command() *cobra.Command {
 					}
 
 					logger.Info().
-						Str("table", table.SafeString()).
 						Int("num_rows", e.NumRows).
 						Dur("duration", e.EndTime.Sub(e.StartTime)).
 						Msgf("data extraction from source complete")
@@ -187,7 +186,6 @@ func Command() *cobra.Command {
 							importErrCh <- func() error {
 								if truncate {
 									logger.Info().
-										Str("table", table.SafeString()).
 										Dur("duration", e.EndTime.Sub(e.StartTime)).
 										Msgf("truncating table")
 									_, err := conns[1].(*dbconn.PGConn).Conn.Exec(ctx, "TRUNCATE TABLE "+table.SafeString())
@@ -197,7 +195,6 @@ func Command() *cobra.Command {
 								}
 
 								logger.Info().
-									Str("table", table.SafeString()).
 									Dur("duration", e.EndTime.Sub(e.StartTime)).
 									Msgf("starting data import on target")
 
@@ -214,7 +211,6 @@ func Command() *cobra.Command {
 								}
 								numImported++
 								logger.Info().
-									Str("table", table.SafeString()).
 									Dur("duration", time.Since(startTime)).
 									Str("snapshot_id", e.SnapshotID).
 									Msgf("data import on target for table complete")
