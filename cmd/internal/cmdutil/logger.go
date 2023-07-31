@@ -16,7 +16,7 @@ var loggerConfigInst = loggerConfig{
 func RegisterLoggerFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(
 		&loggerConfigInst.level,
-		"level",
+		"logging",
 		loggerConfigInst.level,
 		"what level to log at - maps to zerolog.Level",
 	)

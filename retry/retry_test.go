@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,6 +46,78 @@ func TestVerifySettings(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
+		})
+	}
+}
+
+func TestRetry_Do(t *testing.T) {
+	errors := []error{errors.New("1"), errors.New("2"), errors.Newf("3")}
+	for _, tc := range []struct {
+		desc          string
+		settings      Settings
+		do            func() func() error
+		expectedSeen  []error
+		expectedFinal error
+	}{
+		{
+			desc: "success",
+			settings: Settings{
+				InitialBackoff: time.Microsecond,
+				Multiplier:     2,
+			},
+			do: func() func() error {
+				return func() error {
+					return nil
+				}
+			},
+		},
+		{
+			desc: "failed once",
+			settings: Settings{
+				InitialBackoff: time.Microsecond,
+				Multiplier:     2,
+			},
+			do: func() func() error {
+				it := 0
+				return func() error {
+					it++
+					if it == 1 {
+						return errors[0]
+					}
+					return nil
+				}
+			},
+			expectedSeen: []error{errors[0]},
+		},
+		{
+			desc: "failed all",
+			settings: Settings{
+				InitialBackoff: time.Microsecond,
+				Multiplier:     2,
+				MaxRetries:     3,
+			},
+			do: func() func() error {
+				it := 0
+				return func() error {
+					it++
+					return errors[it-1]
+				}
+			},
+			expectedSeen:  []error{errors[0], errors[1]},
+			expectedFinal: errors[2],
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			r, err := NewRetry(tc.settings)
+			require.NoError(t, err)
+
+			doFunc := tc.do()
+			var seenErrors []error
+			err = r.Do(doFunc, func(err error) {
+				seenErrors = append(seenErrors, err)
+			})
+			require.Equal(t, tc.expectedSeen, seenErrors)
+			require.Equal(t, tc.expectedFinal, err)
 		})
 	}
 }

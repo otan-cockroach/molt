@@ -46,25 +46,18 @@ func Import(
 	if err != nil {
 		return ret, err
 	}
-	for {
-		err := func() error {
-			if _, err := conn.Exec(
-				ctx,
-				dataquery.ImportInto(table, locs),
-			); err != nil {
-				return errors.Wrap(err, "error importing data")
-			}
-			return nil
-		}()
-		if err == nil {
-			break
+	if err := r.Do(func() error {
+		if _, err := conn.Exec(
+			ctx,
+			dataquery.ImportInto(table, locs),
+		); err != nil {
+			return errors.Wrap(err, "error importing data")
 		}
-		if !r.ShouldContinue() {
-			return ret, err
-		}
+		return nil
+	}, func(err error) {
 		logger.Err(err).Msgf("error importing data, retrying")
-		r.Next()
-		time.Sleep(time.Until(r.NextRetry))
+	}); err != nil {
+		return ret, err
 	}
 	ret.EndTime = time.Now()
 	logger.Info().

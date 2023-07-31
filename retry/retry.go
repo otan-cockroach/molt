@@ -89,3 +89,18 @@ func (rm *Retry) Next() {
 	rm.Iteration++
 	rm.NextRetry = rm.NextRetry.Add(nextDuration)
 }
+
+func (rm *Retry) Do(do func() error, onRetry func(error)) error {
+	for {
+		err := do()
+		if err == nil {
+			return nil
+		}
+		if !rm.ShouldContinue() {
+			return err
+		}
+		onRetry(err)
+		time.Sleep(time.Until(rm.NextRetry))
+		rm.Next()
+	}
+}
