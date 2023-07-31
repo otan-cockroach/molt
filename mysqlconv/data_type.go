@@ -31,7 +31,7 @@ func DataTypeToOID(dataType, columnType string) oid.Oid {
 	case "time":
 		return oid.T_time
 	case "char":
-		return oid.T__char
+		return oid.T_varchar
 	case "varchar":
 		return oid.T_varchar
 	case "binary":

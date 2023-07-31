@@ -19,7 +19,8 @@ func ConnectMySQL(ctx context.Context, id ID, url string) (*MySQLConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &MySQLConn{id: id, url: url, DB: db, typeMap: pgtype.NewMap()}, nil
+	m := pgtype.NewMap()
+	return &MySQLConn{id: id, url: url, DB: db, typeMap: m}, nil
 }
 
 func (c *MySQLConn) ID() ID {
