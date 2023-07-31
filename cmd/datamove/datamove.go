@@ -91,7 +91,6 @@ func Command() *cobra.Command {
 				Str("store", fmt.Sprintf("%T", src)).
 				Msg("initial config")
 
-			// TODO: optimise for single table
 			logger.Info().Msgf("checking database details")
 			dbTables, err := dbverify.Verify(ctx, conns)
 			if err != nil {
@@ -131,7 +130,11 @@ func Command() *cobra.Command {
 				Int("num_tables", len(tables)).
 				Str("snapshot_id", sqlSrc.SnapshotID()).
 				Msgf("starting data movement")
-			for _, table := range tables {
+
+			importErrCh := make(chan error)
+			var numImported int
+			for idx, table := range tables {
+				table := table
 				for _, col := range table.MismatchingTableDefinitions {
 					logger.Warn().
 						Str("reason", col.Info).
@@ -163,32 +166,55 @@ func Command() *cobra.Command {
 
 				logger.Info().
 					Str("table", table.SafeString()).
+					Int("num_rows", e.NumRows).
 					Dur("duration", e.EndTime.Sub(e.StartTime)).
-					Msgf("data extraction phase complete, starting data movement")
+					Msgf("data extraction from source complete")
 
 				if src.CanBeTarget() {
-					if !live {
-						_, err := datamove.Import(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
-						if err != nil {
-							return err
-						}
-					} else {
-						_, err := datamove.Copy(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
-						if err != nil {
-							return err
+					if idx > 0 {
+						if err := <-importErrCh; err != nil {
+							return errors.Wrapf(err, "error importing %s", tables[idx-1].SafeString())
 						}
 					}
-				}
+					// Start async goroutine to export concurrently.
+					go func() {
+						importErrCh <- func() error {
+							logger.Info().
+								Str("table", table.SafeString()).
+								Dur("duration", e.EndTime.Sub(e.StartTime)).
+								Msgf("starting data import on target")
 
-				logger.Info().
-					Str("table", table.SafeString()).
-					Dur("duration", time.Since(startTime)).
-					Str("snapshot_id", e.SnapshotID).
-					Msgf("data movement for table complete")
+							if !live {
+								_, err := datamove.Import(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
+								if err != nil {
+									return err
+								}
+							} else {
+								_, err := datamove.Copy(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
+								if err != nil {
+									return err
+								}
+							}
+							numImported++
+							logger.Info().
+								Str("table", table.SafeString()).
+								Dur("duration", time.Since(startTime)).
+								Str("snapshot_id", e.SnapshotID).
+								Msgf("data import on target for table complete")
+							return nil
+						}()
+					}()
+				}
+			}
+			if len(tables) > 0 {
+				if err := <-importErrCh; err != nil {
+					return errors.Wrapf(err, "error importing %s", tables[len(tables)-1].SafeString())
+				}
 			}
 			logger.Info().
 				Str("snapshot_id", sqlSrc.SnapshotID()).
-				Msgf("data movement completed")
+				Int("num_imported", numImported).
+				Msgf("data movement complete")
 			return nil
 		},
 	}

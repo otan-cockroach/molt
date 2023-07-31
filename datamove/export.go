@@ -17,6 +17,7 @@ type ExportResult struct {
 	SnapshotID string
 	StartTime  time.Time
 	EndTime    time.Time
+	NumRows    int
 }
 
 func Export(
@@ -70,11 +71,17 @@ func Export(
 			}()
 			return forwardWrite
 		})
+		pipeCh := make(chan error)
+		go func() {
+			pipeCh <- pipe.Pipe()
+		}()
 		select {
 		case err := <-writerErrorCh:
 			cancelFunc()
 			errorCh <- err
-		case errorCh <- pipe.Pipe():
+		case err := <-pipeCh:
+			ret.NumRows = pipe.numRows
+			errorCh <- err
 		}
 	}()
 
