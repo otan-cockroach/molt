@@ -28,6 +28,7 @@ type verifyOpts struct {
 	tableSplits              int
 	continuous               bool
 	continuousPause          time.Duration
+	dbFilter                 dbverify.FilterConfig
 	liveVerificationSettings *rowverify.LiveReverificationSettings
 }
 
@@ -64,6 +65,12 @@ func WithLive(live bool, settings rowverify.LiveReverificationSettings) VerifyOp
 	}
 }
 
+func WithDBFilter(filter dbverify.FilterConfig) VerifyOpt {
+	return func(o *verifyOpts) {
+		o.dbFilter = filter
+	}
+}
+
 // Verify verifies the given connections have matching tables and contents.
 func Verify(
 	ctx context.Context,
@@ -76,25 +83,29 @@ func Verify(
 		concurrency:  DefaultConcurrency,
 		rowBatchSize: DefaultRowBatchSize,
 		tableSplits:  DefaultTableSplits,
+		dbFilter:     dbverify.DefaultFilterConfig(),
 	}
 	for _, applyOpt := range inOpts {
 		applyOpt(&opts)
 	}
 
-	ret, err := dbverify.Verify(ctx, conns)
+	dbTables, err := dbverify.Verify(ctx, conns)
 	if err != nil {
 		return errors.Wrap(err, "error comparing database tables")
 	}
+	if dbTables, err = dbverify.FilterResult(opts.dbFilter, dbTables); err != nil {
+		return err
+	}
 
-	for _, missingTable := range ret.MissingTables {
+	for _, missingTable := range dbTables.MissingTables {
 		reporter.Report(missingTable)
 	}
-	for _, extraneousTable := range ret.ExtraneousTables {
+	for _, extraneousTable := range dbTables.ExtraneousTables {
 		reporter.Report(extraneousTable)
 	}
 
 	// Grab columns for each table on both sides.
-	tbls, err := tableverify.VerifyCommonTables(ctx, conns, ret.Verified)
+	tbls, err := tableverify.VerifyCommonTables(ctx, conns, dbTables.Verified)
 	if err != nil {
 		return err
 	}

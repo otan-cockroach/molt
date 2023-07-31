@@ -7,13 +7,11 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/cmd/internal/cmdutil"
 	"github.com/cockroachdb/molt/datamove"
 	"github.com/cockroachdb/molt/datamove/datamovestore"
 	"github.com/cockroachdb/molt/dbconn"
-	"github.com/cockroachdb/molt/dbtable"
 	"github.com/cockroachdb/molt/verify/dbverify"
 	"github.com/cockroachdb/molt/verify/tableverify"
 	"github.com/spf13/cobra"
@@ -24,7 +22,6 @@ func Command() *cobra.Command {
 	var (
 		s3Bucket       string
 		gcpBucket      string
-		tableName      string
 		localPath      string
 		directCRDBCopy bool
 		cleanup        bool
@@ -38,8 +35,6 @@ func Command() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
-			tableName := dbtable.Name{Schema: "public", Table: tree.Name(tableName)}
-
 			conns, err := cmdutil.LoadDBConns(ctx)
 			if err != nil {
 				return err
@@ -47,36 +42,6 @@ func Command() *cobra.Command {
 			logger, err := cmdutil.Logger()
 			if err != nil {
 				return err
-			}
-
-			// TODO: optimise for single table
-			logger.Info().Msgf("verifying database details")
-			dbTables, err := dbverify.Verify(ctx, conns)
-			if err != nil {
-				return err
-			}
-			var table dbtable.VerifiedTable
-			found := false
-			for idx, tables := range dbTables.Verified {
-				if tables[0].Name == tableName {
-					r, err := tableverify.VerifyCommonTables(ctx, conns, dbTables.Verified[idx:idx+1])
-					if err != nil {
-						return err
-					}
-					if len(r[0].VerifiedTable.PrimaryKeyColumns) == 0 {
-						return errors.AssertionFailedf("cannot move table as primary key do not match")
-					}
-					table = r[0].VerifiedTable
-					for _, col := range r[0].MismatchingTableDefinitions {
-						logger.Warn().
-							Str("reason", col.Info).
-							Msgf("not migrating %s as it mismatches", col.Name)
-					}
-					found = true
-				}
-			}
-			if !found {
-				return errors.Newf("table %s not found", tableName.SafeString())
 			}
 
 			var src datamovestore.Store
@@ -123,51 +88,101 @@ func Command() *cobra.Command {
 			}()
 			logger.Debug().
 				Int("flush_size", flushSize).
-				Str("table", tableName.SafeString()).
 				Str("store", fmt.Sprintf("%T", src)).
 				Msg("initial config")
 
-			logger.Info().
-				Msgf("data extraction phase starting")
-
-			startTime := time.Now()
-			e, err := datamove.Export(ctx, conns[0], logger, src, table, flushSize)
+			// TODO: optimise for single table
+			logger.Info().Msgf("checking database details")
+			dbTables, err := dbverify.Verify(ctx, conns)
 			if err != nil {
 				return err
 			}
-			defer func() {
-				if cleanup {
-					for _, r := range e.Resources {
-						if err := r.MarkForCleanup(ctx); err != nil {
-							logger.Err(err).Msgf("error cleaning up resource")
+			if dbTables, err = dbverify.FilterResult(cmdutil.TableFilter(), dbTables); err != nil {
+				return err
+			}
+			for _, tbl := range dbTables.ExtraneousTables {
+				logger.Warn().
+					Str("table", tbl.SafeString()).
+					Msgf("ignoring table as it is missing a definition on the source")
+			}
+			for _, tbl := range dbTables.MissingTables {
+				logger.Warn().
+					Str("table", tbl.SafeString()).
+					Msgf("ignoring table as it is missing a definition on the target")
+			}
+			for _, tbl := range dbTables.Verified {
+				logger.Info().
+					Str("source_table", tbl[0].SafeString()).
+					Str("target_table", tbl[1].SafeString()).
+					Msgf("found matching table")
+			}
+
+			logger.Info().Msgf("verifying common tables")
+			tables, err := tableverify.VerifyCommonTables(ctx, conns, dbTables.Verified)
+			if err != nil {
+				return err
+			}
+			logger.Info().
+				Int("num_tables", len(tables)).
+				Msgf("starting data movement")
+			for _, table := range tables {
+				// TODO: use same snapshot.
+				for _, col := range table.MismatchingTableDefinitions {
+					logger.Warn().
+						Str("reason", col.Info).
+						Msgf("not migrating column %s as it mismatches", col.Name)
+				}
+				if !table.RowVerifiable {
+					logger.Error().Msgf("table %s do not have matching primary keys, cannot migrate", table.SafeString())
+					continue
+				}
+
+				logger.Info().
+					Str("table", table.SafeString()).
+					Msgf("data extraction phase starting")
+
+				startTime := time.Now()
+				e, err := datamove.Export(ctx, conns[0], logger, src, table.VerifiedTable, flushSize)
+				if err != nil {
+					return err
+				}
+				defer func() {
+					if cleanup {
+						for _, r := range e.Resources {
+							if err := r.MarkForCleanup(ctx); err != nil {
+								logger.Err(err).Msgf("error cleaning up resource")
+							}
+						}
+					}
+				}()
+
+				logger.Info().
+					Str("table", table.SafeString()).
+					Dur("duration", e.EndTime.Sub(e.StartTime)).
+					Msgf("data extraction phase complete, starting data movement")
+
+				if src.CanBeTarget() {
+					if !live {
+						_, err := datamove.Import(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
+						if err != nil {
+							return err
+						}
+					} else {
+						_, err := datamove.Copy(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
+						if err != nil {
+							return err
 						}
 					}
 				}
-			}()
 
-			logger.Info().
-				Dur("duration", e.EndTime.Sub(e.StartTime)).
-				Msgf("data extraction phase complete")
-
-			if src.CanBeTarget() {
-				if !live {
-					_, err := datamove.Import(ctx, conns[1], logger, table, e.Resources)
-					if err != nil {
-						return err
-					}
-				} else {
-					_, err := datamove.Copy(ctx, conns[1], logger, table, e.Resources)
-					if err != nil {
-						return err
-					}
-				}
+				logger.Info().
+					Str("table", table.SafeString()).
+					Dur("duration", time.Since(startTime)).
+					Str("snapshot_id", e.SnapshotID).
+					Msgf("data movement for table complete")
 			}
-
 			logger.Info().
-				Dur("duration", time.Since(startTime)).
-				Str("snapshot_id", e.SnapshotID).
-				Msg("data movement complete")
-
+				Msgf("data movement completed")
 			return nil
 		},
 	}
@@ -209,12 +224,6 @@ func Command() *cobra.Command {
 		"gcp bucket",
 	)
 	cmd.PersistentFlags().StringVar(
-		&tableName,
-		"table",
-		"",
-		"table to migrate",
-	)
-	cmd.PersistentFlags().StringVar(
 		&localPath,
 		"local-path",
 		"",
@@ -222,5 +231,6 @@ func Command() *cobra.Command {
 	)
 	cmdutil.RegisterDBConnFlags(cmd)
 	cmdutil.RegisterLoggerFlags(cmd)
+	cmdutil.RegisterNameFilterFlags(cmd)
 	return cmd
 }

@@ -45,6 +45,9 @@ molt verify \
 
 See `molt verify --help` for all available parameters.
 
+### Filters
+To verify specific tables or schemas, use `--table-filter` or `--schema-filter`.
+
 ### Continuous verification
 If you want all tables to be verified in a loop, you can use `--continuous`.
 
@@ -88,7 +91,7 @@ molt datamove \
 molt datamove \
   --source 'postgres://postgres@pgurl:5432/replicationload' \
   --target 'postgres://root@35.229.89.45:26257/defaultdb?sslmode=disable' \
-  --table 'good_table' \
+  --table-filter 'good_table' \
   --gcp-bucket 'otan-test-bucket'
 ```
 ```sh
@@ -96,7 +99,7 @@ molt datamove \
 mol5 datamove \
   --source 'postgres://postgres@pgurl:5432/replicationload' \
   --target 'postgres://root@35.229.89.45:26257/defaultdb?sslmode=disable' \
-  --table 'good_table' \
+  --table-filter 'good_table' \
   --direct-copy
 ```
 ```sh
@@ -104,7 +107,7 @@ mol5 datamove \
 molt datamove \
   --source 'postgres://postgres@pgurl:5432/replicationload' \
   --target 'postgres://root@35.229.89.45:26257/defaultdb?sslmode=disable' \
-  --table 'good_table' \
+  --table-filter 'good_table' \
   --local-path /tmp/basic
 ```
 

@@ -76,6 +76,7 @@ func Command() *cobra.Command {
 				verify.WithRowBatchSize(verifyRowBatchSize),
 				verify.WithContinuous(verifyContinuous, verifyContinuousPause),
 				verify.WithLive(verifyLive, verifyLiveVerificationSettings),
+				verify.WithDBFilter(cmdutil.TableFilter()),
 			); err != nil {
 				return errors.Wrapf(err, "error verifying")
 			}
@@ -169,5 +170,6 @@ func Command() *cobra.Command {
 	}
 	cmdutil.RegisterDBConnFlags(cmd)
 	cmdutil.RegisterLoggerFlags(cmd)
+	cmdutil.RegisterNameFilterFlags(cmd)
 	return cmd
 }
