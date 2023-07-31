@@ -17,7 +17,7 @@ import (
 )
 
 type ExportSource interface {
-	SnapshotID() string
+	CDCCursor() string
 	Export(ctx context.Context, writer io.Writer, table dbtable.VerifiedTable) error
 	Close(ctx context.Context) error
 }
@@ -25,6 +25,10 @@ type ExportSource interface {
 func InferExportSource(ctx context.Context, conn dbconn.Conn) (ExportSource, error) {
 	switch conn := conn.(type) {
 	case *dbconn.PGConn:
+		var cdcCursor string
+		if err := conn.QueryRow(ctx, "SELECT pg_current_wal_insert_lsn()").Scan(&cdcCursor); err != nil {
+			return nil, errors.Wrap(err, "failed to export wal LSN")
+		}
 		tx, err := conn.BeginTx(ctx, pgx.TxOptions{
 			IsoLevel: pgx.RepeatableRead,
 		})
@@ -42,6 +46,7 @@ func InferExportSource(ctx context.Context, conn dbconn.Conn) (ExportSource, err
 		}
 		return &pgExportSource{
 			snapshotID: snapshotID,
+			cdcCursor:  cdcCursor,
 			tx:         tx,
 		}, nil
 	case *dbconn.MySQLConn:
@@ -66,9 +71,9 @@ func InferExportSource(ctx context.Context, conn dbconn.Conn) (ExportSource, err
 			return nil, errors.CombineErrors(err, tx.Rollback())
 		}
 		return &mysqlExportSource{
-			snapshotID: fmt.Sprintf("%s:%d-%d", source, start, end),
-			tx:         tx,
-			conn:       conn,
+			gtid: fmt.Sprintf("%s:%d-%d", source, start, end),
+			tx:   tx,
+			conn: conn,
 		}, nil
 	}
 	return nil, errors.AssertionFailedf("unknown conn type: %T", conn)
@@ -77,6 +82,7 @@ func InferExportSource(ctx context.Context, conn dbconn.Conn) (ExportSource, err
 type pgExportSource struct {
 	tx         pgx.Tx
 	snapshotID string
+	cdcCursor  string
 }
 
 func (p *pgExportSource) Export(
@@ -96,18 +102,18 @@ func (p *pgExportSource) Close(ctx context.Context) error {
 	return p.tx.Rollback(ctx)
 }
 
-func (p *pgExportSource) SnapshotID() string {
-	return p.snapshotID
+func (p *pgExportSource) CDCCursor() string {
+	return p.cdcCursor
 }
 
 type mysqlExportSource struct {
-	snapshotID string
-	conn       dbconn.Conn
-	tx         *sql.Tx
+	gtid string
+	conn dbconn.Conn
+	tx   *sql.Tx
 }
 
-func (m *mysqlExportSource) SnapshotID() string {
-	return m.snapshotID
+func (m *mysqlExportSource) CDCCursor() string {
+	return m.gtid
 }
 
 func (m *mysqlExportSource) Export(

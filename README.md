@@ -85,7 +85,7 @@ flowchart LR
 without taking your PG/MySQL tables offline. It takes `--source` and `--target`
 as arguments (see `molt verify` documentation above for examples).
 
-It outputs a `snapshot_id` which can be fed to CDC programs (e.g. cdc-sink, AWS DMS)
+It outputs a `cdc_cursor` which can be fed to CDC programs (e.g. cdc-sink, AWS DMS)
 to migrate live data without taking your database offline.
 
 It currently supports the following:

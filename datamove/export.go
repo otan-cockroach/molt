@@ -14,11 +14,11 @@ import (
 )
 
 type ExportResult struct {
-	Resources  []datamovestore.Resource
-	SnapshotID string
-	StartTime  time.Time
-	EndTime    time.Time
-	NumRows    int
+	Resources []datamovestore.Resource
+	CDCCursor string
+	StartTime time.Time
+	EndTime   time.Time
+	NumRows   int
 }
 
 func Export(
@@ -32,8 +32,10 @@ func Export(
 	ret := ExportResult{
 		StartTime: time.Now(),
 	}
-	ret.SnapshotID = sqlSrc.SnapshotID()
-	logger.Debug().Str("snapshot", ret.SnapshotID).Msgf("establishing consistent snapshot")
+	ret.CDCCursor = sqlSrc.CDCCursor()
+	logger.Debug().
+		Str("cdc_cursor", ret.CDCCursor).
+		Msgf("established approriate cdc cursor location")
 
 	cancellableCtx, cancelFunc := context.WithCancel(ctx)
 	defer cancelFunc()

@@ -131,7 +131,7 @@ func Command() *cobra.Command {
 			}
 			logger.Info().
 				Int("num_tables", len(tables)).
-				Str("snapshot_id", sqlSrc.SnapshotID()).
+				Str("cdc_cursor", sqlSrc.CDCCursor()).
 				Msgf("starting data movement")
 
 			importErrCh := make(chan error)
@@ -217,7 +217,7 @@ func Command() *cobra.Command {
 								logger.Info().
 									Dur("net_duration", time.Since(tableStartTime)).
 									Dur("import_duration", importDuration).
-									Str("snapshot_id", e.SnapshotID).
+									Str("cdc_cursor", e.CDCCursor).
 									Msgf("data import on target for table complete")
 								return nil
 							}()
@@ -236,7 +236,7 @@ func Command() *cobra.Command {
 				}
 			}
 			logger.Info().
-				Str("snapshot_id", sqlSrc.SnapshotID()).
+				Str("cdc_cursor", sqlSrc.CDCCursor()).
 				Int("num_imported", numImported).
 				Msgf("data movement complete")
 			return nil
