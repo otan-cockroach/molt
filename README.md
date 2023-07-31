@@ -66,7 +66,10 @@ This makes verifier re-check rows before marking them as problematic.
 
 It currently supports the following:
 * Pulling a table, uploading CSVs to S3 and running IMPORT on Cockroach for you.
-* Pulling a table and running COPY TO directly onto the CRDB table.
+* Pulling a table, uploading CSVs to S3 and running COPY TO on Cockroach from that CSV.
+* Pulling a table and running COPY TO directly onto the CRDB table without an intermediate store.
+
+This works for both MySQL and PostgreSQL URLs.
 
 For now, schemas must be identical on both sides. 
 
@@ -80,6 +83,15 @@ go run . datamove \
   --target 'postgres://root@35.229.89.45:26257/defaultdb?sslmode=disable' \
   --table 'good_table' \
   --s3-bucket 'otan-test-bucket'
+```
+```sh
+# For gcp
+# Ensure credentials are loaded using `gcloud init`
+go run . datamove \
+  --source 'postgres://postgres@pgurl:5432/replicationload' \
+  --target 'postgres://root@35.229.89.45:26257/defaultdb?sslmode=disable' \
+  --table 'good_table' \
+  --gcp-bucket 'otan-test-bucket'
 ```
 ```sh
 # For COPY
@@ -97,6 +109,9 @@ go run . datamove \
   --table 'good_table' \
   --local-path /tmp/basic
 ```
+
+You can use `--live` if you need target data to be queriable during
+loading.
 
 ## Local Setup
 

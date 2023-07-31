@@ -215,5 +215,18 @@ func comparableType(a, b *pgtype.Type) bool {
 	if !ok {
 		return false
 	}
-	return aTyp.Equivalent(bTyp)
+	return allowableTypes(oid.Oid(a.OID), oid.Oid(b.OID)) || aTyp.Equivalent(bTyp)
+}
+
+func allowableTypes(a oid.Oid, b oid.Oid) bool {
+	if a == oid.T_timestamp && b == oid.T_timestamptz {
+		return true
+	}
+	if a == oid.T_timestamptz && b == oid.T_timestamp {
+		return true
+	}
+	if a == oid.T_varchar && b == oid.T_uuid {
+		return true
+	}
+	return false
 }

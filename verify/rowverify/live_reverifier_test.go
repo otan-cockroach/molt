@@ -202,11 +202,11 @@ func TestLiveReverifier(t *testing.T) {
 				beforeScans = append(beforeScans, ret)
 			}
 
-			lvr.testingKnobs.canScan.Store(false)
+			lvr.testingKnobs.blockScan.Store(true)
 			for i := range tc.push {
 				lvr.Push(&tc.push[i])
 			}
-			lvr.testingKnobs.canScan.Store(true)
+			lvr.testingKnobs.blockScan.Store(false)
 
 			lvr.ScanComplete()
 			lvr.WaitForDone()

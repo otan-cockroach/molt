@@ -33,7 +33,7 @@ type liveReverifier struct {
 	table        TableShard
 	testingKnobs struct {
 		beforeScan func(*retry.Retry, []tree.Datums)
-		canScan    atomic.Bool
+		blockScan  atomic.Bool
 	}
 }
 
@@ -104,7 +104,7 @@ func newLiveReverifier(
 				}
 				queue.heapPush(it)
 			case <-nextWorkCh:
-				if !r.testingKnobs.canScan.Load() {
+				if r.testingKnobs.blockScan.Load() {
 					continue
 				}
 				it := queue.heapPop()

@@ -62,6 +62,7 @@ func Command() *cobra.Command {
 				return err
 			}
 			var table dbtable.VerifiedTable
+			found := false
 			for idx, tables := range dbTables.Verified {
 				if tables[0].Name == tableName {
 					r, err := tableverify.VerifyCommonTables(ctx, conns, dbTables.Verified[idx:idx+1])
@@ -77,7 +78,11 @@ func Command() *cobra.Command {
 							Str("reason", col.Info).
 							Msgf("not migrating %s as it mismatches", col.Name)
 					}
+					found = true
 				}
+			}
+			if !found {
+				return errors.Newf("table %s not found", tableName.SafeString())
 			}
 
 			var src datamovestore.Store

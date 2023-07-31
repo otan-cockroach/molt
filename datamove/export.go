@@ -8,10 +8,8 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/datamove/datamovestore"
-	"github.com/cockroachdb/molt/datamove/dataquery"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
-	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"
 )
 
@@ -24,28 +22,20 @@ type ExportResult struct {
 
 func Export(
 	ctx context.Context,
-	baseConn dbconn.Conn,
+	conn dbconn.Conn,
 	logger zerolog.Logger,
 	datasource datamovestore.Store,
 	table dbtable.VerifiedTable,
 	flushSize int,
 ) (ExportResult, error) {
-	conn := baseConn.(*dbconn.PGConn)
 	ret := ExportResult{
 		StartTime: time.Now(),
 	}
-	tx, err := conn.BeginTx(ctx, pgx.TxOptions{
-		IsoLevel: pgx.ReadCommitted,
-	})
+	sqlSrc, err := inferSource(ctx, conn)
 	if err != nil {
 		return ret, err
 	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
-	if err := tx.QueryRow(ctx, "SELECT pg_export_snapshot()").Scan(&ret.SnapshotID); err != nil {
-		return ret, errors.Wrap(err, "failed to export snapshot")
-	}
+	ret.SnapshotID = sqlSrc.SnapshotID()
 	logger.Debug().Str("snapshot", ret.SnapshotID).Msgf("establishing consistent snapshot")
 
 	cancellableCtx, cancelFunc := context.WithCancel(ctx)
@@ -98,11 +88,7 @@ func Export(
 	go func() {
 		defer close(copyFinishCh)
 		if err := func() error {
-			if _, err := tx.Conn().PgConn().CopyTo(
-				cancellableCtx,
-				sqlWrite,
-				dataquery.NewPGCopyTo(table),
-			); err != nil {
+			if err := sqlSrc.Export(cancellableCtx, sqlWrite, table); err != nil {
 				return err
 			}
 			return sqlWrite.Close()
