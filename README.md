@@ -61,58 +61,76 @@ This makes verifier re-check rows before marking them as problematic.
 * Geospatial types cannot yet be compared.
 * We do not handle schema changes between commands well.
 
-## Data move
+## Data movement
 
-`molt datamove` is able to migrate your PG tables to CockroachDB.
+`molt datamove` is able to migrate data from your PG or MySQL tables to CockroachDB
+without taking your PG/MySQL tables offline. It takes `--source` and `--target`
+as arguments (see `molt verify` documentation above for examples).
+
+It outputs a `snapshot_id` which can be fed to CDC programs (e.g. cdc-sink, AWS DMS)
+to migrate live data without taking your database offline.
 
 It currently supports the following:
 * Pulling a table, uploading CSVs to S3 and running IMPORT on Cockroach for you.
 * Pulling a table, uploading CSVs to S3 and running COPY TO on Cockroach from that CSV.
 * Pulling a table and running COPY TO directly onto the CRDB table without an intermediate store.
 
-This works for both MySQL and PostgreSQL URLs.
+By default, data is imported using `IMPORT INTO`. You can use `--live` if you
+need target data to be queriable during loading, which uses `COPY FROM` instead.
 
-For now, schemas must be identical on both sides. 
+Data can be truncated automatically if run with `--truncate`.
 
+For now, schemas must be identical on both sides. This is verified upfront -
+tables with mismatching columns may only be partially migrated.
+
+### Example invocations.
+
+S3 usage:
 ```sh
-# For S3
+# Ensure access tokens are appropriately set in the environment.
 export AWS_REGION='us-east-1'
 export AWS_SECRET_ACCESS_KEY='key'
 export AWS_ACCESS_KEY_ID='id'
+# Ensure the S3 bucket is created and accessible from CRDB.
 molt datamove \
-  --source 'postgres://postgres@pgurl:5432/replicationload' \
-  --target 'postgres://root@35.229.89.45:26257/defaultdb?sslmode=disable' \
-  --table 'good_table' \
-  --s3-bucket 'otan-test-bucket'
-```
-```sh
-# For gcp
-# Ensure credentials are loaded using `gcloud init`
-molt datamove \
-  --source 'postgres://postgres@pgurl:5432/replicationload' \
-  --target 'postgres://root@35.229.89.45:26257/defaultdb?sslmode=disable' \
+  --source 'postgres://postgres@localhost:5432/replicationload' \
+  --target 'postgres://root@localhost:26257/defaultdb?sslmode=disable' \
   --table-filter 'good_table' \
-  --gcp-bucket 'otan-test-bucket'
+  --s3-bucket 'otan-test-bucket' \
+  --truncate \ # automatically truncate destination tables before importing 
+  --cleanup # cleans up any created s3 files
 ```
+
+GCP usage:
 ```sh
-# For COPY
-mol5 datamove \
-  --source 'postgres://postgres@pgurl:5432/replicationload' \
-  --target 'postgres://root@35.229.89.45:26257/defaultdb?sslmode=disable' \
+# Ensure credentials are loaded using `gcloud init`.
+# Ensure the GCP bucket is created and accessible from CRDB.
+molt datamove \
+  --source 'postgres://postgres@localhost:5432/replicationload' \
+  --target 'postgres://root@localhost:26257/defaultdb?sslmode=disable' \
+  --table-filter 'good_table' \
+  --gcp-bucket 'otan-test-bucket' \
+  --cleanup # cleans up any created gcp files
+```
+
+Using a direct COPY FROM without storing intermediate files:
+```sh
+molt datamove \
+  --source 'postgres://postgres@localhost:5432/replicationload' \
+  --target 'postgres://root@localhost:26257/defaultdb?sslmode=disable' \
   --table-filter 'good_table' \
   --direct-copy
 ```
-```sh
-# Look at files locally
-molt datamove \
-  --source 'postgres://postgres@pgurl:5432/replicationload' \
-  --target 'postgres://root@35.229.89.45:26257/defaultdb?sslmode=disable' \
-  --table-filter 'good_table' \
-  --local-path /tmp/basic
-```
 
-You can use `--live` if you need target data to be queriable during
-loading.
+Storing CSVs locally before running COPY TO:
+```sh
+molt datamove \
+  --source 'postgres://postgres@localhost:5432/replicationload' \
+  --target 'postgres://root@localhost:26257/defaultdb?sslmode=disable' \
+  --table-filter 'good_table' \
+  --local-path /tmp/basic \
+  --live
+```
 
 ## Local Setup
 
