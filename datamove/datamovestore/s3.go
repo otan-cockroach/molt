@@ -88,7 +88,6 @@ func (s *s3Store) CreateFromReader(
 	ctx context.Context, r io.Reader, table dbtable.VerifiedTable, iteration int,
 ) (Resource, error) {
 	key := fmt.Sprintf("%s/part_%08d.csv", table.SafeString(), iteration)
-
 	s.logger.Debug().Str("file", key).Msgf("creating new file")
 	if _, err := s3manager.NewUploader(s.session).UploadWithContext(ctx, &s3manager.UploadInput{
 		Bucket: aws.String(s.bucket),
