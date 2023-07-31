@@ -97,7 +97,9 @@ func (l LogReporter) Report(obj ReportableObject) {
 func zipPrimaryKeysForReporting(columnVals tree.Datums) []string {
 	ret := make([]string, len(columnVals))
 	for i := range columnVals {
-		ret[i] = columnVals[i].String()
+		f := tree.NewFmtCtx(tree.FmtBareStrings | tree.FmtParsableNumerics)
+		f.FormatNode(columnVals[i])
+		ret[i] = f.CloseAndGetString()
 	}
 	return ret
 }

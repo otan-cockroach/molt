@@ -29,4 +29,4 @@ varchar_test: varchar
 float_test: float4
 bigfloat_test: float
 numeric_test: decimal
-qchar: "char"[]
+qchar: varchar
