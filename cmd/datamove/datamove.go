@@ -20,14 +20,16 @@ import (
 
 func Command() *cobra.Command {
 	var (
-		s3Bucket       string
-		gcpBucket      string
-		localPath      string
-		directCRDBCopy bool
-		cleanup        bool
-		live           bool
-		flushSize      int
-		truncate       bool
+		s3Bucket                string
+		gcpBucket               string
+		localPath               string
+		localPathListenAddr     string
+		localPathCRDBAccessAddr string
+		directCRDBCopy          bool
+		cleanup                 bool
+		live                    bool
+		flushSize               int
+		truncate                bool
 	)
 	cmd := &cobra.Command{
 		Use:  "datamove",
@@ -70,7 +72,7 @@ func Command() *cobra.Command {
 				}
 				src = datamovestore.NewS3Store(logger, sess, creds, s3Bucket)
 			case localPath != "":
-				src, err = datamovestore.NewLocalStore(logger, localPath)
+				src, err = datamovestore.NewLocalStore(logger, localPath, localPathListenAddr, localPathCRDBAccessAddr)
 				if err != nil {
 					return err
 				}
@@ -282,6 +284,18 @@ func Command() *cobra.Command {
 		"local-path",
 		"",
 		"path to upload files to locally",
+	)
+	cmd.PersistentFlags().StringVar(
+		&localPathListenAddr,
+		"local-path-listen-addr",
+		"",
+		"local address to listen to for traffic",
+	)
+	cmd.PersistentFlags().StringVar(
+		&localPathCRDBAccessAddr,
+		"local-path-crdb-access-addr",
+		"",
+		"address CockroachDB can access to connect to the --local-path-listen-addr",
 	)
 	cmd.PersistentFlags().BoolVar(
 		&truncate,

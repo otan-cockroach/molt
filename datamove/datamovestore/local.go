@@ -4,8 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"path"
+	"path/filepath"
+	"strings"
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbtable"
@@ -13,17 +17,64 @@ import (
 )
 
 type localStore struct {
-	logger     zerolog.Logger
-	basePath   string
-	cleanPaths map[string]struct{}
+	logger         zerolog.Logger
+	basePath       string
+	cleanPaths     map[string]struct{}
+	crdbAccessAddr string
 }
 
-func NewLocalStore(logger zerolog.Logger, basePath string) (*localStore, error) {
+func NewLocalStore(
+	logger zerolog.Logger, basePath string, listenAddr string, crdbAccessAddr string,
+) (*localStore, error) {
+	if err := os.MkdirAll(basePath, os.ModePerm); err != nil {
+		return nil, err
+	}
+	if listenAddr != "" {
+		if crdbAccessAddr == "" {
+			ip := getLocalIP()
+			if ip == "" {
+				return nil, errors.Newf("cannot find IP")
+			}
+			splat := strings.Split(listenAddr, ":")
+			if len(splat) < 2 {
+				return nil, errors.Newf("listen addr must have port")
+			}
+			port := splat[1]
+			crdbAccessAddr = ip + ":" + port
+		}
+		go func() {
+			logger.Info().
+				Str("listen-addr", listenAddr).
+				Str("crdb-access-addr", crdbAccessAddr).
+				Msgf("starting file server")
+			if err := http.ListenAndServe(listenAddr, http.FileServer(http.Dir(basePath))); err != nil {
+				logger.Err(err).Msgf("error starting file server")
+			}
+		}()
+	}
 	return &localStore{
-		logger:     logger,
-		basePath:   basePath,
-		cleanPaths: make(map[string]struct{}),
+		logger:         logger,
+		basePath:       basePath,
+		cleanPaths:     make(map[string]struct{}),
+		crdbAccessAddr: crdbAccessAddr,
 	}, nil
+}
+
+// GetLocalIP returns the non loopback local IP of the host
+func getLocalIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+	for _, address := range addrs {
+		// check the address type and if it is not a loopback the display it
+		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String()
+			}
+		}
+	}
+	return ""
 }
 
 func (l *localStore) CreateFromReader(
@@ -49,7 +100,7 @@ func (l *localStore) CreateFromReader(
 		if err != nil {
 			if err == io.EOF {
 				logger.Debug().Msgf("wrote file")
-				return &localResource{path: fileName}, nil
+				return &localResource{path: fileName, store: l}, nil
 			}
 			return nil, err
 		}
@@ -77,7 +128,8 @@ func (l *localStore) CanBeTarget() bool {
 }
 
 type localResource struct {
-	path string
+	path  string
+	store *localStore
 }
 
 func (l *localResource) Reader(ctx context.Context) (io.ReadCloser, error) {
@@ -85,7 +137,14 @@ func (l *localResource) Reader(ctx context.Context) (io.ReadCloser, error) {
 }
 
 func (l *localResource) ImportURL() (string, error) {
-	return "", errors.AssertionFailedf("cannot IMPORT from a local path")
+	if l.store.crdbAccessAddr == "" {
+		return "", errors.AssertionFailedf("cannot IMPORT from a local path unless file server is set")
+	}
+	rel, err := filepath.Rel(l.store.basePath, l.path)
+	if err != nil {
+		return "", errors.Wrapf(err, "error finding relative path")
+	}
+	return fmt.Sprintf("http://%s/%s", l.store.crdbAccessAddr, rel), nil
 }
 
 func (l *localResource) MarkForCleanup(ctx context.Context) error {

@@ -71,8 +71,8 @@ It outputs a `snapshot_id` which can be fed to CDC programs (e.g. cdc-sink, AWS 
 to migrate live data without taking your database offline.
 
 It currently supports the following:
-* Pulling a table, uploading CSVs to S3 and running IMPORT on Cockroach for you.
-* Pulling a table, uploading CSVs to S3 and running COPY TO on Cockroach from that CSV.
+* Pulling a table, uploading CSVs to S3/GCP/local machine (`--listen-addr` must be set) and running IMPORT on Cockroach for you.
+* Pulling a table, uploading CSVs to S3/GCP/local machine and running COPY TO on Cockroach from that CSV.
 * Pulling a table and running COPY TO directly onto the CRDB table without an intermediate store.
 
 By default, data is imported using `IMPORT INTO`. You can use `--live` if you
@@ -129,6 +129,18 @@ molt datamove \
   --target 'postgres://root@localhost:26257/defaultdb?sslmode=disable' \
   --table-filter 'good_table' \
   --local-path /tmp/basic \
+  --live
+```
+
+Storing CSVs locally and running a file server:
+```sh
+# set --local-path-crdb-access-addr if the automatic IP detection is incorrect.
+molt datamove \
+  --source 'postgres://postgres@localhost:5432/replicationload' \
+  --target 'postgres://root@localhost:26257/defaultdb?sslmode=disable' \
+  --table-filter 'good_table' \
+  --local-path /tmp/basic \
+  --local-path-listen-addr '0.0.0.0:9005' \
   --live
 ```
 
