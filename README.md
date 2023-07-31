@@ -63,6 +63,24 @@ This makes verifier re-check rows before marking them as problematic.
 
 ## Data movement
 
+```mermaid
+flowchart LR
+    LegacyDB[legacy database<br/>i.e. PG, MySQL]
+    S3[(Amazon S3)]
+    GCP[(Google Cloud<br/>Bucket)]
+    Local[(Local File Server)]
+    CRDB[CockroachDB]
+
+    LegacyDB -- CSV Dump --> S3
+    LegacyDB -- CSV Dump --> GCP
+    LegacyDB -- CSV Dump --> Local
+    S3 -- IMPORT INTO<br/>or COPY FROM --> CRDB
+    GCP -- IMPORT INTO<br/>or COPY FROM --> CRDB
+    Local -- "IMPORT INTO (exposes HTTP server)"<br/>or COPY FROM --> CRDB
+
+    LegacyDB -- COPY FROM --> CRDB
+```
+
 `molt datamove` is able to migrate data from your PG or MySQL tables to CockroachDB
 without taking your PG/MySQL tables offline. It takes `--source` and `--target`
 as arguments (see `molt verify` documentation above for examples).
@@ -83,7 +101,7 @@ Data can be truncated automatically if run with `--truncate`.
 For now, schemas must be identical on both sides. This is verified upfront -
 tables with mismatching columns may only be partially migrated.
 
-### Example invocations.
+### Example invocations
 
 S3 usage:
 ```sh
