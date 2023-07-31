@@ -8,7 +8,6 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/datamove/datamovestore"
-	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/rs/zerolog"
 )
@@ -22,18 +21,14 @@ type ExportResult struct {
 
 func Export(
 	ctx context.Context,
-	conn dbconn.Conn,
 	logger zerolog.Logger,
+	sqlSrc ExportSource,
 	datasource datamovestore.Store,
 	table dbtable.VerifiedTable,
 	flushSize int,
 ) (ExportResult, error) {
 	ret := ExportResult{
 		StartTime: time.Now(),
-	}
-	sqlSrc, err := inferSource(ctx, conn)
-	if err != nil {
-		return ret, err
 	}
 	ret.SnapshotID = sqlSrc.SnapshotID()
 	logger.Debug().Str("snapshot", ret.SnapshotID).Msgf("establishing consistent snapshot")

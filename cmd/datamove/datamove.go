@@ -122,11 +122,16 @@ func Command() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			logger.Info().Msgf("establishing snapshot")
+			sqlSrc, err := datamove.InferExportSource(ctx, conns[0])
+			if err != nil {
+				return err
+			}
 			logger.Info().
 				Int("num_tables", len(tables)).
+				Str("snapshot_id", sqlSrc.SnapshotID()).
 				Msgf("starting data movement")
 			for _, table := range tables {
-				// TODO: use same snapshot.
 				for _, col := range table.MismatchingTableDefinitions {
 					logger.Warn().
 						Str("reason", col.Info).
@@ -142,7 +147,7 @@ func Command() *cobra.Command {
 					Msgf("data extraction phase starting")
 
 				startTime := time.Now()
-				e, err := datamove.Export(ctx, conns[0], logger, src, table.VerifiedTable, flushSize)
+				e, err := datamove.Export(ctx, logger, sqlSrc, src, table.VerifiedTable, flushSize)
 				if err != nil {
 					return err
 				}
@@ -182,6 +187,7 @@ func Command() *cobra.Command {
 					Msgf("data movement for table complete")
 			}
 			logger.Info().
+				Str("snapshot_id", sqlSrc.SnapshotID()).
 				Msgf("data movement completed")
 			return nil
 		},

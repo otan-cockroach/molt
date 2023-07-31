@@ -22,7 +22,7 @@ type ExportSource interface {
 	Close(ctx context.Context) error
 }
 
-func inferSource(ctx context.Context, conn dbconn.Conn) (ExportSource, error) {
+func InferExportSource(ctx context.Context, conn dbconn.Conn) (ExportSource, error) {
 	switch conn := conn.(type) {
 	case *dbconn.PGConn:
 		tx, err := conn.BeginTx(ctx, pgx.TxOptions{
