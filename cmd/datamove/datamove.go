@@ -27,6 +27,7 @@ func Command() *cobra.Command {
 		cleanup        bool
 		live           bool
 		flushSize      int
+		truncate       bool
 	)
 	cmd := &cobra.Command{
 		Use:  "datamove",
@@ -157,6 +158,16 @@ func Command() *cobra.Command {
 						return err
 					}
 
+					cleanupFunc := func() {
+						if cleanup {
+							for _, r := range e.Resources {
+								if err := r.MarkForCleanup(ctx); err != nil {
+									logger.Err(err).Msgf("error cleaning up resource")
+								}
+							}
+						}
+					}
+
 					logger.Info().
 						Str("table", table.SafeString()).
 						Int("num_rows", e.NumRows).
@@ -171,16 +182,20 @@ func Command() *cobra.Command {
 						}
 						// Start async goroutine to import in data concurrently.
 						go func() {
-							defer func() {
-								if cleanup {
-									for _, r := range e.Resources {
-										if err := r.MarkForCleanup(ctx); err != nil {
-											logger.Err(err).Msgf("error cleaning up resource")
-										}
+							// It is important that we only cleanup when the import of data is complete.
+							defer cleanupFunc()
+							importErrCh <- func() error {
+								if truncate {
+									logger.Info().
+										Str("table", table.SafeString()).
+										Dur("duration", e.EndTime.Sub(e.StartTime)).
+										Msgf("truncating table")
+									_, err := conns[1].(*dbconn.PGConn).Conn.Exec(ctx, "TRUNCATE TABLE "+table.SafeString())
+									if err != nil {
+										return err
 									}
 								}
-							}()
-							importErrCh <- func() error {
+
 								logger.Info().
 									Str("table", table.SafeString()).
 									Dur("duration", e.EndTime.Sub(e.StartTime)).
@@ -207,15 +222,7 @@ func Command() *cobra.Command {
 							}()
 						}()
 					} else {
-						defer func() {
-							if cleanup {
-								for _, r := range e.Resources {
-									if err := r.MarkForCleanup(ctx); err != nil {
-										logger.Err(err).Msgf("error cleaning up resource")
-									}
-								}
-							}
-						}()
+						cleanupFunc()
 					}
 					return nil
 				}(); err != nil {
@@ -276,6 +283,12 @@ func Command() *cobra.Command {
 		"local-path",
 		"",
 		"path to upload files to locally",
+	)
+	cmd.PersistentFlags().BoolVar(
+		&truncate,
+		"truncate",
+		false,
+		"whether to truncate the table being imported to",
 	)
 	cmdutil.RegisterDBConnFlags(cmd)
 	cmdutil.RegisterLoggerFlags(cmd)
