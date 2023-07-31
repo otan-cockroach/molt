@@ -175,7 +175,7 @@ type scanQuery struct {
 }
 
 func newPGScanQuery(table ScanTable, rowBatchSize int) scanQuery {
-	baseSelectExpr := newPGBaseSelectClause(table.Table)
+	baseSelectExpr := NewPGBaseSelectClause(table.Table)
 	baseSelectExpr.Limit = &tree.Limit{Count: tree.NewNumVal(constant.MakeUint64(uint64(rowBatchSize)), "", false)}
 	return scanQuery{
 		base:  baseSelectExpr,
@@ -183,7 +183,7 @@ func newPGScanQuery(table ScanTable, rowBatchSize int) scanQuery {
 	}
 }
 
-func newPGBaseSelectClause(table Table) *tree.Select {
+func NewPGBaseSelectClause(table Table) *tree.Select {
 	tn := tree.MakeTableNameFromPrefix(
 		tree.ObjectNamePrefix{SchemaName: table.Schema, ExplicitSchema: true},
 		table.Table,

@@ -85,7 +85,7 @@ func NewS3Store(
 }
 
 func (s *s3Store) CreateFromReader(
-	ctx context.Context, r io.Reader, table dbtable.Name, iteration int,
+	ctx context.Context, r io.Reader, table dbtable.VerifiedTable, iteration int,
 ) (Resource, error) {
 	key := fmt.Sprintf("%s/part_%08d.csv", table.SafeString(), iteration)
 

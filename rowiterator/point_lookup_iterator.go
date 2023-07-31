@@ -99,7 +99,7 @@ func (it *pointLookupIterator) HasNext(ctx context.Context) bool {
 func (it *pointLookupIterator) genQuery() (string, error) {
 	switch conn := it.conn.(type) {
 	case *dbconn.PGConn:
-		stmt := newPGBaseSelectClause(it.table)
+		stmt := NewPGBaseSelectClause(it.table)
 
 		inClause := &tree.ComparisonExpr{
 			Operator: treecmp.MakeComparisonOperator(treecmp.In),

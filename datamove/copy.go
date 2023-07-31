@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/molt/datamove/datamovestore"
+	"github.com/cockroachdb/molt/datamove/dataquery"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/rs/zerolog"
@@ -19,7 +20,7 @@ func Copy(
 	ctx context.Context,
 	baseConn dbconn.Conn,
 	logger zerolog.Logger,
-	table dbtable.Name,
+	table dbtable.VerifiedTable,
 	resources []datamovestore.Resource,
 ) (CopyResult, error) {
 	ret := CopyResult{
@@ -43,7 +44,7 @@ func Copy(
 			if _, err := conn.PgConn().CopyFrom(
 				ctx,
 				r,
-				"COPY "+table.SafeString()+" FROM STDIN CSV",
+				dataquery.CopyFrom(table),
 			); err != nil {
 				return err
 			}

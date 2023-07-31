@@ -8,6 +8,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/datamove/datamovestore"
+	"github.com/cockroachdb/molt/datamove/dataquery"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/jackc/pgx/v5"
@@ -26,7 +27,7 @@ func Export(
 	baseConn dbconn.Conn,
 	logger zerolog.Logger,
 	datasource datamovestore.Store,
-	table dbtable.Name,
+	table dbtable.VerifiedTable,
 	flushSize int,
 ) (ExportResult, error) {
 	conn := baseConn.(*dbconn.PGConn)
@@ -97,7 +98,11 @@ func Export(
 	go func() {
 		defer close(copyFinishCh)
 		if err := func() error {
-			if _, err := tx.Conn().PgConn().CopyTo(cancellableCtx, sqlWrite, "COPY "+table.SafeString()+" TO STDOUT CSV"); err != nil {
+			if _, err := tx.Conn().PgConn().CopyTo(
+				cancellableCtx,
+				sqlWrite,
+				dataquery.NewPGCopyTo(table),
+			); err != nil {
 				return err
 			}
 			return sqlWrite.Close()
@@ -122,8 +127,5 @@ func Export(
 	}
 	ret.EndTime = time.Now()
 	runWG.Wait()
-	logger.Info().
-		Dur("duration", ret.EndTime.Sub(ret.StartTime)).
-		Msgf("import phase complete")
 	return ret, nil
 }

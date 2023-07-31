@@ -2,11 +2,11 @@ package datamove
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/datamove/datamovestore"
+	"github.com/cockroachdb/molt/datamove/dataquery"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/rs/zerolog"
@@ -21,7 +21,7 @@ func Import(
 	ctx context.Context,
 	baseConn dbconn.Conn,
 	logger zerolog.Logger,
-	table dbtable.Name,
+	table dbtable.VerifiedTable,
 	resources []datamovestore.Resource,
 ) (ImportResult, error) {
 	ret := ImportResult{
@@ -34,17 +34,14 @@ func Import(
 		if err != nil {
 			return ImportResult{}, err
 		}
-		locs = append(
-			locs,
-			fmt.Sprintf("'%s'", u),
-		)
+		locs = append(locs, u)
 	}
 	conn := baseConn.(*dbconn.PGConn)
 	if _, err := conn.Exec(
 		ctx,
-		"IMPORT INTO "+table.SafeString()+" CSV DATA ("+strings.Join(locs, ",")+")",
+		dataquery.ImportInto(table, locs),
 	); err != nil {
-		return ret, err
+		return ret, errors.Wrap(err, "error importing data")
 	}
 	ret.EndTime = time.Now()
 	logger.Info().

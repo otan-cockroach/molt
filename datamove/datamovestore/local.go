@@ -27,7 +27,7 @@ func NewLocalStore(logger zerolog.Logger, basePath string) (*localStore, error) 
 }
 
 func (l *localStore) CreateFromReader(
-	ctx context.Context, r io.Reader, table dbtable.Name, iteration int,
+	ctx context.Context, r io.Reader, table dbtable.VerifiedTable, iteration int,
 ) (Resource, error) {
 	baseDir := path.Join(l.basePath, table.SafeString())
 	if iteration == 1 {

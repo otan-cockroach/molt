@@ -13,6 +13,8 @@ import (
 	"github.com/cockroachdb/molt/datamove/datamovestore"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
+	"github.com/cockroachdb/molt/verify/dbverify"
+	"github.com/cockroachdb/molt/verify/tableverify"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"golang.org/x/oauth2/google"
@@ -49,7 +51,34 @@ func Command() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			table := dbtable.Name{Schema: "public", Table: tree.Name(tableName)}
+			tableName := dbtable.Name{Schema: "public", Table: tree.Name(tableName)}
+
+			conns := dbconn.OrderedConns{source, target}
+
+			// TODO: optimise for single table
+			logger.Info().Msgf("verifying database details")
+			dbTables, err := dbverify.Verify(ctx, conns)
+			if err != nil {
+				return err
+			}
+			var table dbtable.VerifiedTable
+			for idx, tables := range dbTables.Verified {
+				if tables[0].Name == tableName {
+					r, err := tableverify.VerifyCommonTables(ctx, conns, dbTables.Verified[idx:idx+1])
+					if err != nil {
+						return err
+					}
+					if len(r[0].VerifiedTable.PrimaryKeyColumns) == 0 {
+						return errors.AssertionFailedf("cannot move table as primary key do not match")
+					}
+					table = r[0].VerifiedTable
+					for _, col := range r[0].MismatchingTableDefinitions {
+						logger.Warn().
+							Str("reason", col.Info).
+							Msgf("not migrating %s as it mismatches", col.Name)
+					}
+				}
+			}
 
 			var src datamovestore.Store
 			switch {
@@ -95,9 +124,12 @@ func Command() *cobra.Command {
 			}()
 			logger.Debug().
 				Int("flush_size", flushSize).
-				Str("table", table.SafeString()).
+				Str("table", tableName.SafeString()).
 				Str("store", fmt.Sprintf("%T", src)).
 				Msg("initial config")
+
+			logger.Info().
+				Msgf("data extraction phase starting")
 
 			startTime := time.Now()
 			e, err := datamove.Export(ctx, source, logger, src, table, flushSize)
@@ -113,6 +145,11 @@ func Command() *cobra.Command {
 					}
 				}
 			}()
+
+			logger.Info().
+				Dur("duration", e.EndTime.Sub(e.StartTime)).
+				Msgf("data extraction phase complete")
+
 			if src.CanBeTarget() {
 				if !live {
 					_, err := datamove.Import(ctx, target, logger, table, e.Resources)

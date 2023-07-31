@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/cockroachdb/molt/datamove/dataquery"
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"
@@ -18,10 +19,10 @@ type copyCRDBDirect struct {
 }
 
 func (c *copyCRDBDirect) CreateFromReader(
-	ctx context.Context, r io.Reader, table dbtable.Name, iteration int,
+	ctx context.Context, r io.Reader, table dbtable.VerifiedTable, iteration int,
 ) (Resource, error) {
 	c.logger.Debug().Int("batch", iteration).Msgf("csv batch starting")
-	if _, err := c.target.PgConn().CopyFrom(ctx, r, "COPY "+table.SafeString()+" FROM STDIN CSV"); err != nil {
+	if _, err := c.target.PgConn().CopyFrom(ctx, r, dataquery.CopyFrom(table)); err != nil {
 		return nil, err
 	}
 	c.logger.Debug().Int("batch", iteration).Msgf("csv batch complete")

@@ -5,31 +5,12 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
-	"github.com/cockroachdb/cockroachdb-parser/pkg/util/duration"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/json"
-	"github.com/cockroachdb/cockroachdb-parser/pkg/util/timeutil/pgdate"
 	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/molt/parsectx"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
 )
-
-type parseTimeContext struct{}
-
-var _ tree.ParseTimeContext = (*parseTimeContext)(nil)
-
-func (p parseTimeContext) GetRelativeParseTime() time.Time {
-	return time.Now().UTC()
-}
-
-func (p parseTimeContext) GetIntervalStyle() duration.IntervalStyle {
-	return duration.IntervalStyle_POSTGRES
-}
-
-func (p parseTimeContext) GetDateStyle() pgdate.DateStyle {
-	return pgdate.DefaultDateStyle()
-}
-
-var timeCtx = &parseTimeContext{}
 
 func ConvertRowValue(typMap *pgtype.Map, val []byte, typOID oid.Oid) (tree.Datum, error) {
 	if val == nil {
@@ -53,14 +34,14 @@ func ConvertRowValue(typMap *pgtype.Map, val []byte, typOID oid.Oid) (tree.Datum
 		if strings.HasPrefix(v, "0000-") {
 			return tree.DNull, nil
 		}
-		ret, _, err := tree.ParseDTimestamp(timeCtx, v, time.Microsecond)
+		ret, _, err := tree.ParseDTimestamp(parsectx.ParseContext, v, time.Microsecond)
 		return ret, err
 	case pgtype.TimestamptzOID:
 		v := string(val)
-		ret, _, err := tree.ParseDTimestampTZ(timeCtx, v, time.Microsecond)
+		ret, _, err := tree.ParseDTimestampTZ(parsectx.ParseContext, v, time.Microsecond)
 		return ret, err
 	case pgtype.DateOID:
-		ret, _, err := tree.ParseDDate(timeCtx, string(val))
+		ret, _, err := tree.ParseDDate(parsectx.ParseContext, string(val))
 		return ret, err
 	case pgtype.ByteaOID:
 		return tree.NewDBytes(tree.DBytes(val)), nil

@@ -7,33 +7,15 @@ import (
 	"github.com/cockroachdb/apd/v3"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
-	"github.com/cockroachdb/cockroachdb-parser/pkg/util/duration"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/json"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/timeofday"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/timeutil/pgdate"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/util/uuid"
 	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/molt/parsectx"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
 )
-
-type parseTimeContext struct{}
-
-var _ tree.ParseTimeContext = (*parseTimeContext)(nil)
-
-func (p parseTimeContext) GetRelativeParseTime() time.Time {
-	return time.Now().UTC()
-}
-
-func (p parseTimeContext) GetIntervalStyle() duration.IntervalStyle {
-	return duration.IntervalStyle_POSTGRES
-}
-
-func (p parseTimeContext) GetDateStyle() pgdate.DateStyle {
-	return pgdate.DefaultDateStyle()
-}
-
-var timeCtx = &parseTimeContext{}
 
 func ConvertRowValue(typMap *pgtype.Map, val any, typOID oid.Oid) (tree.Datum, error) {
 	if val == nil {
@@ -107,7 +89,7 @@ func ConvertRowValue(typMap *pgtype.Map, val any, typOID oid.Oid) (tree.Datum, e
 	case pgtype.ByteaOID:
 		return tree.NewDBytes(tree.DBytes(val.([]byte))), nil
 	case oid.T_timetz: // does not exist in pgtype.
-		d, _, err := tree.ParseDTimeTZ(timeCtx, val.(string), time.Microsecond)
+		d, _, err := tree.ParseDTimeTZ(parsectx.ParseContext, val.(string), time.Microsecond)
 		return d, err
 	case pgtype.NumericOID:
 		return convertNumeric(val.(pgtype.Numeric))
