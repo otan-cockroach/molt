@@ -137,8 +137,10 @@ func Command() *cobra.Command {
 			for idx, table := range tables {
 				// Stick in a defer so defers close ASAP.
 				if err := func() error {
+					tableStartTime := time.Now()
 					table := table
 					logger := logger.With().Str("table", table.SafeString()).Logger()
+
 					for _, col := range table.MismatchingTableDefinitions {
 						logger.Warn().
 							Str("reason", col.Info).
@@ -152,7 +154,6 @@ func Command() *cobra.Command {
 					logger.Info().
 						Msgf("data extraction phase starting")
 
-					startTime := time.Now()
 					e, err := datamove.Export(ctx, logger, sqlSrc, src, table.VerifiedTable, flushSize)
 					if err != nil {
 						return err
@@ -170,7 +171,7 @@ func Command() *cobra.Command {
 
 					logger.Info().
 						Int("num_rows", e.NumRows).
-						Dur("duration", e.EndTime.Sub(e.StartTime)).
+						Dur("export_duration", e.EndTime.Sub(e.StartTime)).
 						Msgf("data extraction from source complete")
 
 					if src.CanBeTarget() {
@@ -186,7 +187,6 @@ func Command() *cobra.Command {
 							importErrCh <- func() error {
 								if truncate {
 									logger.Info().
-										Dur("duration", e.EndTime.Sub(e.StartTime)).
 										Msgf("truncating table")
 									_, err := conns[1].(*dbconn.PGConn).Conn.Exec(ctx, "TRUNCATE TABLE "+table.SafeString())
 									if err != nil {
@@ -195,23 +195,26 @@ func Command() *cobra.Command {
 								}
 
 								logger.Info().
-									Dur("duration", e.EndTime.Sub(e.StartTime)).
 									Msgf("starting data import on target")
 
+								var importDuration time.Duration
 								if !live {
-									_, err := datamove.Import(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
+									r, err := datamove.Import(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
 									if err != nil {
 										return err
 									}
+									importDuration = r.EndTime.Sub(r.StartTime)
 								} else {
-									_, err := datamove.Copy(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
+									r, err := datamove.Copy(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
 									if err != nil {
 										return err
 									}
+									importDuration = r.EndTime.Sub(r.StartTime)
 								}
 								numImported++
 								logger.Info().
-									Dur("duration", time.Since(startTime)).
+									Dur("net_duration", time.Since(tableStartTime)).
+									Dur("import_duration", importDuration).
 									Str("snapshot_id", e.SnapshotID).
 									Msgf("data import on target for table complete")
 								return nil

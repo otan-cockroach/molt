@@ -60,8 +60,5 @@ func Import(
 		return ret, err
 	}
 	ret.EndTime = time.Now()
-	logger.Info().
-		Dur("duration", ret.EndTime.Sub(ret.StartTime)).
-		Msgf("table imported")
 	return ret, nil
 }
