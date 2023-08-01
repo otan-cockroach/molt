@@ -50,7 +50,11 @@ func Connect(ctx context.Context, preferredID ID, connStr string) (Conn, error) 
 		if err != nil {
 			return nil, errors.Wrapf(err, "error connecting to %s", connStr)
 		}
-		return NewPGConn(id, conn), nil
+		var version string
+		if err := conn.QueryRow(ctx, "SELECT version()").Scan(&version); err != nil {
+			return nil, err
+		}
+		return NewPGConn(id, conn, version), nil
 	case strings.Contains(before[0], "mysql"):
 		return ConnectMySQL(ctx, id, before[len(before)-1])
 	}
@@ -74,13 +78,17 @@ func TestOnlyCleanDatabase(ctx context.Context, id ID, url string, dbName string
 		if _, err := c.Exec(ctx, "CREATE DATABASE "+lexbase.EscapeSQLIdent(dbName)); err != nil {
 			return nil, err
 		}
+		var version string
+		if err := c.QueryRow(ctx, "SELECT version()").Scan(&version); err != nil {
+			return nil, err
+		}
 		cfgCopy := c.Config().Copy()
 		cfgCopy.Database = dbName
 		pgConn, err := pgx.ConnectConfig(ctx, cfgCopy)
 		if err != nil {
 			return nil, err
 		}
-		return NewPGConn(c.id, pgConn), nil
+		return NewPGConn(c.id, pgConn, version), nil
 	case *MySQLConn:
 		if _, err := c.ExecContext(ctx, "DROP DATABASE IF EXISTS "+dbName); err != nil {
 			return nil, err

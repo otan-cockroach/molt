@@ -42,6 +42,9 @@ func Command() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if pgx, ok := conns[1].(*dbconn.PGConn); !ok || !pgx.IsCockroach() {
+				return errors.AssertionFailedf("target must be cockroach")
+			}
 			logger, err := cmdutil.Logger()
 			if err != nil {
 				return err
