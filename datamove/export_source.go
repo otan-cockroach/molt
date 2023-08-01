@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
@@ -25,6 +26,12 @@ type ExportSource interface {
 func InferExportSource(ctx context.Context, conn dbconn.Conn) (ExportSource, error) {
 	switch conn := conn.(type) {
 	case *dbconn.PGConn:
+		if conn.IsCockroach() {
+			return &crdbExportSource{
+				conn: conn,
+				aost: time.Now().UTC().Truncate(time.Second),
+			}, nil
+		}
 		var cdcCursor string
 		if err := conn.QueryRow(ctx, "SELECT pg_current_wal_insert_lsn()").Scan(&cdcCursor); err != nil {
 			return nil, errors.Wrap(err, "failed to export wal LSN")
@@ -119,24 +126,61 @@ func (m *mysqlExportSource) CDCCursor() string {
 func (m *mysqlExportSource) Export(
 	ctx context.Context, writer io.Writer, table dbtable.VerifiedTable,
 ) error {
+	return scanWithRowIterator(ctx, m.conn, writer, rowiterator.ScanTable{
+		Table: rowiterator.Table{
+			Name:              table.Name,
+			ColumnNames:       table.Columns,
+			ColumnOIDs:        table.ColumnOIDs[0],
+			PrimaryKeyColumns: table.PrimaryKeyColumns,
+		},
+	})
+}
+
+func (m *mysqlExportSource) Close(ctx context.Context) error {
+	return m.tx.Rollback()
+}
+
+type crdbExportSource struct {
+	aost time.Time
+	conn dbconn.Conn
+}
+
+func (c *crdbExportSource) CDCCursor() string {
+	return c.aost.Format(time.RFC3339Nano)
+}
+
+func (c *crdbExportSource) Export(
+	ctx context.Context, writer io.Writer, table dbtable.VerifiedTable,
+) error {
+	return scanWithRowIterator(ctx, c.conn, writer, rowiterator.ScanTable{
+		Table: rowiterator.Table{
+			Name:              table.Name,
+			ColumnNames:       table.Columns,
+			ColumnOIDs:        table.ColumnOIDs[0],
+			PrimaryKeyColumns: table.PrimaryKeyColumns,
+		},
+		AOST: &c.aost,
+	})
+}
+
+func (c *crdbExportSource) Close(ctx context.Context) error {
+	return nil
+}
+
+func scanWithRowIterator(
+	ctx context.Context, c dbconn.Conn, writer io.Writer, table rowiterator.ScanTable,
+) error {
 	cw := csv.NewWriter(writer)
 	it, err := rowiterator.NewScanIterator(
 		ctx,
-		m.conn,
-		rowiterator.ScanTable{
-			Table: rowiterator.Table{
-				Name:              table.Name,
-				ColumnNames:       table.Columns,
-				ColumnOIDs:        table.ColumnOIDs[0],
-				PrimaryKeyColumns: table.PrimaryKeyColumns,
-			},
-		},
+		c,
+		table,
 		100_000,
 	)
 	if err != nil {
 		return err
 	}
-	strings := make([]string, 0, len(table.Columns))
+	strings := make([]string, 0, len(table.ColumnNames))
 	for it.HasNext(ctx) {
 		strings = strings[:0]
 		datums := it.Next(ctx)
@@ -154,8 +198,4 @@ func (m *mysqlExportSource) Export(
 	}
 	cw.Flush()
 	return nil
-}
-
-func (m *mysqlExportSource) Close(ctx context.Context) error {
-	return m.tx.Rollback()
 }

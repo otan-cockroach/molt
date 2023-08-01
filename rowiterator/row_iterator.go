@@ -3,6 +3,7 @@ package rowiterator
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/molt/dbconn"
@@ -31,6 +32,7 @@ type Table struct {
 
 type ScanTable struct {
 	Table
+	AOST        *time.Time
 	StartPKVals []tree.Datum
 	EndPKVals   []tree.Datum
 }

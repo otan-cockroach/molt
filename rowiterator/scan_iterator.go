@@ -4,6 +4,7 @@ import (
 	"context"
 	"go/constant"
 	"strings"
+	"time"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree/treecmp"
@@ -177,6 +178,13 @@ type scanQuery struct {
 func newPGScanQuery(table ScanTable, rowBatchSize int) scanQuery {
 	baseSelectExpr := NewPGBaseSelectClause(table.Table)
 	baseSelectExpr.Limit = &tree.Limit{Count: tree.NewNumVal(constant.MakeUint64(uint64(rowBatchSize)), "", false)}
+	if table.AOST != nil {
+		var err error
+		baseSelectExpr.Select.(*tree.SelectClause).From.AsOf.Expr, err = tree.MakeDTimestamp(*table.AOST, time.Microsecond)
+		if err != nil {
+			panic(err)
+		}
+	}
 	return scanQuery{
 		base:  baseSelectExpr,
 		table: table,
