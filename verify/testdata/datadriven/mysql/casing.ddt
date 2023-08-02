@@ -1,9 +1,9 @@
-exec source_of_truth
+exec source
 CREATE TABLE `Tbl` (`Id` INT PRIMARY KEY, t TEXT, xxx text)
 ----
 [mysql] 0 rows affected
 
-exec non_source_of_truth
+exec target
 CREATE TABLE tbl (id int primary key, t text, "xXx" text)
 ----
 [crdb] CREATE TABLE

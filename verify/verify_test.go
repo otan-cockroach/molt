@@ -69,9 +69,9 @@ func testDataDriven(t *testing.T, path string, connArgs []connArg) {
 			var connIdxs []int
 			for _, arg := range d.CmdArgs {
 				switch arg.Key {
-				case "source_of_truth":
+				case "source":
 					connIdxs = append(connIdxs, 0)
-				case "non_source_of_truth":
+				case "target":
 					connIdxs = append(connIdxs, 1)
 				case "all":
 					for connIdx := range conns {

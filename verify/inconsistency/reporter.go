@@ -64,9 +64,8 @@ func (l LogReporter) Report(obj ReportableObject) {
 		falseValues := zerolog.Dict()
 		truthVals := zerolog.Dict()
 		for i, col := range obj.MismatchingColumns {
-			// TODO: differentiate nulls
-			truthVals = truthVals.Str(string(col), obj.TruthVals[i].String())
-			falseValues = falseValues.Str(string(col), obj.TargetVals[i].String())
+			truthVals = truthVals.Str(string(col), reportableVal(obj.TruthVals[i]))
+			falseValues = falseValues.Str(string(col), reportableVal(obj.TargetVals[i]))
 		}
 		l.Warn().
 			Str("table_schema", string(obj.Schema)).
@@ -94,12 +93,16 @@ func (l LogReporter) Report(obj ReportableObject) {
 	}
 }
 
+func reportableVal(d tree.Datum) string {
+	f := tree.NewFmtCtx(tree.FmtBareStrings | tree.FmtParsableNumerics)
+	f.FormatNode(d)
+	return f.CloseAndGetString()
+}
+
 func zipPrimaryKeysForReporting(columnVals tree.Datums) []string {
 	ret := make([]string, len(columnVals))
 	for i := range columnVals {
-		f := tree.NewFmtCtx(tree.FmtBareStrings | tree.FmtParsableNumerics)
-		f.FormatNode(columnVals[i])
-		ret[i] = f.CloseAndGetString()
+		ret[i] = reportableVal(columnVals[i])
 	}
 	return ret
 }

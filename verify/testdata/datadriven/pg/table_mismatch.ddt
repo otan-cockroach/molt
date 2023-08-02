@@ -1,11 +1,11 @@
 # No PRIMARY KEY.
 
-exec source_of_truth
+exec source
 CREATE TABLE t (id INT4 NOT NULL)
 ----
 [pg] CREATE TABLE
 
-exec non_source_of_truth
+exec target
 CREATE TABLE t (id INT4 PRIMARY KEY)
 ----
 [crdb] CREATE TABLE
@@ -22,7 +22,7 @@ DROP TABLE t
 
 # Table mismatches on multiple axis.
 
-exec source_of_truth
+exec source
 CREATE TABLE t (
     id INT8 PRIMARY KEY,
     t TEXT NULL,
@@ -35,7 +35,7 @@ CREATE TABLE different_pk_type (
 ----
 [pg] CREATE TABLE
 
-exec non_source_of_truth
+exec target
 CREATE TABLE t (
     id INT8 NOT NULL,
     mismatching_pk INT8 PRIMARY KEY,

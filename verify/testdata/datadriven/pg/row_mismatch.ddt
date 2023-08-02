@@ -74,7 +74,7 @@ CREATE TABLE common_table (
 [pg] CREATE TABLE
 [crdb] CREATE TABLE
 
-exec source_of_truth
+exec source
 INSERT INTO common_table VALUES
     (100, 'same value'),
     (125, 'i am missing'),
@@ -85,7 +85,7 @@ INSERT INTO common_table VALUES
 ----
 [pg] INSERT 0 6
 
-exec non_source_of_truth
+exec target
 INSERT INTO common_table VALUES
     (50, 'extraneous row'),
     (100, 'same value'),
@@ -108,7 +108,7 @@ verify
 {"level":"info","message":"finished row verification on public.common_table (shard 1/1): truth rows seen: 6, success: 3, missing: 2, mismatch: 1, extraneous: 2, live_retry: 0"}
 
 # Verify with extraneous rows on source of truth.
-exec source_of_truth
+exec source
 INSERT INTO common_table VALUES
      (400, 'same value')
 ----
@@ -132,7 +132,7 @@ DROP TABLE common_table
 [crdb] DROP TABLE
 
 # Test two tables, but mismatching columns.
-exec source_of_truth
+exec source
 CREATE TABLE table_misaligned_columns (
     id INT8 PRIMARY KEY,
     a INT8,
@@ -144,7 +144,7 @@ INSERT INTO table_misaligned_columns VALUES
 ----
 [pg] INSERT 0 2
 
-exec non_source_of_truth
+exec target
 CREATE TABLE table_misaligned_columns (
     id INT8 PRIMARY KEY,
     a INT8,
@@ -171,7 +171,7 @@ DROP TABLE table_misaligned_columns
 [crdb] DROP TABLE
 
 # Test two tables with comparable types that are not the same.
-exec source_of_truth
+exec source
 CREATE TABLE comparable_type (
     id INT4 PRIMARY KEY,
     f FLOAT4,
@@ -183,7 +183,7 @@ INSERT INTO comparable_type VALUES
 ----
 [pg] INSERT 0 2
 
-exec non_source_of_truth
+exec target
 CREATE TABLE comparable_type (
     id INT8 PRIMARY KEY,
     f FLOAT8,
@@ -198,5 +198,5 @@ INSERT INTO comparable_type VALUES
 verify
 ----
 {"level":"info","message":"starting verify on public.comparable_type, shard 1/1"}
-{"level":"warn","table_schema":"public","table_name":"comparable_type","truth_values":{"j":"'[\"mismatch\"]'"},"compare_values":{"j":"'[\"big mismatch\"]'"},"primary_key":["3"],"message":"mismatching row value"}
+{"level":"warn","table_schema":"public","table_name":"comparable_type","truth_values":{"j":"[\"mismatch\"]"},"compare_values":{"j":"'[\"big mismatch\"]'"},"primary_key":["3"],"message":"mismatching row value"}
 {"level":"info","message":"finished row verification on public.comparable_type (shard 1/1): truth rows seen: 2, success: 1, missing: 0, mismatch: 1, extraneous: 0, live_retry: 0"}
