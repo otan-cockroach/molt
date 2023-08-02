@@ -61,17 +61,17 @@ func (l LogReporter) Report(obj ReportableObject) {
 	case StatusReport:
 		l.Info().Msg(obj.Info)
 	case MismatchingRow:
-		falseValues := zerolog.Dict()
-		truthVals := zerolog.Dict()
+		sourceValues := zerolog.Dict()
+		targetVals := zerolog.Dict()
 		for i, col := range obj.MismatchingColumns {
-			truthVals = truthVals.Str(string(col), reportableVal(obj.TruthVals[i]))
-			falseValues = falseValues.Str(string(col), reportableVal(obj.TargetVals[i]))
+			targetVals = targetVals.Str(string(col), reportableVal(obj.TruthVals[i]))
+			sourceValues = sourceValues.Str(string(col), reportableVal(obj.TargetVals[i]))
 		}
 		l.Warn().
 			Str("table_schema", string(obj.Schema)).
 			Str("table_name", string(obj.Table)).
-			Dict("truth_values", truthVals).
-			Dict("compare_values", falseValues).
+			Dict("source_values", targetVals).
+			Dict("target_values", sourceValues).
 			Strs("primary_key", zipPrimaryKeysForReporting(obj.PrimaryKeyValues)).
 			Msgf("mismatching row value")
 	case MissingRow:
