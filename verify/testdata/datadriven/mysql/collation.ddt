@@ -1,0 +1,37 @@
+exec source
+CREATE TABLE tbl (
+    id VARCHAR(30) COLLATE "latin1_swedish_ci",
+    PRIMARY KEY(id)
+)
+----
+[mysql] 0 rows affected
+
+exec target
+CREATE TABLE tbl (
+    id TEXT COLLATE "en_US",
+    PRIMARY KEY(id)
+)
+----
+[crdb] CREATE TABLE
+
+verify
+----
+{"level":"warn","table_schema":"public","table_name":"tbl","mismatch_info":"PRIMARY KEY has a string field id has a different collation (mysql=latin1_swedish_ci, crdb=en_US.utf8) preventing verification","message":"mismatching table definition"}
+
+exec source
+DROP TABLE tbl;
+----
+[mysql] 0 rows affected
+
+exec source
+CREATE TABLE tbl (
+    id VARCHAR(30) COLLATE "utf8mb4_unicode_ci",
+    PRIMARY KEY(id)
+)
+----
+[mysql] 0 rows affected
+
+verify
+----
+{"level":"info","message":"starting verify on public.tbl, shard 1/1"}
+{"level":"info","message":"finished row verification on public.tbl (shard 1/1): truth rows seen: 0, success: 0, missing: 0, mismatch: 0, extraneous: 0, live_retry: 0"}

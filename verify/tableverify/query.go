@@ -2,6 +2,7 @@ package tableverify
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
@@ -13,9 +14,10 @@ import (
 )
 
 type Column struct {
-	Name    tree.Name
-	OID     oid.Oid
-	NotNull bool
+	Name      tree.Name
+	OID       oid.Oid
+	NotNull   bool
+	Collation sql.NullString
 }
 
 func GetColumns(ctx context.Context, conn dbconn.Conn, table dbtable.DBTable) ([]Column, error) {
@@ -23,9 +25,23 @@ func GetColumns(ctx context.Context, conn dbconn.Conn, table dbtable.DBTable) ([
 
 	switch conn := conn.(type) {
 	case *dbconn.PGConn:
+		var defaultCollation string
+		if err := conn.QueryRow(
+			ctx,
+			`SELECT pg_database.datcollate AS current_collation
+FROM pg_catalog.pg_database
+WHERE pg_database.datname = pg_catalog.current_database()`,
+		).Scan(&defaultCollation); err != nil {
+			return ret, nil
+		}
 		rows, err := conn.Query(
 			ctx,
-			`SELECT attname, atttypid, attnotnull FROM pg_attribute WHERE attrelid = $1 AND attnum > 0`,
+			`SELECT
+attname, atttypid, attnotnull, collname
+FROM pg_attribute
+LEFT OUTER JOIN pg_collation ON (pg_collation.oid = pg_attribute.attcollation)
+WHERE attrelid = $1 AND attnum > 0
+ORDER BY attnum`,
 			table.OID,
 		)
 		if err != nil {
@@ -34,8 +50,12 @@ func GetColumns(ctx context.Context, conn dbconn.Conn, table dbtable.DBTable) ([
 
 		for rows.Next() {
 			var cm Column
-			if err := rows.Scan(&cm.Name, &cm.OID, &cm.NotNull); err != nil {
+			if err := rows.Scan(&cm.Name, &cm.OID, &cm.NotNull, &cm.Collation); err != nil {
 				return ret, errors.Wrap(err, "error decoding column metadata")
+			}
+			if !cm.Collation.Valid || cm.Collation.String == "default" {
+				cm.Collation.String = defaultCollation
+				cm.Collation.Valid = true
 			}
 			ret = append(ret, cm)
 		}
@@ -46,7 +66,7 @@ func GetColumns(ctx context.Context, conn dbconn.Conn, table dbtable.DBTable) ([
 		rows, err := conn.QueryContext(
 			ctx,
 			`SELECT
-column_name, data_type, column_type, is_nullable
+column_name, data_type, column_type, is_nullable, collation_name
 FROM information_schema.columns
 WHERE table_schema = database() AND table_name = ?
 ORDER BY ordinal_position`,
@@ -61,13 +81,15 @@ ORDER BY ordinal_position`,
 			var ct string
 			var dt string
 			var isNullable string
-			if err := rows.Scan(&cn, &dt, &ct, &isNullable); err != nil {
+			var collation sql.NullString
+			if err := rows.Scan(&cn, &dt, &ct, &isNullable, &collation); err != nil {
 				return ret, errors.Wrap(err, "error decoding column metadata")
 			}
 			var cm Column
 			cm.Name = tree.Name(strings.ToLower(cn))
 			cm.OID = mysqlconv.DataTypeToOID(dt, ct)
 			cm.NotNull = isNullable == "NO"
+			cm.Collation = collation
 			ret = append(ret, cm)
 		}
 		if rows.Err() != nil {

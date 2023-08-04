@@ -2,7 +2,9 @@ package tableverify
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
@@ -50,9 +52,9 @@ func verifyTable(
 	columns [2][]Column,
 ) (Result, error) {
 	truthTbl := cmpTables[0]
-	var columnOIDMap [2]map[tree.Name]oid.Oid
-	for i := range columnOIDMap {
-		columnOIDMap[i] = make(map[tree.Name]oid.Oid)
+	var columnMap [2]map[tree.Name]Column
+	for i := range columnMap {
+		columnMap[i] = make(map[tree.Name]Column)
 	}
 	res := Result{
 		VerifiedTable: dbtable.VerifiedTable{
@@ -63,9 +65,8 @@ func verifyTable(
 		},
 	}
 	truthCols := columns[0]
-	columnOIDMap[0] = make(map[tree.Name]oid.Oid)
 	for _, truthCol := range truthCols {
-		columnOIDMap[0][truthCol.Name] = truthCol.OID
+		columnMap[0][truthCol.Name] = truthCol
 	}
 
 	pkSame := true
@@ -84,9 +85,8 @@ func verifyTable(
 	truthMappedCols := mapColumns(truthCols)
 	targetTbl := cmpTables[1]
 	compareColumns := columns[1]
-	columnOIDMap[1] = make(map[tree.Name]oid.Oid)
 	for _, targetCol := range compareColumns {
-		columnOIDMap[1][targetCol.Name] = targetCol.OID
+		columnMap[1][targetCol.Name] = targetCol
 		sourceCol, ok := truthMappedCols[targetCol.Name]
 		if !ok {
 			res.MismatchingTableDefinitions = append(
@@ -156,8 +156,9 @@ func verifyTable(
 	targetPKCols := pkCols[1]
 
 	currPKSame := len(targetPKCols) == len(truthPKCols)
+	var collationMismatch bool
 	if currPKSame {
-		for i := range targetPKCols {
+		for i, col := range targetPKCols {
 			if targetPKCols[i] != truthPKCols[i] {
 				currPKSame = false
 				break
@@ -165,6 +166,31 @@ func verifyTable(
 			if _, ok := comparableColumns[targetPKCols[i]]; !ok {
 				currPKSame = false
 				break
+			}
+			compareCollation := true
+			for i := 0; i < 2; i++ {
+				if typ, ok := types.OidToType[columnMap[i][col].OID]; !ok || typ.Family() != types.StringFamily {
+					compareCollation = false
+				}
+			}
+			if compareCollation {
+				if !comparableCollation(columnMap[0][col].Collation, columnMap[1][col].Collation) {
+					collationMismatch = true
+					res.MismatchingTableDefinitions = append(
+						res.MismatchingTableDefinitions,
+						inconsistency.MismatchingTableDefinition{
+							DBTable: targetTbl,
+							Info: fmt.Sprintf(
+								"PRIMARY KEY has a string field %s has a different collation (%s=%s, %s=%s) preventing verification",
+								col,
+								conns[0].ID(),
+								columnMap[0][col].Collation.String,
+								conns[1].ID(),
+								columnMap[1][col].Collation.String,
+							),
+						},
+					)
+				}
 			}
 		}
 	}
@@ -185,22 +211,52 @@ func verifyTable(
 		if _, ok := comparableColumns[col]; ok {
 			res.Columns = append(res.Columns, col)
 			for i := 0; i < 2; i++ {
-				res.ColumnOIDs[i] = append(res.ColumnOIDs[i], columnOIDMap[i][col])
+				res.ColumnOIDs[i] = append(res.ColumnOIDs[i], columnMap[i][col].OID)
 			}
 			delete(comparableColumns, col)
 		}
 	}
+
 	// Then every other column.
 	for _, col := range truthCols {
 		if _, ok := comparableColumns[col.Name]; ok {
 			res.Columns = append(res.Columns, col.Name)
 			for i := 0; i < 2; i++ {
-				res.ColumnOIDs[i] = append(res.ColumnOIDs[i], columnOIDMap[i][col.Name])
+				res.ColumnOIDs[i] = append(res.ColumnOIDs[i], columnMap[i][col.Name].OID)
 			}
 		}
 	}
-	res.RowVerifiable = pkSame && len(truthPKCols) > 0
+	res.RowVerifiable = pkSame && len(truthPKCols) > 0 && !collationMismatch
 	return res, nil
+}
+
+// This logic isn't 100% there, but it's good enough.
+func comparableCollation(a, b sql.NullString) bool {
+	if a == b {
+		return true
+	}
+	if a.Valid != b.Valid {
+		return false
+	}
+	// unicode specifiers after `.` can be different.
+	splitA := strings.Split(a.String, ".")
+	splitB := strings.Split(b.String, ".")
+	if splitA[0] == splitB[0] {
+		return true
+	}
+	return isUnicodeCollation(a.String) && isUnicodeCollation(b.String)
+}
+
+func isUnicodeCollation(a string) bool {
+	// mysql
+	if strings.Contains(a, "utf8mb4_") {
+		return true
+	}
+	split := strings.Split(a, ".")
+	if len(split) >= 2 {
+		return strings.Contains(split[1], "UTF-8") || strings.Contains(split[1], "utf8")
+	}
+	return false
 }
 
 func comparableType(a, b *pgtype.Type) bool {
