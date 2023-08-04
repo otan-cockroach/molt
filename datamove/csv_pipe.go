@@ -3,6 +3,8 @@ package datamove
 import (
 	"encoding/csv"
 	"io"
+
+	"github.com/rs/zerolog"
 )
 
 type csvPipe struct {
@@ -10,6 +12,7 @@ type csvPipe struct {
 
 	csvWriter *csv.Writer
 	out       io.WriteCloser
+	logger    zerolog.Logger
 
 	flushSize int
 	currSize  int
@@ -17,9 +20,12 @@ type csvPipe struct {
 	newWriter func() io.WriteCloser
 }
 
-func newCSVPipe(in io.Reader, flushSize int, newWriter func() io.WriteCloser) *csvPipe {
+func newCSVPipe(
+	in io.Reader, logger zerolog.Logger, flushSize int, newWriter func() io.WriteCloser,
+) *csvPipe {
 	return &csvPipe{
 		in:        in,
+		logger:    logger,
 		flushSize: flushSize,
 		newWriter: newWriter,
 	}
@@ -40,6 +46,9 @@ func (p *csvPipe) Pipe() error {
 			return err
 		}
 		p.numRows++
+		if p.numRows%100000 == 0 {
+			p.logger.Info().Int("num_rows", p.numRows).Msgf("importing rows")
+		}
 		for _, s := range record {
 			p.currSize += len(s) + 1
 		}
