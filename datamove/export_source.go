@@ -68,7 +68,7 @@ func InferExportSource(ctx context.Context, conn dbconn.Conn) (ExportSource, err
 		var source string
 		var start, end int
 		if err := func() error {
-			if err := tx.QueryRowContext(ctx, "select source_uuid, min(interval_start), max(interval_end) from mysql.gtid_executed;").Scan(
+			if err := tx.QueryRowContext(ctx, "select source_uuid, min(interval_start), max(interval_end) from mysql.gtid_executed group by source_uuid").Scan(
 				&source, &start, &end,
 			); err != nil {
 				return errors.Wrap(err, "failed to export snapshot")
