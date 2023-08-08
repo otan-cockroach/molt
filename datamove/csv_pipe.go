@@ -61,7 +61,7 @@ func (p *csvPipe) Pipe(tn dbtable.Name) error {
 		p.numRows++
 		m.Inc()
 		if p.numRows%100000 == 0 {
-			p.logger.Info().Int("num_rows", p.numRows).Msgf("importing rows")
+			p.logger.Info().Int("num_rows", p.numRows).Msgf("row import status")
 		}
 		for _, s := range record {
 			p.currSize += len(s) + 1
