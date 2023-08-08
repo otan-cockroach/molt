@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"sync"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -21,7 +22,10 @@ type s3Store struct {
 	bucket      string
 	session     *session.Session
 	creds       credentials.Value
-	batchDelete []s3manager.BatchDeleteObject
+	batchDelete struct {
+		sync.Mutex
+		batch []s3manager.BatchDeleteObject
+	}
 }
 
 type s3Resource struct {
@@ -41,7 +45,9 @@ func (s *s3Resource) ImportURL() (string, error) {
 }
 
 func (s *s3Resource) MarkForCleanup(ctx context.Context) error {
-	s.store.batchDelete = append(s.store.batchDelete, s3manager.BatchDeleteObject{
+	s.store.batchDelete.Lock()
+	defer s.store.batchDelete.Unlock()
+	s.store.batchDelete.batch = append(s.store.batchDelete.batch, s3manager.BatchDeleteObject{
 		Object: &s3.DeleteObjectInput{
 			Key:    aws.String(s.key),
 			Bucket: aws.String(s.store.bucket),
@@ -113,13 +119,16 @@ func (s *s3Store) DefaultFlushBatchSize() int {
 }
 
 func (s *s3Store) Cleanup(ctx context.Context) error {
+	s.batchDelete.Lock()
+	defer s.batchDelete.Unlock()
+
 	batcher := s3manager.NewBatchDelete(s.session)
 	if err := batcher.Delete(
 		aws.BackgroundContext(),
-		&s3manager.DeleteObjectsIterator{Objects: s.batchDelete},
+		&s3manager.DeleteObjectsIterator{Objects: s.batchDelete.batch},
 	); err != nil {
 		return err
 	}
-	s.batchDelete = s.batchDelete[:0]
+	s.batchDelete.batch = s.batchDelete.batch[:0]
 	return nil
 }
