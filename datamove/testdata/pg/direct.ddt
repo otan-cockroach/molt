@@ -1,0 +1,38 @@
+exec all
+CREATE TABLE tbl1(id INT PRIMARY KEY, t TEXT)
+----
+[source] CREATE TABLE
+[target] CREATE TABLE
+
+exec source
+INSERT INTO tbl1 VALUES (1, 'aaa'), (2, 'bbb')
+----
+[source] INSERT 0 2
+
+exec all
+CREATE TABLE tbl2(id INT PRIMARY KEY, t TEXT)
+----
+[source] CREATE TABLE
+[target] CREATE TABLE
+
+exec source
+INSERT INTO tbl2 VALUES (11, 'aaa'), (22, 'bbb')
+----
+[source] INSERT 0 2
+
+datamove direct
+----
+
+query all
+SELECT * FROM tbl1
+----
+[source]:
+id	t
+1	aaa
+2	bbb
+tag: SELECT 2
+[target]:
+id	t
+1	aaa
+2	bbb
+tag: SELECT 2

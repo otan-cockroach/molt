@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/datamove/dataquery"
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/jackc/pgx/v5"
@@ -21,12 +22,16 @@ type copyCRDBDirect struct {
 func (c *copyCRDBDirect) CreateFromReader(
 	ctx context.Context, r io.Reader, table dbtable.VerifiedTable, iteration int,
 ) (Resource, error) {
-	c.logger.Debug().Int("batch", iteration).Msgf("csv batch starting")
-	if _, err := c.target.PgConn().CopyFrom(ctx, r, dataquery.CopyFrom(table)); err != nil {
+	conn, err := pgx.ConnectConfig(ctx, c.target.Config())
+	if err != nil {
 		return nil, err
 	}
+	c.logger.Debug().Int("batch", iteration).Msgf("csv batch starting")
+	if _, err := conn.PgConn().CopyFrom(ctx, r, dataquery.CopyFrom(table)); err != nil {
+		return nil, errors.CombineErrors(err, conn.Close(ctx))
+	}
 	c.logger.Debug().Int("batch", iteration).Msgf("csv batch complete")
-	return nil, nil
+	return nil, conn.Close(ctx)
 }
 
 func (c *copyCRDBDirect) CanBeTarget() bool {

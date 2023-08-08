@@ -31,7 +31,7 @@ func TestDataDriven(t *testing.T) {
 				ctx := context.Background()
 				var conns dbconn.OrderedConns
 				var err error
-				dbName := "datamove_datadriven_" + strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+				dbName := "datamove_dd_" + tc.desc + "_" + strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 				logger := zerolog.New(os.Stderr)
 
 				conns[0], err = dbconn.TestOnlyCleanDatabase(ctx, "source", tc.src, dbName)
@@ -62,6 +62,7 @@ func TestDataDriven(t *testing.T) {
 						filter := dbverify.DefaultFilterConfig()
 						truncate := true
 						live := false
+						direct := false
 
 						for _, cmd := range d.CmdArgs {
 							switch cmd.Key {
@@ -69,14 +70,21 @@ func TestDataDriven(t *testing.T) {
 								live = true
 							case "notruncate":
 								truncate = false
+							case "direct":
+								direct = true
 							default:
 								t.Errorf("unknown key %s", cmd.Key)
 							}
 						}
 						dir, err := os.MkdirTemp("", "")
 						require.NoError(t, err)
-						src, err := datamovestore.NewLocalStore(logger, dir, "localhost:4000", "localhost:4000")
-						require.NoError(t, err)
+						var src datamovestore.Store
+						if direct {
+							src = datamovestore.NewCopyCRDBDirect(logger, conns[1].(*dbconn.PGConn).Conn)
+						} else {
+							src, err = datamovestore.NewLocalStore(logger, dir, "localhost:4040", "localhost:4040")
+							require.NoError(t, err)
+						}
 
 						err = DataMove(ctx, Config{Live: live, Truncate: truncate}, logger, conns, src, filter)
 						if expectError {
