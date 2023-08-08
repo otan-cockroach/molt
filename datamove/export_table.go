@@ -16,7 +16,6 @@ import (
 
 type exportResult struct {
 	Resources []datamovestore.Resource
-	CDCCursor string
 	StartTime time.Time
 	EndTime   time.Time
 	NumRows   int
@@ -33,10 +32,6 @@ func exportTable(
 	ret := exportResult{
 		StartTime: time.Now(),
 	}
-	ret.CDCCursor = sqlSrc.CDCCursor()
-	logger.Debug().
-		Str("cdc_cursor", ret.CDCCursor).
-		Msgf("established appropriate cdc cursor location")
 
 	cancellableCtx, cancelFunc := context.WithCancel(ctx)
 	defer cancelFunc()

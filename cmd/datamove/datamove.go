@@ -112,6 +112,12 @@ func Command() *cobra.Command {
 		0,
 		"if set, size (in bytes) before the data source is flushed",
 	)
+	cmd.PersistentFlags().IntVar(
+		&cfg.Concurrency,
+		"concurrency",
+		4,
+		"number of tables to move data with at a time",
+	)
 	cmd.PersistentFlags().StringVar(
 		&s3Bucket,
 		"s3-bucket",

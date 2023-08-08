@@ -3,6 +3,7 @@ package datamove
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/cockroachdb/molt/datamove/dataexport"
@@ -11,13 +12,15 @@ import (
 	"github.com/cockroachdb/molt/verify/dbverify"
 	"github.com/cockroachdb/molt/verify/tableverify"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 )
 
 type Config struct {
-	FlushSize int
-	Cleanup   bool
-	Live      bool
-	Truncate  bool
+	FlushSize   int
+	Cleanup     bool
+	Live        bool
+	Truncate    bool
+	Concurrency int
 }
 
 func DataMove(
@@ -31,6 +34,10 @@ func DataMove(
 	if cfg.FlushSize == 0 {
 		cfg.FlushSize = src.DefaultFlushBatchSize()
 	}
+	if cfg.Concurrency == 0 {
+		cfg.Concurrency = 4
+	}
+
 	if cfg.Cleanup {
 		defer func() {
 			if err := src.Cleanup(ctx); err != nil {
@@ -83,17 +90,48 @@ func DataMove(
 		Str("cdc_cursor", sqlSrc.CDCCursor()).
 		Msgf("starting data movement")
 
-	var numImportedTables int
-	var importedTables []string
-	for _, table := range tables {
-		if err := dataMoveTable(ctx, cfg, logger, conns, src, sqlSrc, table); err != nil {
-			return err
-		}
-		importedTables = append(importedTables, table.SafeString())
+	type statsMu struct {
+		sync.Mutex
+		numImportedTables int
+		importedTables    []string
 	}
+	var stats statsMu
+
+	workCh := make(chan tableverify.Result)
+	g, _ := errgroup.WithContext(ctx)
+	for i := 0; i < cfg.Concurrency; i++ {
+		g.Go(func() error {
+			for {
+				table, ok := <-workCh
+				if !ok {
+					return nil
+				}
+				if err := dataMoveTable(ctx, cfg, logger, conns, src, sqlSrc, table); err != nil {
+					return err
+				}
+
+				stats.Lock()
+				stats.numImportedTables++
+				stats.importedTables = append(stats.importedTables, table.SafeString())
+				stats.Unlock()
+			}
+		})
+	}
+
+	go func() {
+		defer close(workCh)
+		for _, table := range tables {
+			workCh <- table
+		}
+	}()
+
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
 	logger.Info().
-		Int("num_tables", numImportedTables).
-		Strs("tables", importedTables).
+		Int("num_tables", stats.numImportedTables).
+		Strs("tables", stats.importedTables).
 		Str("cdc_cursor", sqlSrc.CDCCursor()).
 		Msgf("data movement complete")
 	return nil
@@ -173,7 +211,7 @@ func dataMoveTable(
 		logger.Info().
 			Dur("net_duration", time.Since(tableStartTime)).
 			Dur("import_duration", importDuration).
-			Str("cdc_cursor", e.CDCCursor).
+			Str("cdc_cursor", sqlSrc.CDCCursor()).
 			Msgf("data import on target for table complete")
 		return nil
 	}
