@@ -13,19 +13,19 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type ImportResult struct {
+type importResult struct {
 	StartTime time.Time
 	EndTime   time.Time
 }
 
-func Import(
+func importTable(
 	ctx context.Context,
 	baseConn dbconn.Conn,
 	logger zerolog.Logger,
 	table dbtable.VerifiedTable,
 	resources []datamovestore.Resource,
-) (ImportResult, error) {
-	ret := ImportResult{
+) (importResult, error) {
+	ret := importResult{
 		StartTime: time.Now(),
 	}
 
@@ -33,7 +33,7 @@ func Import(
 	for _, resource := range resources {
 		u, err := resource.ImportURL()
 		if err != nil {
-			return ImportResult{}, err
+			return importResult{}, err
 		}
 		locs = append(locs, u)
 	}

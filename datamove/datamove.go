@@ -123,7 +123,7 @@ func dataMoveTable(
 
 	logger.Info().Msgf("data extraction phase starting")
 
-	e, err := Export(ctx, logger, sqlSrc, src, table.VerifiedTable, cfg.FlushSize)
+	e, err := exportTable(ctx, logger, sqlSrc, src, table.VerifiedTable, cfg.FlushSize)
 	if err != nil {
 		return err
 	}
@@ -158,7 +158,7 @@ func dataMoveTable(
 
 		var importDuration time.Duration
 		if !cfg.Live {
-			r, err := Import(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
+			r, err := importTable(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
 			if err != nil {
 				return err
 			}

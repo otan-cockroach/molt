@@ -14,7 +14,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type ExportResult struct {
+type exportResult struct {
 	Resources []datamovestore.Resource
 	CDCCursor string
 	StartTime time.Time
@@ -22,21 +22,21 @@ type ExportResult struct {
 	NumRows   int
 }
 
-func Export(
+func exportTable(
 	ctx context.Context,
 	logger zerolog.Logger,
 	sqlSrc dataexport.Source,
 	datasource datamovestore.Store,
 	table dbtable.VerifiedTable,
 	flushSize int,
-) (ExportResult, error) {
-	ret := ExportResult{
+) (exportResult, error) {
+	ret := exportResult{
 		StartTime: time.Now(),
 	}
 	ret.CDCCursor = sqlSrc.CDCCursor()
 	logger.Debug().
 		Str("cdc_cursor", ret.CDCCursor).
-		Msgf("established approriate cdc cursor location")
+		Msgf("established appropriate cdc cursor location")
 
 	cancellableCtx, cancelFunc := context.WithCancel(ctx)
 	defer cancelFunc()
