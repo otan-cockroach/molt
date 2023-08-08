@@ -111,9 +111,9 @@ func Command() *cobra.Command {
 	)
 	cmd.PersistentFlags().DurationVar(
 		&verifyContinuousPause,
-		"continuous-pause-duration",
+		"continuous-pause-between-runs",
 		0,
-		"pause between continuous runs",
+		"time to pause between continuous runs",
 	)
 	cmd.PersistentFlags().BoolVar(
 		&verifyContinuous,
