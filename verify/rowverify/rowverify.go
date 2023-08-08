@@ -9,7 +9,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
-	rowiterator "github.com/cockroachdb/molt/rowiterator"
+	"github.com/cockroachdb/molt/rowiterator"
 	"github.com/cockroachdb/molt/verify/inconsistency"
 	"github.com/rs/zerolog"
 )

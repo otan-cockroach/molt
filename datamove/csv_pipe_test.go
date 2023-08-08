@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cockroachdb/molt/dbtable"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
@@ -78,7 +79,7 @@ multiline part"
 					return &bufs[len(bufs)-1]
 				},
 			)
-			require.NoError(t, pipe.Pipe())
+			require.NoError(t, pipe.Pipe(dbtable.Name{Schema: "test", Table: "test"}))
 			var written []string
 			for _, buf := range bufs {
 				written = append(written, buf.String())

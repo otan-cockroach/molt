@@ -24,7 +24,7 @@ func Command() *cobra.Command {
 		verifyContinuous               bool
 		verifyLive                     bool
 		verifyLiveVerificationSettings = rowverify.LiveReverificationSettings{
-			MaxBatchSize:  100,
+			MaxBatchSize:  1000,
 			FlushInterval: time.Second,
 			RetrySettings: retry.Settings{
 				InitialBackoff: 250 * time.Millisecond,
@@ -44,6 +44,7 @@ func Command() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			cmdutil.RunMetricsServer(logger)
 
 			reporter := inconsistency.CombinedReporter{}
 			reporter.Reporters = append(reporter.Reporters, &inconsistency.LogReporter{Logger: logger})
@@ -171,5 +172,6 @@ func Command() *cobra.Command {
 	cmdutil.RegisterDBConnFlags(cmd)
 	cmdutil.RegisterLoggerFlags(cmd)
 	cmdutil.RegisterNameFilterFlags(cmd)
+	cmdutil.RegisterMetricsFlags(cmd)
 	return cmd
 }

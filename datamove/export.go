@@ -79,7 +79,7 @@ func Export(
 		return forwardWrite
 	})
 
-	err := pipe.Pipe()
+	err := pipe.Pipe(table.Name)
 	// Wait for the resource wait group to complete. It may output an error
 	// that is not captured in the pipe.
 	resourceWG.Wait()

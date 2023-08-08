@@ -7,6 +7,8 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/molt/retry"
 	"github.com/cockroachdb/molt/verify/inconsistency"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 type RowEventListener interface {
@@ -15,6 +17,28 @@ type RowEventListener interface {
 	OnMismatchingRow(row inconsistency.MismatchingRow)
 	OnMatch()
 	OnRowScan()
+}
+
+var (
+	rowStatusMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "molt",
+		Subsystem: "verify",
+		Name:      "row_verification_status",
+		Help:      "Status of rows that have been verified.",
+	}, []string{"status"})
+	rowsReadMetric = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "molt",
+		Subsystem: "verify",
+		Name:      "rows_read",
+		Help:      "Rate of rows that are being read from source database.",
+	})
+)
+
+func init() {
+	// Initialise each metric by default.
+	for _, s := range []string{"extraneous", "missing", "mismatching", "success"} {
+		rowStatusMetric.WithLabelValues(s)
+	}
 }
 
 // defaultRowEventListener is the default invocation of the row event listener.
@@ -27,20 +51,24 @@ type defaultRowEventListener struct {
 func (n *defaultRowEventListener) OnExtraneousRow(row inconsistency.ExtraneousRow) {
 	n.reporter.Report(row)
 	n.stats.numExtraneous++
+	rowStatusMetric.WithLabelValues("extraneous").Inc()
 }
 
 func (n *defaultRowEventListener) OnMissingRow(row inconsistency.MissingRow) {
 	n.stats.numMissing++
 	n.reporter.Report(row)
+	rowStatusMetric.WithLabelValues("missing").Inc()
 }
 
 func (n *defaultRowEventListener) OnMismatchingRow(row inconsistency.MismatchingRow) {
 	n.reporter.Report(row)
 	n.stats.numMismatch++
+	rowStatusMetric.WithLabelValues("mismatching").Inc()
 }
 
 func (n *defaultRowEventListener) OnMatch() {
 	n.stats.numSuccess++
+	rowStatusMetric.WithLabelValues("success").Inc()
 }
 
 func (n *defaultRowEventListener) OnRowScan() {
@@ -49,6 +77,7 @@ func (n *defaultRowEventListener) OnRowScan() {
 			Info: fmt.Sprintf("progress on %s.%s (shard %d/%d): %s", n.table.Schema, n.table.Table, n.table.ShardNum, n.table.TotalShards, n.stats.String()),
 		})
 	}
+	rowsReadMetric.Inc()
 	n.stats.numVerified++
 }
 

@@ -4,6 +4,9 @@ import (
 	"encoding/csv"
 	"io"
 
+	"github.com/cockroachdb/molt/dbtable"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rs/zerolog"
 )
 
@@ -20,6 +23,15 @@ type csvPipe struct {
 	newWriter func() io.WriteCloser
 }
 
+var (
+	importedRows = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "molt",
+		Subsystem: "datamove",
+		Name:      "rows_imported",
+		Help:      "Number of rows that have been imported in",
+	}, []string{"table"})
+)
+
 func newCSVPipe(
 	in io.Reader, logger zerolog.Logger, flushSize int, newWriter func() io.WriteCloser,
 ) *csvPipe {
@@ -31,12 +43,13 @@ func newCSVPipe(
 	}
 }
 
-func (p *csvPipe) Pipe() error {
+func (p *csvPipe) Pipe(tn dbtable.Name) error {
 	if err := p.flush(true); err != nil {
 		return err
 	}
 	r := csv.NewReader(p.in)
 	r.ReuseRecord = true
+	m := importedRows.WithLabelValues(tn.SafeString())
 	for {
 		record, err := r.Read()
 		if err != nil {
@@ -46,6 +59,7 @@ func (p *csvPipe) Pipe() error {
 			return err
 		}
 		p.numRows++
+		m.Inc()
 		if p.numRows%100000 == 0 {
 			p.logger.Info().Int("num_rows", p.numRows).Msgf("importing rows")
 		}

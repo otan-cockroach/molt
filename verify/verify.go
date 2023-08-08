@@ -12,6 +12,8 @@ import (
 	"github.com/cockroachdb/molt/verify/inconsistency"
 	"github.com/cockroachdb/molt/verify/rowverify"
 	"github.com/cockroachdb/molt/verify/tableverify"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
@@ -70,6 +72,15 @@ func WithDBFilter(filter dbverify.FilterConfig) VerifyOpt {
 		o.dbFilter = filter
 	}
 }
+
+var (
+	verificationShards = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "molt",
+		Subsystem: "verify",
+		Name:      "shards_running",
+		Help:      "Number of verification shards that are running.",
+	})
+)
 
 // Verify verifies the given connections have matching tables and contents.
 func Verify(
@@ -156,6 +167,9 @@ func Verify(
 	workQueue := make(chan rowverify.TableShard)
 	for goroutineIdx := 0; goroutineIdx < numGoroutines; goroutineIdx++ {
 		g.Go(func() error {
+			verificationShards.Inc()
+			defer verificationShards.Dec()
+
 			for {
 				shard, ok := <-workQueue
 				if !ok {

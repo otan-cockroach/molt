@@ -11,6 +11,8 @@ import (
 	"github.com/cockroachdb/molt/retry"
 	"github.com/cockroachdb/molt/rowiterator"
 	"github.com/cockroachdb/molt/verify/inconsistency"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rs/zerolog"
 )
 
@@ -36,6 +38,15 @@ type liveReverifier struct {
 		blockScan  atomic.Bool
 	}
 }
+
+var (
+	liveReverifiedRows = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "molt",
+		Subsystem: "verify",
+		Name:      "live_reverified_rows",
+		Help:      "Number of rows that require reverification by the live reverifier.",
+	})
+)
 
 func newLiveReverifier(
 	ctx context.Context,
@@ -102,6 +113,7 @@ func newLiveReverifier(
 				if !ok {
 					return
 				}
+				liveReverifiedRows.Add(float64(len(it.PrimaryKeys)))
 				queue.heapPush(it)
 			case <-nextWorkCh:
 				if r.testingKnobs.blockScan.Load() {

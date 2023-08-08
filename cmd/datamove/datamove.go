@@ -38,16 +38,18 @@ func Command() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
+			logger, err := cmdutil.Logger()
+			if err != nil {
+				return err
+			}
+			cmdutil.RunMetricsServer(logger)
+
 			conns, err := cmdutil.LoadDBConns(ctx)
 			if err != nil {
 				return err
 			}
 			if pgx, ok := conns[1].(*dbconn.PGConn); !ok || !pgx.IsCockroach() {
 				return errors.AssertionFailedf("target must be cockroach")
-			}
-			logger, err := cmdutil.Logger()
-			if err != nil {
-				return err
 			}
 
 			var src datamovestore.Store
@@ -309,5 +311,6 @@ func Command() *cobra.Command {
 	cmdutil.RegisterDBConnFlags(cmd)
 	cmdutil.RegisterLoggerFlags(cmd)
 	cmdutil.RegisterNameFilterFlags(cmd)
+	cmdutil.RegisterMetricsFlags(cmd)
 	return cmd
 }
