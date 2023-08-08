@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cockroachdb/molt/datamove/dataexport"
 	"github.com/cockroachdb/molt/datamove/datamovestore"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/verify/dbverify"
@@ -73,7 +74,7 @@ func DataMove(
 		return err
 	}
 	logger.Info().Msgf("establishing snapshot")
-	sqlSrc, err := InferExportSource(ctx, conns[0])
+	sqlSrc, err := dataexport.InferExportSource(ctx, conns[0])
 	if err != nil {
 		return err
 	}
@@ -104,7 +105,7 @@ func dataMoveTable(
 	logger zerolog.Logger,
 	conns dbconn.OrderedConns,
 	src datamovestore.Store,
-	sqlSrc ExportSource,
+	sqlSrc dataexport.Source,
 	table tableverify.Result,
 ) error {
 	tableStartTime := time.Now()

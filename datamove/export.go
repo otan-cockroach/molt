@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/molt/datamove/dataexport"
 	"github.com/cockroachdb/molt/datamove/datamovestore"
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/rs/zerolog"
@@ -24,7 +25,7 @@ type ExportResult struct {
 func Export(
 	ctx context.Context,
 	logger zerolog.Logger,
-	sqlSrc ExportSource,
+	sqlSrc dataexport.Source,
 	datasource datamovestore.Store,
 	table dbtable.VerifiedTable,
 	flushSize int,
@@ -44,10 +45,19 @@ func Export(
 	// Run the COPY TO, which feeds into the pipe, concurrently.
 	copyWG, _ := errgroup.WithContext(ctx)
 	copyWG.Go(func() error {
-		if err := sqlSrc.Export(cancellableCtx, sqlWrite, table); err != nil {
-			return errors.CombineErrors(err, sqlWrite.CloseWithError(err))
+		sqlSrcConn, err := sqlSrc.Conn(ctx)
+		if err != nil {
+			return err
 		}
-		return sqlWrite.Close()
+		return errors.CombineErrors(
+			func() error {
+				if err := sqlSrcConn.Export(cancellableCtx, sqlWrite, table); err != nil {
+					return errors.CombineErrors(err, sqlWrite.CloseWithError(err))
+				}
+				return sqlWrite.Close()
+			}(),
+			sqlSrcConn.Close(ctx),
+		)
 	})
 
 	var resourceWG sync.WaitGroup

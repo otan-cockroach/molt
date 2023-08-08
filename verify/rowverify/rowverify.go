@@ -7,6 +7,7 @@ import (
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/molt/comparectx"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/cockroachdb/molt/rowiterator"
@@ -33,25 +34,6 @@ func (s *rowStats) String() string {
 		s.numExtraneous,
 		s.numLiveRetry,
 	)
-}
-
-// compareContext implements tree.CompareContext
-type compareContext struct{}
-
-func (c *compareContext) UnwrapDatum(d tree.Datum) tree.Datum {
-	return d
-}
-
-func (c *compareContext) GetLocation() *time.Location {
-	return time.UTC
-}
-
-func (c *compareContext) GetRelativeParseTime() time.Time {
-	return time.Now().UTC()
-}
-
-func (c *compareContext) MustGetPlaceholderValue(p *tree.Placeholder) tree.Datum {
-	return p
 }
 
 type TableShard struct {
@@ -138,8 +120,6 @@ func VerifyRowsOnShard(
 func verifyRows(
 	ctx context.Context, iterators [2]rowiterator.Iterator, table TableShard, evl RowEventListener,
 ) error {
-	cmpCtx := &compareContext{}
-
 	truth := iterators[0]
 	for truth.HasNext(ctx) {
 		evl.OnRowScan()
@@ -166,7 +146,7 @@ func verifyRows(
 			targetVals := it.Peek(ctx)
 			var compareVal int
 			for i := range table.PrimaryKeyColumns {
-				if compareVal = truthVals[i].Compare(cmpCtx, targetVals[i]); compareVal != 0 {
+				if compareVal = truthVals[i].Compare(comparectx.CompareContext, targetVals[i]); compareVal != 0 {
 					break
 				}
 			}
@@ -188,7 +168,7 @@ func verifyRows(
 					PrimaryKeyValues:  targetVals[:len(table.PrimaryKeyColumns)],
 				}
 				for valIdx := len(table.PrimaryKeyColumns); valIdx < len(targetVals); valIdx++ {
-					if targetVals[valIdx].Compare(cmpCtx, truthVals[valIdx]) != 0 {
+					if targetVals[valIdx].Compare(comparectx.CompareContext, truthVals[valIdx]) != 0 {
 						mismatches.MismatchingColumns = append(mismatches.MismatchingColumns, table.Columns[valIdx])
 						mismatches.TargetVals = append(mismatches.TargetVals, targetVals[valIdx])
 						mismatches.TruthVals = append(mismatches.TruthVals, truthVals[valIdx])
