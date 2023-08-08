@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/datamove/dataexport"
 	"github.com/cockroachdb/molt/datamove/datamovestore"
 	"github.com/cockroachdb/molt/dbconn"
@@ -85,6 +86,11 @@ func DataMove(
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err := sqlSrc.Close(ctx); err != nil {
+			logger.Err(err).Msgf("error closing export source")
+		}
+	}()
 	logger.Info().
 		Int("num_tables", len(tables)).
 		Str("cdc_cursor", sqlSrc.CDCCursor()).
@@ -182,31 +188,42 @@ func dataMoveTable(
 		Msgf("data extraction from source complete")
 
 	if src.CanBeTarget() {
-		if cfg.Truncate {
-			logger.Info().
-				Msgf("truncating table")
-			_, err := conns[1].(*dbconn.PGConn).Conn.Exec(ctx, "TRUNCATE TABLE "+table.SafeString())
-			if err != nil {
-				return err
-			}
+		targetConn, err := conns[1].Clone(ctx)
+		if err != nil {
+			return err
 		}
-
-		logger.Info().
-			Msgf("starting data import on target")
-
 		var importDuration time.Duration
-		if !cfg.Live {
-			r, err := importTable(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
-			if err != nil {
-				return err
+		if err := func() error {
+			if cfg.Truncate {
+				logger.Info().Msgf("truncating table")
+				_, err := targetConn.(*dbconn.PGConn).Conn.Exec(ctx, "TRUNCATE TABLE "+table.SafeString())
+				if err != nil {
+					return err
+				}
 			}
-			importDuration = r.EndTime.Sub(r.StartTime)
-		} else {
-			r, err := Copy(ctx, conns[1], logger, table.VerifiedTable, e.Resources)
-			if err != nil {
-				return err
+
+			logger.Info().
+				Msgf("starting data import on target")
+
+			if !cfg.Live {
+				r, err := importTable(ctx, targetConn, logger, table.VerifiedTable, e.Resources)
+				if err != nil {
+					return err
+				}
+				importDuration = r.EndTime.Sub(r.StartTime)
+			} else {
+				r, err := Copy(ctx, targetConn, logger, table.VerifiedTable, e.Resources)
+				if err != nil {
+					return err
+				}
+				importDuration = r.EndTime.Sub(r.StartTime)
 			}
-			importDuration = r.EndTime.Sub(r.StartTime)
+			return nil
+		}(); err != nil {
+			return errors.CombineErrors(err, targetConn.Close(ctx))
+		}
+		if err := targetConn.Close(ctx); err != nil {
+			return err
 		}
 		logger.Info().
 			Dur("net_duration", time.Since(tableStartTime)).

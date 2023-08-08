@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
+	"github.com/cockroachdb/molt/comparectx"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/cockroachdb/molt/retry"
@@ -138,11 +139,11 @@ func TestLiveReverifier(t *testing.T) {
 			},
 			beforeIteration: map[int]func(t *testing.T, conns dbconn.OrderedConns, pks []tree.Datums){
 				1: func(t *testing.T, conns dbconn.OrderedConns, pks []tree.Datums) {
-					if pks[0][0].Compare(&compareContext{}, tree.NewDInt(1)) == 0 {
+					if pks[0][0].Compare(comparectx.CompareContext, tree.NewDInt(1)) == 0 {
 						_, err := conns[0].(*dbconn.PGConn).Exec(ctx, "INSERT INTO test_table VALUES (2, 'a')")
 						require.NoError(t, err)
 					}
-					if pks[0][0].Compare(&compareContext{}, tree.NewDInt(3)) == 0 {
+					if pks[0][0].Compare(comparectx.CompareContext, tree.NewDInt(3)) == 0 {
 						for _, conn := range conns {
 							_, err := conn.(*dbconn.PGConn).Exec(ctx, "INSERT INTO test_table VALUES (3, 'a')")
 							require.NoError(t, err)

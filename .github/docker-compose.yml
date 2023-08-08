@@ -3,3 +3,13 @@ services:
     image: cockroachdb/cockroach:latest-v22.2
     network_mode: host
     command: start-single-node --insecure --store type=mem,size=2G
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: defaultdb
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+    ports:
+      - 3306:3306
+    command: --gtid-mode=on --enforce-gtid-consistency=on --binlog-row-metadata=full

@@ -1,6 +1,8 @@
 package dataquery
 
 import (
+	"strings"
+
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/cockroachdb/molt/rowiterator"
@@ -53,5 +55,6 @@ func CopyFrom(table dbtable.VerifiedTable) string {
 	}
 	f := tree.NewFmtCtx(tree.FmtParsableNumerics)
 	f.FormatNode(copyFrom)
-	return f.CloseAndGetString()
+	// Temporary hack for v22.2- compat. Remove when we use 23.1 in CI.
+	return strings.ReplaceAll(f.CloseAndGetString(), "STDIN WITH (FORMAT CSV)", "STDIN CSV")
 }

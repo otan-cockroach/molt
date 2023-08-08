@@ -55,7 +55,6 @@ func NewLocalStore(
 	return &localStore{
 		logger:         logger,
 		basePath:       basePath,
-		cleanPaths:     make(map[string]struct{}),
 		crdbAccessAddr: crdbAccessAddr,
 	}, nil
 }
@@ -81,16 +80,13 @@ func (l *localStore) CreateFromReader(
 	ctx context.Context, r io.Reader, table dbtable.VerifiedTable, iteration int,
 ) (Resource, error) {
 	baseDir := path.Join(l.basePath, table.SafeString())
-	if iteration == 1 {
-		l.cleanPaths[baseDir] = struct{}{}
-		if err := os.MkdirAll(baseDir, os.ModePerm); err != nil {
-			return nil, err
-		}
+	if err := os.MkdirAll(baseDir, os.ModePerm); err != nil {
+		return nil, err
 	}
-	path := path.Join(baseDir, fmt.Sprintf("part_%08d.csv", iteration))
-	logger := l.logger.With().Str("path", path).Logger()
+	p := path.Join(baseDir, fmt.Sprintf("part_%08d.csv", iteration))
+	logger := l.logger.With().Str("path", p).Logger()
 	logger.Debug().Msgf("creating file")
-	f, err := os.Create(path)
+	f, err := os.Create(p)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +96,7 @@ func (l *localStore) CreateFromReader(
 		if err != nil {
 			if err == io.EOF {
 				logger.Debug().Msgf("wrote file")
-				return &localResource{path: path, store: l}, nil
+				return &localResource{path: p, store: l}, nil
 			}
 			return nil, err
 		}

@@ -66,53 +66,9 @@ func testDataDriven(t *testing.T, path string, connArgs []connArg) {
 		var sb strings.Builder
 		switch d.Cmd {
 		case "exec":
-			var connIdxs []int
-			for _, arg := range d.CmdArgs {
-				switch arg.Key {
-				case "source":
-					connIdxs = append(connIdxs, 0)
-				case "target":
-					connIdxs = append(connIdxs, 1)
-				case "all":
-					for connIdx := range conns {
-						connIdxs = append(connIdxs, connIdx)
-					}
-				}
-			}
-			require.NotEmpty(t, connIdxs, "destination sql must be defined")
-			for _, connIdx := range connIdxs {
-				switch conn := conns[connIdx].(type) {
-				case *dbconn.PGConn:
-					tag, err := conn.Exec(ctx, d.Input)
-					if err != nil {
-						sb.WriteString(fmt.Sprintf("[%s] error: %s\n", conn.ID(), err.Error()))
-						continue
-					}
-					sb.WriteString(fmt.Sprintf("[%s] %s\n", conn.ID(), tag.String()))
-				case *dbconn.MySQLConn:
-					tag, err := conn.ExecContext(ctx, d.Input)
-					if err != nil {
-						sb.WriteString(fmt.Sprintf("[%s] error: %s\n", conn.ID(), err.Error()))
-						continue
-					}
-					r, err := tag.RowsAffected()
-					if err != nil {
-						sb.WriteString(fmt.Sprintf("[%s] error getting rows affected: %s\n", conn.ID(), err.Error()))
-						continue
-					}
-					sb.WriteString(fmt.Sprintf("[%s] %d rows affected\n", conn.ID(), r))
-				default:
-					t.Fatalf("unhandled Conn type: %T", conn)
-				}
-			}
-
-			// Deallocate caches - otherwise the plans may stick around.
-			for _, conn := range conns {
-				switch conn := conn.(type) {
-				case *dbconn.PGConn:
-					require.NoError(t, conn.DeallocateAll(ctx))
-				}
-			}
+			return testutils.ExecConnCommand(t, d, conns)
+		case "query":
+			return testutils.QueryConnCommand(t, d, conns)
 		case "verify":
 			numSplits := 1
 			for _, arg := range d.CmdArgs {
