@@ -56,6 +56,18 @@ var (
 		Name:      "live_reverified_rows",
 		Help:      "Number of rows that require reverification by the live reverifier.",
 	})
+	liveReverifyRemainingPKs = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "molt",
+		Subsystem: "verify",
+		Name:      "live_queued_pks",
+		Help:      "Number of rows that are queued by the live reverifier.",
+	})
+	liveReverifyRemainingBatches = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "molt",
+		Subsystem: "verify",
+		Name:      "live_queued_batches",
+		Help:      "Number of batches of rows that require the live reverifier.",
+	})
 )
 
 func newLiveReverifier(
@@ -110,6 +122,9 @@ func newLiveReverifier(
 					Int("num_pks", queue.numPKs).
 					Msgf("waiting for live reverifier to complete")
 			}
+			liveReverifyRemainingPKs.Set(float64(queue.numPKs))
+			liveReverifyRemainingBatches.Set(float64(len(queue.items)))
+
 			// By default, block until we get work.
 			var nextWorkCh <-chan time.Time = noTrafficChannel
 			if len(queue.items) > 0 {
