@@ -17,6 +17,7 @@ import (
 	"github.com/lib/pq/oid"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/time/rate"
 )
 
 func TestLiveReverifier(t *testing.T) {
@@ -190,6 +191,7 @@ func TestLiveReverifier(t *testing.T) {
 				conns,
 				TableShard{VerifiedTable: tbl},
 				evl,
+				rate.NewLimiter(rate.Inf, 1),
 			)
 			require.NoError(t, err)
 

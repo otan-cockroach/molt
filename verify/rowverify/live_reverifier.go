@@ -14,12 +14,21 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rs/zerolog"
+	"golang.org/x/time/rate"
 )
 
 type LiveReverificationSettings struct {
 	MaxBatchSize  int
 	FlushInterval time.Duration
 	RetrySettings retry.Settings
+	RunsPerSecond int
+}
+
+func (s LiveReverificationSettings) rateLimit() rate.Limit {
+	if s.RunsPerSecond == 0 {
+		return rate.Inf
+	}
+	return rate.Every(time.Duration(float64(time.Second) / float64(s.RunsPerSecond)))
 }
 
 type liveRetryItem struct {
@@ -33,6 +42,7 @@ type liveReverifier struct {
 	done         chan struct{}
 	logger       zerolog.Logger
 	table        TableShard
+	limiter      *rate.Limiter
 	testingKnobs struct {
 		beforeScan func(*retry.Retry, []tree.Datums)
 		blockScan  atomic.Bool
@@ -54,6 +64,7 @@ func newLiveReverifier(
 	baseConns dbconn.OrderedConns,
 	table TableShard,
 	baseListener RowEventListener,
+	rateLimiter *rate.Limiter,
 ) (*liveReverifier, error) {
 	r := &liveReverifier{
 		insertQueue:  make(chan *liveRetryItem),
@@ -61,6 +72,7 @@ func newLiveReverifier(
 		table:        table,
 		done:         make(chan struct{}),
 		scanComplete: make(chan struct{}),
+		limiter:      rateLimiter,
 	}
 
 	var conns dbconn.OrderedConns
@@ -123,7 +135,9 @@ func newLiveReverifier(
 				if it == nil {
 					continue
 				}
-
+				if err := r.limiter.Wait(ctx); err != nil {
+					logger.Err(err).Msgf("error applying live reverifier rate limit")
+				}
 				if r.testingKnobs.beforeScan != nil {
 					r.testingKnobs.beforeScan(it.Retry, it.PrimaryKeys)
 				}

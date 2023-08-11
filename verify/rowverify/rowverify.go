@@ -86,7 +86,7 @@ func VerifyRowsOnShard(
 	var liveReverifier *liveReverifier
 	if liveReverifySettings != nil {
 		var err error
-		liveReverifier, err = newLiveReverifier(ctx, logger, conns, table, rowEVL)
+		liveReverifier, err = newLiveReverifier(ctx, logger, conns, table, rowEVL, rate.NewLimiter(liveReverifySettings.rateLimit(), 1))
 		if err != nil {
 			return err
 		}

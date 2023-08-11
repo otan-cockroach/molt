@@ -32,6 +32,7 @@ func Command() *cobra.Command {
 				MaxBackoff:     time.Second,
 				MaxRetries:     5,
 			},
+			RunsPerSecond: 0,
 		}
 		verifyLimitRowsPerSecond int
 	)
@@ -135,6 +136,12 @@ func Command() *cobra.Command {
 		"live",
 		false,
 		"enables live mode, which attempts to account for rows that can change in value by retrying them before marking them as an inconsistency",
+	)
+	cmd.PersistentFlags().IntVar(
+		&verifyLiveVerificationSettings.RunsPerSecond,
+		"live-runs-per-second",
+		verifyLiveVerificationSettings.RunsPerSecond,
+		"if set, sets a maximum number of attempts to reverify per second",
 	)
 	cmd.PersistentFlags().IntVar(
 		&verifyLiveVerificationSettings.MaxBatchSize,
