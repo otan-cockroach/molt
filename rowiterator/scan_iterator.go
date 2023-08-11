@@ -15,6 +15,7 @@ import (
 	"github.com/pingcap/tidb/parser/format"
 	"github.com/pingcap/tidb/parser/model"
 	"github.com/pingcap/tidb/parser/opcode"
+	"golang.org/x/time/rate"
 )
 
 type scanIterator struct {
@@ -28,6 +29,7 @@ type scanIterator struct {
 	currCacheSize int
 	err           error
 	scanQuery     scanQuery
+	rateLimiter   *rate.Limiter
 }
 
 type scanIteratorResult struct {
@@ -37,7 +39,11 @@ type scanIteratorResult struct {
 
 // NewScanIterator returns a row iterator which scans the given table.
 func NewScanIterator(
-	ctx context.Context, conn dbconn.Conn, table ScanTable, rowBatchSize int,
+	ctx context.Context,
+	conn dbconn.Conn,
+	table ScanTable,
+	rowBatchSize int,
+	rateLimiter *rate.Limiter,
 ) (Iterator, error) {
 	// Initialize the type map on the connection.
 	for _, typOID := range table.ColumnOIDs {
@@ -51,6 +57,7 @@ func NewScanIterator(
 		rowBatchSize:  rowBatchSize,
 		currCacheSize: rowBatchSize,
 		waitCh:        make(chan scanIteratorResult, 1),
+		rateLimiter:   rateLimiter,
 	}
 	switch conn := conn.(type) {
 	case *dbconn.PGConn:
@@ -108,6 +115,11 @@ func (it *scanIterator) nextPage(ctx context.Context) {
 			q, err := it.scanQuery.generate(it.pkCursor)
 			if err != nil {
 				return nil, err
+			}
+			if it.rateLimiter != nil {
+				if err := it.rateLimiter.Wait(ctx); err != nil {
+					return nil, err
+				}
 			}
 			switch conn := it.conn.(type) {
 			case *dbconn.PGConn:

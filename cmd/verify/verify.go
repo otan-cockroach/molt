@@ -32,7 +32,9 @@ func Command() *cobra.Command {
 				MaxBackoff:     time.Second,
 				MaxRetries:     5,
 			},
+			RunsPerSecond: 0,
 		}
+		verifyLimitRowsPerSecond int
 	)
 
 	cmd := &cobra.Command{
@@ -78,6 +80,7 @@ func Command() *cobra.Command {
 				verify.WithContinuous(verifyContinuous, verifyContinuousPause),
 				verify.WithLive(verifyLive, verifyLiveVerificationSettings),
 				verify.WithDBFilter(cmdutil.TableFilter()),
+				verify.WithRowsPerSecond(verifyLimitRowsPerSecond),
 			); err != nil {
 				return errors.Wrapf(err, "error verifying")
 			}
@@ -104,6 +107,12 @@ func Command() *cobra.Command {
 		20000,
 		"number of rows to get from a table at a time",
 	)
+	cmd.PersistentFlags().IntVar(
+		&verifyLimitRowsPerSecond,
+		"rows-per-second",
+		0,
+		"if set, maximum number of rows to read per second during scanning per shard",
+	)
 	cmd.PersistentFlags().BoolVar(
 		&verifyFixup,
 		"fixup",
@@ -127,6 +136,12 @@ func Command() *cobra.Command {
 		"live",
 		false,
 		"enables live mode, which attempts to account for rows that can change in value by retrying them before marking them as an inconsistency",
+	)
+	cmd.PersistentFlags().IntVar(
+		&verifyLiveVerificationSettings.RunsPerSecond,
+		"live-runs-per-second",
+		verifyLiveVerificationSettings.RunsPerSecond,
+		"if set, sets a maximum number of attempts to reverify per second",
 	)
 	cmd.PersistentFlags().IntVar(
 		&verifyLiveVerificationSettings.MaxBatchSize,

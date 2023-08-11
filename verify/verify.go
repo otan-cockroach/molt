@@ -16,6 +16,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/time/rate"
 )
 
 const DefaultConcurrency = 8
@@ -28,10 +29,19 @@ type verifyOpts struct {
 	concurrency              int
 	rowBatchSize             int
 	tableSplits              int
+	rowsPerSecond            int
 	continuous               bool
 	continuousPause          time.Duration
 	dbFilter                 dbverify.FilterConfig
 	liveVerificationSettings *rowverify.LiveReverificationSettings
+}
+
+func (o verifyOpts) rateLimit() rate.Limit {
+	if o.rowsPerSecond == 0 {
+		return rate.Inf
+	}
+	perSecond := float64(o.rowBatchSize) / float64(o.rowsPerSecond)
+	return rate.Every(time.Duration(float64(time.Second) * perSecond))
 }
 
 func WithConcurrency(c int) VerifyOpt {
@@ -43,6 +53,12 @@ func WithConcurrency(c int) VerifyOpt {
 func WithRowBatchSize(c int) VerifyOpt {
 	return func(o *verifyOpts) {
 		o.rowBatchSize = c
+	}
+}
+
+func WithRowsPerSecond(c int) VerifyOpt {
+	return func(o *verifyOpts) {
+		o.rowsPerSecond = c
 	}
 }
 
@@ -214,7 +230,16 @@ func Verify(
 					reporter.Report(inconsistency.StatusReport{
 						Info: msg,
 					})
-					if err := verifyRowShard(ctx, conns, reporter, logger, opts.rowBatchSize, shard, opts.liveVerificationSettings); err != nil {
+					if err := verifyRowShard(
+						ctx,
+						conns,
+						reporter,
+						logger,
+						opts.rowBatchSize,
+						shard,
+						opts.liveVerificationSettings,
+						rate.NewLimiter(opts.rateLimit(), 1),
+					); err != nil {
 						logger.Err(err).
 							Str("schema", string(shard.Schema)).
 							Str("table", string(shard.Table)).
@@ -240,6 +265,7 @@ func verifyRowShard(
 	rowBatchSize int,
 	tbl rowverify.TableShard,
 	liveVerifySettings *rowverify.LiveReverificationSettings,
+	rateLimiter *rate.Limiter,
 ) error {
 	// Copy connections over naming wise, but initialize a new connection
 	// for each table.
@@ -264,5 +290,6 @@ func verifyRowShard(
 		reporter,
 		logger,
 		liveVerifySettings,
+		rateLimiter,
 	)
 }

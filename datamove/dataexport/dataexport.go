@@ -93,6 +93,7 @@ func scanWithRowIterator(
 		c,
 		table,
 		100_000,
+		nil,
 	)
 	if err != nil {
 		return err
