@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cockroachdb/datadriven"
 	"github.com/cockroachdb/molt/dbconn"
@@ -13,11 +14,48 @@ import (
 	"github.com/cockroachdb/molt/verify/inconsistency"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/time/rate"
 )
 
 type connArg struct {
 	id      dbconn.ID
 	connStr string
+}
+
+func TestVerifyOpts_rateLimit(t *testing.T) {
+	for _, tc := range []struct {
+		desc     string
+		opts     verifyOpts
+		expected rate.Limit
+	}{
+		{
+			desc: "no rate limit",
+			opts: verifyOpts{
+				rowBatchSize: 10000,
+			},
+			expected: rate.Inf,
+		},
+		{
+			desc: "multiple batches per second",
+			opts: verifyOpts{
+				rowBatchSize:  10000,
+				rowsPerSecond: 20000,
+			},
+			expected: rate.Every(time.Second / 2),
+		},
+		{
+			desc: "multiple seconds",
+			opts: verifyOpts{
+				rowBatchSize:  10000,
+				rowsPerSecond: 5000,
+			},
+			expected: rate.Every(time.Second * 2),
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			require.Equal(t, tc.expected, tc.opts.rateLimit())
+		})
+	}
 }
 
 func TestDataDrivenPG(t *testing.T) {

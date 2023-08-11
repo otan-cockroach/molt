@@ -13,6 +13,7 @@ import (
 	"github.com/cockroachdb/molt/rowiterator"
 	"github.com/cockroachdb/molt/verify/inconsistency"
 	"github.com/rs/zerolog"
+	"golang.org/x/time/rate"
 )
 
 type rowStats struct {
@@ -54,6 +55,7 @@ func VerifyRowsOnShard(
 	reporter inconsistency.Reporter,
 	logger zerolog.Logger,
 	liveReverifySettings *LiveReverificationSettings,
+	rateLimiter *rate.Limiter,
 ) error {
 	var iterators [2]rowiterator.Iterator
 	for i, conn := range conns {
@@ -72,6 +74,7 @@ func VerifyRowsOnShard(
 				EndPKVals:   table.EndPKVals,
 			},
 			rowBatchSize,
+			rateLimiter,
 		)
 		if err != nil {
 			return errors.Wrapf(err, "error initializing row iterator on %s", conn.ID())
