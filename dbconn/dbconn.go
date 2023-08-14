@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/lexbase"
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
 	"github.com/cockroachdb/errors"
 	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5"
@@ -109,6 +110,13 @@ func TestOnlyCleanDatabase(ctx context.Context, id ID, url string, dbName string
 func GetDataType(ctx context.Context, inConn Conn, oid oid.Oid) (*pgtype.Type, error) {
 	if typ, ok := inConn.TypeMap().TypeForOID(uint32(oid)); ok {
 		return typ, nil
+	}
+	if oid == types.AnyEnum.Oid() {
+		return &pgtype.Type{
+			Codec: &pgtype.EnumCodec{},
+			Name:  "enum",
+			OID:   uint32(oid),
+		}, nil
 	}
 	conn, ok := inConn.(*PGConn)
 	if !ok {

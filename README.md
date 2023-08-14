@@ -56,7 +56,7 @@ If you expect data to change as you do data verification, you can use `--live`.
 This makes verifier re-check rows before marking them as problematic.
 
 ### Limitations
-* MySQL enums and set types are not supported.
+* MySQL set types are not supported.
 * Supports only comparing one MySQL database vs a whole CRDB schema (which is assumed to be "public").
 * Geospatial types cannot yet be compared.
 * We do not handle schema changes between commands well.

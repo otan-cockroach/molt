@@ -13,7 +13,8 @@ CREATE TABLE da_test_table (
     float_test FLOAT,
     bigfloat_test DOUBLE,
     numeric_test DECIMAL,
-    qchar CHAR(30)
+    qchar CHAR(30),
+    enum_test ENUM('a', 'b', 'c')
 )
 ----
 tinyint_test: int2
@@ -30,3 +31,4 @@ float_test: float4
 bigfloat_test: float
 numeric_test: decimal
 qchar: varchar
+enum_test: (non-standard) 3500
