@@ -43,8 +43,6 @@ func (c *tableVerificationIterator) curr() dbtable.DBTable {
 
 // Verify verifies tables exist in all databases.
 func Verify(ctx context.Context, conns dbconn.OrderedConns) (Result, error) {
-	// TODO: optimise for single table regexp filters
-
 	// Grab all tables and verify them.
 	var in []connWithTables
 	for _, conn := range conns {

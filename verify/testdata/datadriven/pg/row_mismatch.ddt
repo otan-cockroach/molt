@@ -30,8 +30,8 @@ CREATE TABLE test_table (
     simple_arr_test TEXT[] DEFAULT '{"a", "b"}',
     bitarr_test VARBIT(10) DEFAULT '0100',
     enum_test test_enum DEFAULT 'bbb',
-    int_arr_test int8[] DEFAULT '{1, 2, 3}'
-    -- enum_arr_test _test_enum DEFAULT '{"a", "bbb"}' # TODO: support enum arrays
+    int_arr_test int8[] DEFAULT '{1, 2, 3}',
+    enum_arr_test _test_enum DEFAULT '{"a", "bbb"}'
 );
 INSERT INTO test_table(id)
 SELECT id FROM generate_series(1, 100) AS t(id)

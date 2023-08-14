@@ -126,8 +126,7 @@ func (n *liveRowEventListener) Flush() {
 		}
 		n.r.Push(&liveRetryItem{
 			PrimaryKeys: n.pks,
-			// TODO: configurable.
-			Retry: r,
+			Retry:       r,
 		})
 		n.pks = nil
 	}

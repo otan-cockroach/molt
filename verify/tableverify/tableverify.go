@@ -266,6 +266,11 @@ func comparableType(a, b *pgtype.Type) bool {
 	if enumCodec(a) && enumCodec(b) {
 		return true
 	}
+	if arrayCodec(a) && arrayCodec(b) {
+		if enumCodec(a.Codec.(*pgtype.ArrayCodec).ElementType) && enumCodec(b.Codec.(*pgtype.ArrayCodec).ElementType) {
+			return true
+		}
+	}
 	aTyp, ok := types.OidToType[oid.Oid(a.OID)]
 	if !ok {
 		return false
@@ -279,6 +284,11 @@ func comparableType(a, b *pgtype.Type) bool {
 
 func enumCodec(a *pgtype.Type) bool {
 	_, ok := a.Codec.(*pgtype.EnumCodec)
+	return ok
+}
+
+func arrayCodec(a *pgtype.Type) bool {
+	_, ok := a.Codec.(*pgtype.ArrayCodec)
 	return ok
 }
 
