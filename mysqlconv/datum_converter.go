@@ -49,6 +49,8 @@ func ConvertRowValue(typMap *pgtype.Map, val []byte, typOID oid.Oid) (tree.Datum
 		return tree.ParseDDecimal(string(val))
 	case pgtype.BitOID, pgtype.VarbitOID:
 		return tree.ParseDBitArray(string(val))
+	case oid.T_anyenum:
+		return tree.NewDString(string(val)), nil
 	}
 	return nil, errors.AssertionFailedf("value type OID %d not yet translatable", typOID)
 }

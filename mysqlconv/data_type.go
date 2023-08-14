@@ -6,7 +6,6 @@ import (
 )
 
 func DataTypeToOID(dataType, columnType string) oid.Oid {
-	// TODO: deal with enums.
 	switch dataType {
 	case "integer", "int", "mediumint":
 		return oid.T_int4
@@ -43,8 +42,7 @@ func DataTypeToOID(dataType, columnType string) oid.Oid {
 	case "json":
 		return oid.T_jsonb
 	case "enum":
-		// TODO: this is probably wrong, but leaving it for now.
-		return oid.T_text
+		return oid.T_anyenum
 	case "set":
 		panic(errors.Newf("enums not yet handled"))
 	default:

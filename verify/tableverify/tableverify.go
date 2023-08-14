@@ -263,6 +263,9 @@ func comparableType(a, b *pgtype.Type) bool {
 	if a.Name == b.Name {
 		return true
 	}
+	if enumCodec(a) && enumCodec(b) {
+		return true
+	}
 	aTyp, ok := types.OidToType[oid.Oid(a.OID)]
 	if !ok {
 		return false
@@ -272,6 +275,11 @@ func comparableType(a, b *pgtype.Type) bool {
 		return false
 	}
 	return allowableTypes(oid.Oid(a.OID), oid.Oid(b.OID)) || aTyp.Equivalent(bTyp)
+}
+
+func enumCodec(a *pgtype.Type) bool {
+	_, ok := a.Codec.(*pgtype.EnumCodec)
+	return ok
 }
 
 func allowableTypes(a oid.Oid, b oid.Oid) bool {
