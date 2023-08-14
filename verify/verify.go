@@ -244,6 +244,9 @@ func Verify(
 							Str("schema", string(shard.Schema)).
 							Str("table", string(shard.Table)).
 							Msgf("error verifying rows")
+						reporter.Report(inconsistency.StatusReport{
+							Info: "failed to verify",
+						})
 					}
 					time.Sleep(opts.continuousPause)
 				}

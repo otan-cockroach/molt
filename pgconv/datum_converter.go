@@ -112,9 +112,25 @@ func ConvertRowValue(typMap *pgtype.Map, val any, typOID oid.Oid) (tree.Datum, e
 	if !ok {
 		return nil, errors.AssertionFailedf("value %v (%T) of type OID %d not initialised", val, val, typOID)
 	}
-	switch typ.Codec.(type) {
+	switch cdc := typ.Codec.(type) {
 	case *pgtype.EnumCodec:
 		return tree.NewDString(val.(string)), nil
+	case *pgtype.ArrayCodec:
+		// Support enum arrays by casting to string.
+		if _, ok := cdc.ElementType.Codec.(*pgtype.EnumCodec); ok {
+			ret := tree.NewDArray(types.String)
+			for arrIdx, arr := range val.([]interface{}) {
+				elem, err := ConvertRowValue(typMap, arr, oid.T_text)
+				if err != nil {
+					return nil, errors.Wrapf(err, "error converting array element %d", arrIdx)
+				}
+				if err := ret.Append(elem); err != nil {
+					return nil, errors.Wrapf(err, "error appending array element %d", arrIdx)
+				}
+			}
+			return ret, nil
+		}
+
 	}
 	return nil, errors.AssertionFailedf("value %v (%T) of type OID %d not yet translatable", val, val, typOID)
 }
