@@ -1,6 +1,6 @@
 services:
   cockroachdb:
-    image: cockroachdb/cockroach:latest-v22.2
+    image: cockroachdb/cockroach:latest-v23.1
     network_mode: host
     command: start-single-node --insecure --store type=mem,size=2G
   mysql:
