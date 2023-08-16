@@ -1,4 +1,4 @@
-package datamove
+package fetch
 
 import (
 	"encoding/csv"
@@ -26,7 +26,7 @@ type csvPipe struct {
 var (
 	importedRows = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "molt",
-		Subsystem: "datamove",
+		Subsystem: "fetch",
 		Name:      "rows_imported",
 		Help:      "Number of rows that have been imported in",
 	}, []string{"table"})

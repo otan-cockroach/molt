@@ -1,4 +1,4 @@
-package datamove
+package fetch
 
 import (
 	"context"
@@ -7,15 +7,15 @@ import (
 	"time"
 
 	"github.com/cockroachdb/errors"
-	"github.com/cockroachdb/molt/datamove/dataexport"
-	"github.com/cockroachdb/molt/datamove/datamovestore"
 	"github.com/cockroachdb/molt/dbtable"
+	"github.com/cockroachdb/molt/fetch/datablobstorage"
+	"github.com/cockroachdb/molt/fetch/dataexport"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
 
 type exportResult struct {
-	Resources []datamovestore.Resource
+	Resources []datablobstorage.Resource
 	StartTime time.Time
 	EndTime   time.Time
 	NumRows   int
@@ -25,7 +25,7 @@ func exportTable(
 	ctx context.Context,
 	logger zerolog.Logger,
 	sqlSrc dataexport.Source,
-	datasource datamovestore.Store,
+	datasource datablobstorage.Store,
 	table dbtable.VerifiedTable,
 	flushSize int,
 ) (exportResult, error) {

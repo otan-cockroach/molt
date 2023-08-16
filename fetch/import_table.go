@@ -1,14 +1,14 @@
-package datamove
+package fetch
 
 import (
 	"context"
 	"time"
 
 	"github.com/cockroachdb/errors"
-	"github.com/cockroachdb/molt/datamove/datamovestore"
-	"github.com/cockroachdb/molt/datamove/dataquery"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
+	"github.com/cockroachdb/molt/fetch/datablobstorage"
+	"github.com/cockroachdb/molt/fetch/internal/dataquery"
 	"github.com/cockroachdb/molt/retry"
 	"github.com/rs/zerolog"
 )
@@ -23,7 +23,7 @@ func importTable(
 	baseConn dbconn.Conn,
 	logger zerolog.Logger,
 	table dbtable.VerifiedTable,
-	resources []datamovestore.Resource,
+	resources []datablobstorage.Resource,
 ) (importResult, error) {
 	ret := importResult{
 		StartTime: time.Now(),

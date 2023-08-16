@@ -1,4 +1,4 @@
-package datamovestore
+package datablobstorage
 
 import (
 	"context"
