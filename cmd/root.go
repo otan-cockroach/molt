@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cockroachdb/molt/cmd/datamove"
+	"github.com/cockroachdb/molt/cmd/fetch"
 	"github.com/cockroachdb/molt/cmd/verify"
 	"github.com/spf13/cobra"
 )
@@ -24,5 +24,5 @@ func Execute() {
 
 func init() {
 	rootCmd.AddCommand(verify.Command())
-	rootCmd.AddCommand(datamove.Command())
+	rootCmd.AddCommand(fetch.Command())
 }

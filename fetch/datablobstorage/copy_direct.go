@@ -1,12 +1,12 @@
-package datamovestore
+package datablobstorage
 
 import (
 	"context"
 	"io"
 
 	"github.com/cockroachdb/errors"
-	"github.com/cockroachdb/molt/datamove/dataquery"
 	"github.com/cockroachdb/molt/dbtable"
+	"github.com/cockroachdb/molt/fetch/internal/dataquery"
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"
 )

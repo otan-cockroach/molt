@@ -81,7 +81,7 @@ flowchart LR
     LegacyDB -- COPY FROM --> CRDB
 ```
 
-`molt datamove` is able to migrate data from your PG or MySQL tables to CockroachDB
+`molt fetch` is able to migrate data from your PG or MySQL tables to CockroachDB
 without taking your PG/MySQL tables offline. It takes `--source` and `--target`
 as arguments (see `molt verify` documentation above for examples).
 
@@ -110,7 +110,7 @@ export AWS_REGION='us-east-1'
 export AWS_SECRET_ACCESS_KEY='key'
 export AWS_ACCESS_KEY_ID='id'
 # Ensure the S3 bucket is created and accessible from CRDB.
-molt datamove \
+molt fetch \
   --source 'postgres://postgres@localhost:5432/replicationload' \
   --target 'postgres://root@localhost:26257/defaultdb?sslmode=disable' \
   --table-filter 'good_table' \
@@ -123,7 +123,7 @@ GCP usage:
 ```sh
 # Ensure credentials are loaded using `gcloud init`.
 # Ensure the GCP bucket is created and accessible from CRDB.
-molt datamove \
+molt fetch \
   --source 'postgres://postgres@localhost:5432/replicationload' \
   --target 'postgres://root@localhost:26257/defaultdb?sslmode=disable' \
   --table-filter 'good_table' \
@@ -133,7 +133,7 @@ molt datamove \
 
 Using a direct COPY FROM without storing intermediate files:
 ```sh
-molt datamove \
+molt fetch \
   --source 'postgres://postgres@localhost:5432/replicationload' \
   --target 'postgres://root@localhost:26257/defaultdb?sslmode=disable' \
   --table-filter 'good_table' \
@@ -142,7 +142,7 @@ molt datamove \
 
 Storing CSVs locally before running COPY TO:
 ```sh
-molt datamove \
+molt fetch \
   --source 'postgres://postgres@localhost:5432/replicationload' \
   --target 'postgres://root@localhost:26257/defaultdb?sslmode=disable' \
   --table-filter 'good_table' \
@@ -153,7 +153,7 @@ molt datamove \
 Storing CSVs locally and running a file server:
 ```sh
 # set --local-path-crdb-access-addr if the automatic IP detection is incorrect.
-molt datamove \
+molt fetch \
   --source 'postgres://postgres@localhost:5432/replicationload' \
   --target 'postgres://root@localhost:26257/defaultdb?sslmode=disable' \
   --table-filter 'good_table' \

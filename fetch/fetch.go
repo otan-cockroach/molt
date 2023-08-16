@@ -1,4 +1,4 @@
-package datamove
+package fetch
 
 import (
 	"context"
@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/cockroachdb/errors"
-	"github.com/cockroachdb/molt/datamove/dataexport"
-	"github.com/cockroachdb/molt/datamove/datamovestore"
 	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/fetch/datablobstorage"
+	"github.com/cockroachdb/molt/fetch/dataexport"
 	"github.com/cockroachdb/molt/verify/dbverify"
 	"github.com/cockroachdb/molt/verify/tableverify"
 	"github.com/rs/zerolog"
@@ -24,12 +24,12 @@ type Config struct {
 	Concurrency int
 }
 
-func DataMove(
+func Fetch(
 	ctx context.Context,
 	cfg Config,
 	logger zerolog.Logger,
 	conns dbconn.OrderedConns,
-	src datamovestore.Store,
+	src datablobstorage.Store,
 	tableFilter dbverify.FilterConfig,
 ) error {
 	if cfg.FlushSize == 0 {
@@ -94,7 +94,7 @@ func DataMove(
 	logger.Info().
 		Int("num_tables", len(tables)).
 		Str("cdc_cursor", sqlSrc.CDCCursor()).
-		Msgf("starting data movement")
+		Msgf("starting fetch")
 
 	type statsMu struct {
 		sync.Mutex
@@ -112,7 +112,7 @@ func DataMove(
 				if !ok {
 					return nil
 				}
-				if err := dataMoveTable(ctx, cfg, logger, conns, src, sqlSrc, table); err != nil {
+				if err := fetchTable(ctx, cfg, logger, conns, src, sqlSrc, table); err != nil {
 					return err
 				}
 
@@ -139,16 +139,16 @@ func DataMove(
 		Int("num_tables", stats.numImportedTables).
 		Strs("tables", stats.importedTables).
 		Str("cdc_cursor", sqlSrc.CDCCursor()).
-		Msgf("data movement complete")
+		Msgf("fetch complete")
 	return nil
 }
 
-func dataMoveTable(
+func fetchTable(
 	ctx context.Context,
 	cfg Config,
 	logger zerolog.Logger,
 	conns dbconn.OrderedConns,
-	src datamovestore.Store,
+	src datablobstorage.Store,
 	sqlSrc dataexport.Source,
 	table tableverify.Result,
 ) error {

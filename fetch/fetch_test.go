@@ -1,4 +1,4 @@
-package datamove
+package fetch
 
 import (
 	"context"
@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/datadriven"
-	"github.com/cockroachdb/molt/datamove/datamovestore"
 	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/fetch/datablobstorage"
 	"github.com/cockroachdb/molt/testutils"
 	"github.com/cockroachdb/molt/verify/dbverify"
 	"github.com/rs/zerolog"
@@ -31,7 +31,7 @@ func TestDataDriven(t *testing.T) {
 				ctx := context.Background()
 				var conns dbconn.OrderedConns
 				var err error
-				dbName := "datamove_dd_" + tc.desc + "_" + strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+				dbName := "fetch_" + tc.desc + "_" + strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 				logger := zerolog.New(os.Stderr)
 
 				conns[0], err = dbconn.TestOnlyCleanDatabase(ctx, "source", tc.src, dbName)
@@ -58,7 +58,7 @@ func TestDataDriven(t *testing.T) {
 						return testutils.ExecConnCommand(t, d, conns)
 					case "query":
 						return testutils.QueryConnCommand(t, d, conns)
-					case "datamove":
+					case "fetch":
 						filter := dbverify.DefaultFilterConfig()
 						truncate := true
 						live := false
@@ -78,15 +78,15 @@ func TestDataDriven(t *testing.T) {
 						}
 						dir, err := os.MkdirTemp("", "")
 						require.NoError(t, err)
-						var src datamovestore.Store
+						var src datablobstorage.Store
 						if direct {
-							src = datamovestore.NewCopyCRDBDirect(logger, conns[1].(*dbconn.PGConn).Conn)
+							src = datablobstorage.NewCopyCRDBDirect(logger, conns[1].(*dbconn.PGConn).Conn)
 						} else {
-							src, err = datamovestore.NewLocalStore(logger, dir, "localhost:4040", "localhost:4040")
+							src, err = datablobstorage.NewLocalStore(logger, dir, "localhost:4040", "localhost:4040")
 							require.NoError(t, err)
 						}
 
-						err = DataMove(ctx, Config{Live: live, Truncate: truncate}, logger, conns, src, filter)
+						err = Fetch(ctx, Config{Live: live, Truncate: truncate}, logger, conns, src, filter)
 						if expectError {
 							require.Error(t, err)
 							return err.Error()

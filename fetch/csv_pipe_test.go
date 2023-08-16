@@ -1,4 +1,4 @@
-package datamove
+package fetch
 
 import (
 	"io"

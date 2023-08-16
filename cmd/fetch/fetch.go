@@ -1,4 +1,4 @@
-package datamove
+package fetch
 
 import (
 	"context"
@@ -7,9 +7,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/cmd/internal/cmdutil"
-	"github.com/cockroachdb/molt/datamove"
-	"github.com/cockroachdb/molt/datamove/datamovestore"
 	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/fetch"
+	"github.com/cockroachdb/molt/fetch/datablobstorage"
 	"github.com/spf13/cobra"
 	"golang.org/x/oauth2/google"
 )
@@ -22,11 +22,11 @@ func Command() *cobra.Command {
 		localPathListenAddr     string
 		localPathCRDBAccessAddr string
 		directCRDBCopy          bool
-		cfg                     datamove.Config
+		cfg                     fetch.Config
 	)
 	cmd := &cobra.Command{
-		Use:  "datamove",
-		Long: `Moves data from a source to a target.`,
+		Use:  "fetch",
+		Long: `Fetches data from source to directly import into target.`,
 
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
@@ -45,10 +45,10 @@ func Command() *cobra.Command {
 				return errors.AssertionFailedf("target must be cockroach")
 			}
 
-			var src datamovestore.Store
+			var src datablobstorage.Store
 			switch {
 			case directCRDBCopy:
-				src = datamovestore.NewCopyCRDBDirect(logger, conns[1].(*dbconn.PGConn).Conn)
+				src = datablobstorage.NewCopyCRDBDirect(logger, conns[1].(*dbconn.PGConn).Conn)
 			case gcpBucket != "":
 				creds, err := google.FindDefaultCredentials(ctx)
 				if err != nil {
@@ -58,7 +58,7 @@ func Command() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				src = datamovestore.NewGCPStore(logger, gcpClient, creds, gcpBucket)
+				src = datablobstorage.NewGCPStore(logger, gcpClient, creds, gcpBucket)
 			case s3Bucket != "":
 				sess, err := session.NewSession()
 				if err != nil {
@@ -68,16 +68,16 @@ func Command() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				src = datamovestore.NewS3Store(logger, sess, creds, s3Bucket)
+				src = datablobstorage.NewS3Store(logger, sess, creds, s3Bucket)
 			case localPath != "":
-				src, err = datamovestore.NewLocalStore(logger, localPath, localPathListenAddr, localPathCRDBAccessAddr)
+				src, err = datablobstorage.NewLocalStore(logger, localPath, localPathListenAddr, localPathCRDBAccessAddr)
 				if err != nil {
 					return err
 				}
 			default:
 				return errors.AssertionFailedf("data source must be configured (--s3-bucket, --gcp-bucket, --direct-copy)")
 			}
-			return datamove.DataMove(
+			return fetch.Fetch(
 				ctx,
 				cfg,
 				logger,
@@ -104,7 +104,7 @@ func Command() *cobra.Command {
 		&cfg.Live,
 		"live",
 		false,
-		"whether the table must be queriable during data movement",
+		"whether the table must be queriable during load import",
 	)
 	cmd.PersistentFlags().IntVar(
 		&cfg.FlushSize,

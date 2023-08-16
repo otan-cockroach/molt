@@ -6,9 +6,9 @@ import (
 	"io"
 
 	"github.com/cockroachdb/errors"
-	"github.com/cockroachdb/molt/datamove/dataquery"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
+	"github.com/cockroachdb/molt/fetch/internal/dataquery"
 	"github.com/jackc/pgx/v5"
 )
 

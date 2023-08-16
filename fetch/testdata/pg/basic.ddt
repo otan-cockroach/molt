@@ -1,32 +1,36 @@
 exec all
 CREATE TABLE tbl1(id INT PRIMARY KEY, t TEXT)
 ----
-[source] 0 rows affected
+[source] CREATE TABLE
 [target] CREATE TABLE
 
 exec source
 INSERT INTO tbl1 VALUES (1, 'aaa'), (2, 'bbb')
 ----
-[source] 2 rows affected
+[source] INSERT 0 2
 
 exec all
 CREATE TABLE tbl2(id INT PRIMARY KEY, t TEXT)
 ----
-[source] 0 rows affected
+[source] CREATE TABLE
 [target] CREATE TABLE
 
 exec source
 INSERT INTO tbl2 VALUES (11, 'aaa'), (22, 'bbb')
 ----
-[source] 2 rows affected
+[source] INSERT 0 2
 
-datamove
+fetch
 ----
 
 query all
 SELECT * FROM tbl1
 ----
-[source] 0 rows affected
+[source]:
+id	t
+1	aaa
+2	bbb
+tag: SELECT 2
 [target]:
 id	t
 1	aaa
@@ -36,7 +40,11 @@ tag: SELECT 2
 query all
 SELECT * FROM tbl2
 ----
-[source] 0 rows affected
+[source]:
+id	t
+11	aaa
+22	bbb
+tag: SELECT 2
 [target]:
 id	t
 11	aaa
@@ -46,15 +54,19 @@ tag: SELECT 2
 exec source
 INSERT INTO tbl2 VALUES (111, 'aaa'), (333, 'bbb')
 ----
-[source] 2 rows affected
+[source] INSERT 0 2
 
-datamove live
+fetch live
 ----
 
 query all
 SELECT * FROM tbl1
 ----
-[source] 0 rows affected
+[source]:
+id	t
+1	aaa
+2	bbb
+tag: SELECT 2
 [target]:
 id	t
 1	aaa
@@ -64,7 +76,13 @@ tag: SELECT 2
 query all
 SELECT * FROM tbl2
 ----
-[source] 0 rows affected
+[source]:
+id	t
+11	aaa
+22	bbb
+111	aaa
+333	bbb
+tag: SELECT 4
 [target]:
 id	t
 11	aaa
