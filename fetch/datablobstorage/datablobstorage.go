@@ -12,6 +12,7 @@ type Store interface {
 	CanBeTarget() bool
 	DefaultFlushBatchSize() int
 	Cleanup(ctx context.Context) error
+	TelemetryName() string
 }
 
 type Resource interface {

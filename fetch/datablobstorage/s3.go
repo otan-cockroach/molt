@@ -132,3 +132,7 @@ func (s *s3Store) Cleanup(ctx context.Context) error {
 	s.batchDelete.batch = s.batchDelete.batch[:0]
 	return nil
 }
+
+func (s *s3Store) TelemetryName() string {
+	return "s3"
+}

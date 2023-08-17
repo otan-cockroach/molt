@@ -8,6 +8,7 @@ import (
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/lexbase"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
 	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/molt/molttelemetry"
 	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -19,6 +20,21 @@ type ID string
 
 type OrderedConns [2]Conn
 
+func RegisterTelemetry(conns OrderedConns) error {
+	cockroachFound := false
+	for _, conn := range conns {
+		if conn.IsCockroach() {
+			cockroachFound = true
+			molttelemetry.RegisterConnString(conn.ConnStr())
+			break
+		}
+	}
+	if !cockroachFound {
+		return errors.AssertionFailedf("source or target must be cockroach")
+	}
+	return nil
+}
+
 type Conn interface {
 	ID() ID
 	// Close closes the connection.
@@ -27,6 +43,10 @@ type Conn interface {
 	Clone(ctx context.Context) (Conn, error)
 	// TypeMap returns a pgx typemap.
 	TypeMap() *pgtype.Map
+
+	IsCockroach() bool
+	ConnStr() string
+	Dialect() string
 }
 
 func Connect(ctx context.Context, preferredID ID, connStr string) (Conn, error) {
@@ -55,7 +75,7 @@ func Connect(ctx context.Context, preferredID ID, connStr string) (Conn, error) 
 		if err := conn.QueryRow(ctx, "SELECT version()").Scan(&version); err != nil {
 			return nil, err
 		}
-		return NewPGConn(id, conn, version), nil
+		return NewPGConn(id, conn, connStr, version), nil
 	case strings.Contains(before[0], "mysql"):
 		return ConnectMySQL(ctx, id, before[len(before)-1])
 	}
@@ -89,7 +109,7 @@ func TestOnlyCleanDatabase(ctx context.Context, id ID, url string, dbName string
 		if err != nil {
 			return nil, err
 		}
-		return NewPGConn(c.id, pgConn, version), nil
+		return NewPGConn(c.id, pgConn, c.connStr, version), nil
 	case *MySQLConn:
 		if _, err := c.ExecContext(ctx, "DROP DATABASE IF EXISTS "+dbName); err != nil {
 			return nil, err

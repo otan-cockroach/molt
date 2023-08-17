@@ -46,6 +46,10 @@ func (c *copyCRDBDirect) Cleanup(ctx context.Context) error {
 	return nil
 }
 
+func (c *copyCRDBDirect) TelemetryName() string {
+	return "copy_direct"
+}
+
 func NewCopyCRDBDirect(logger zerolog.Logger, target *pgx.Conn) *copyCRDBDirect {
 	return &copyCRDBDirect{
 		logger: logger,

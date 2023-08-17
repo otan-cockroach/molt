@@ -44,4 +44,16 @@ func (c *MySQLConn) TypeMap() *pgtype.Map {
 	return c.typeMap
 }
 
+func (c *MySQLConn) IsCockroach() bool {
+	return false
+}
+
+func (c *MySQLConn) ConnStr() string {
+	return c.url
+}
+
 var _ Conn = (*MySQLConn)(nil)
+
+func (c *MySQLConn) Dialect() string {
+	return "MySQL"
+}
