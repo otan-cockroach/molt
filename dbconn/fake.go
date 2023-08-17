@@ -30,3 +30,15 @@ func (f FakeConn) Clone(ctx context.Context) (Conn, error) {
 func (f FakeConn) TypeMap() *pgtype.Map {
 	return f.typMap
 }
+
+func (f FakeConn) IsCockroach() bool {
+	return false
+}
+
+func (f FakeConn) ConnStr() string {
+	return "fake://"
+}
+
+func (f FakeConn) Dialect() string {
+	return "fake"
+}

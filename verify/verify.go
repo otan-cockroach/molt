@@ -8,6 +8,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/molttelemetry"
 	"github.com/cockroachdb/molt/verify/dbverify"
 	"github.com/cockroachdb/molt/verify/inconsistency"
 	"github.com/cockroachdb/molt/verify/rowverify"
@@ -115,6 +116,11 @@ func Verify(
 	for _, applyOpt := range inOpts {
 		applyOpt(&opts)
 	}
+
+	if err := dbconn.RegisterTelemetry(conns); err != nil {
+		return err
+	}
+	reportTelemetry(logger, opts, conns)
 
 	dbTables, err := dbverify.Verify(ctx, conns)
 	if err != nil {
@@ -295,4 +301,22 @@ func verifyRowShard(
 		liveVerifySettings,
 		rateLimiter,
 	)
+}
+
+func reportTelemetry(logger zerolog.Logger, opts verifyOpts, conns dbconn.OrderedConns) {
+	dialect := "CockroachDB"
+	for _, conn := range conns {
+		if !conn.IsCockroach() {
+			dialect = conn.Dialect()
+			break
+		}
+	}
+	features := []string{"molt_verify_dialect_" + dialect}
+	if opts.continuous {
+		features = append(features, "molt_verify_continuous")
+	}
+	if opts.liveVerificationSettings != nil {
+		features = append(features, "molt_verify_live")
+	}
+	molttelemetry.ReportTelemetryAsync(logger, features...)
 }

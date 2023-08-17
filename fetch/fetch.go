@@ -10,6 +10,7 @@ import (
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/fetch/datablobstorage"
 	"github.com/cockroachdb/molt/fetch/dataexport"
+	"github.com/cockroachdb/molt/molttelemetry"
 	"github.com/cockroachdb/molt/verify/dbverify"
 	"github.com/cockroachdb/molt/verify/tableverify"
 	"github.com/rs/zerolog"
@@ -29,11 +30,11 @@ func Fetch(
 	cfg Config,
 	logger zerolog.Logger,
 	conns dbconn.OrderedConns,
-	src datablobstorage.Store,
+	blobStore datablobstorage.Store,
 	tableFilter dbverify.FilterConfig,
 ) error {
 	if cfg.FlushSize == 0 {
-		cfg.FlushSize = src.DefaultFlushBatchSize()
+		cfg.FlushSize = blobStore.DefaultFlushBatchSize()
 	}
 	if cfg.Concurrency == 0 {
 		cfg.Concurrency = 4
@@ -41,14 +42,20 @@ func Fetch(
 
 	if cfg.Cleanup {
 		defer func() {
-			if err := src.Cleanup(ctx); err != nil {
+			if err := blobStore.Cleanup(ctx); err != nil {
 				logger.Err(err).Msgf("error marking object for cleanup")
 			}
 		}()
 	}
+
+	if err := dbconn.RegisterTelemetry(conns); err != nil {
+		return err
+	}
+	reportTelemetry(logger, cfg, conns, blobStore)
+
 	logger.Debug().
 		Int("flush_size", cfg.FlushSize).
-		Str("store", fmt.Sprintf("%T", src)).
+		Str("store", fmt.Sprintf("%T", blobStore)).
 		Msg("initial config")
 
 	logger.Info().Msgf("checking database details")
@@ -112,7 +119,7 @@ func Fetch(
 				if !ok {
 					return nil
 				}
-				if err := fetchTable(ctx, cfg, logger, conns, src, sqlSrc, table); err != nil {
+				if err := fetchTable(ctx, cfg, logger, conns, blobStore, sqlSrc, table); err != nil {
 					return err
 				}
 
@@ -148,7 +155,7 @@ func fetchTable(
 	cfg Config,
 	logger zerolog.Logger,
 	conns dbconn.OrderedConns,
-	src datablobstorage.Store,
+	blobStore datablobstorage.Store,
 	sqlSrc dataexport.Source,
 	table tableverify.Result,
 ) error {
@@ -167,7 +174,7 @@ func fetchTable(
 
 	logger.Info().Msgf("data extraction phase starting")
 
-	e, err := exportTable(ctx, logger, sqlSrc, src, table.VerifiedTable, cfg.FlushSize)
+	e, err := exportTable(ctx, logger, sqlSrc, blobStore, table.VerifiedTable, cfg.FlushSize)
 	if err != nil {
 		return err
 	}
@@ -187,7 +194,7 @@ func fetchTable(
 		Dur("export_duration", e.EndTime.Sub(e.StartTime)).
 		Msgf("data extraction from source complete")
 
-	if src.CanBeTarget() {
+	if blobStore.CanBeTarget() {
 		targetConn, err := conns[1].Clone(ctx)
 		if err != nil {
 			return err
@@ -233,4 +240,26 @@ func fetchTable(
 		return nil
 	}
 	return nil
+}
+
+func reportTelemetry(
+	logger zerolog.Logger, cfg Config, conns dbconn.OrderedConns, store datablobstorage.Store,
+) {
+	dialect := "CockroachDB"
+	for _, conn := range conns {
+		if !conn.IsCockroach() {
+			dialect = conn.Dialect()
+			break
+		}
+	}
+	ingestMethod := "import"
+	if cfg.Live {
+		ingestMethod = "copy"
+	}
+	molttelemetry.ReportTelemetryAsync(
+		logger,
+		"molt_fetch_dialect_"+dialect,
+		"molt_fetch_ingest_method_"+ingestMethod,
+		"molt_fetch_blobstore_"+store.TelemetryName(),
+	)
 }

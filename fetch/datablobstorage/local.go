@@ -123,6 +123,10 @@ func (l *localStore) CanBeTarget() bool {
 	return true
 }
 
+func (l *localStore) TelemetryName() string {
+	return "local"
+}
+
 type localResource struct {
 	path  string
 	store *localStore

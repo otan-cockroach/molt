@@ -63,6 +63,10 @@ func (s *gcpStore) Cleanup(ctx context.Context) error {
 	return nil
 }
 
+func (r *gcpStore) TelemetryName() string {
+	return "gcp"
+}
+
 type gcpResource struct {
 	store *gcpStore
 	key   string
