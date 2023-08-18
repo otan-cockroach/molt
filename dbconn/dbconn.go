@@ -10,7 +10,6 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/molttelemetry"
 	"github.com/go-sql-driver/mysql"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/lib/pq/oid"
 	_ "github.com/pingcap/tidb/types/parser_driver"
@@ -67,15 +66,7 @@ func Connect(ctx context.Context, preferredID ID, connStr string) (Conn, error) 
 		if id == "" {
 			id = ID(u.Hostname() + ":" + u.Port())
 		}
-		conn, err := pgx.Connect(ctx, connStr)
-		if err != nil {
-			return nil, errors.Wrapf(err, "error connecting to %s", connStr)
-		}
-		var version string
-		if err := conn.QueryRow(ctx, "SELECT version()").Scan(&version); err != nil {
-			return nil, err
-		}
-		return NewPGConn(id, conn, connStr, version), nil
+		return ConnectPG(ctx, id, connStr)
 	case strings.Contains(before[0], "mysql"):
 		return ConnectMySQL(ctx, id, before[len(before)-1])
 	}
@@ -105,11 +96,7 @@ func TestOnlyCleanDatabase(ctx context.Context, id ID, url string, dbName string
 		}
 		cfgCopy := c.Config().Copy()
 		cfgCopy.Database = dbName
-		pgConn, err := pgx.ConnectConfig(ctx, cfgCopy)
-		if err != nil {
-			return nil, err
-		}
-		return NewPGConn(c.id, pgConn, c.connStr, version), nil
+		return ConnectPGConfig(ctx, c.id, cfgCopy)
 	case *MySQLConn:
 		if _, err := c.ExecContext(ctx, "DROP DATABASE IF EXISTS "+dbName); err != nil {
 			return nil, err
