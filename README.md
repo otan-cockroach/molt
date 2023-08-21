@@ -98,6 +98,9 @@ need target data to be queriable during loading, which uses `COPY FROM` instead.
 
 Data can be truncated automatically if run with `--truncate`.
 
+A PG replication slot can be created for you if you use `pg-logical-replication-slot-name`,
+see `--help` for more related flags.
+
 For now, schemas must be identical on both sides. This is verified upfront -
 tables with mismatching columns may only be partially migrated.
 
@@ -161,15 +164,27 @@ molt fetch \
   --local-path-listen-addr '0.0.0.0:9005'
 ```
 
+Creating a replication slot with PG:
+```sh
+molt fetch \
+  --source 'postgres://postgres@localhost:5432/replicationload' \
+  --target 'postgres://root@localhost:26257/defaultdb?sslmode=disable' \
+  --table-filter 'good_table' \
+  --local-path /tmp/basic \
+  --local-path-listen-addr '0.0.0.0:9005' \
+  --pg-logical-replication-slot-name 'hi_im_elfo' \
+  --pg-logical-replication-slot-decoding 'pgoutput'
+```
+
 ## Local Setup
 
 ### Running Tests
 * Ensure a local postgres instance is setup and can be logged in using
-  `postgres://postgres:postgres@localhost:5432/testdb` (this can be overriden with the
-  `POSTGRES_URL` env var):
+  `postgres://postgres:postgres@localhost:5432/defaultdb` (this can be
+  overridden with the `POSTGRES_URL` env var):
 ```sql
 CREATE USER 'postgres' PASSWORD 'postgres' ADMIN;
-CREATE DATABASE testdb;
+CREATE DATABASE defaultdb;
 ```
 * Ensure a local, insecure CockroachDB instance is setup
   (this can be overriden with the `COCKROACH_URL` env var):

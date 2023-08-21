@@ -10,13 +10,70 @@ import (
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/cockroachdb/molt/fetch/internal/dataquery"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type pgSource struct {
 	tx         pgx.Tx
 	conn       dbconn.Conn
+	settings   Settings
 	snapshotID string
 	cdcCursor  string
+}
+
+type PGReplicationSlotSettings struct {
+	SlotName     string
+	Plugin       string
+	DropIfExists bool
+}
+
+func NewPGSource(ctx context.Context, settings Settings, conn *dbconn.PGConn) (*pgSource, error) {
+	var cdcCursor string
+	if settings.PG.SlotName != "" {
+		if settings.PG.DropIfExists {
+			if _, err := conn.Exec(ctx, "SELECT pg_drop_replication_slot($1)", settings.PG.SlotName); err != nil {
+				if pgErr := (*pgconn.PgError)(nil); errors.As(err, &pgErr) && pgErr.Code != "42704" {
+					return nil, errors.Wrap(err, "error attempting to drop replication slot")
+				}
+			}
+		}
+		if err := conn.QueryRow(
+			ctx,
+			"SELECT lsn FROM pg_create_logical_replication_slot($1, $2)",
+			settings.PG.SlotName,
+			settings.PG.Plugin,
+		).Scan(&cdcCursor); err != nil {
+			return nil, errors.Wrap(err, "error creating replication slot")
+		}
+	} else {
+		if err := conn.QueryRow(ctx, "SELECT pg_current_wal_insert_lsn()").Scan(&cdcCursor); err != nil {
+			return nil, errors.Wrap(err, "failed to export wal LSN")
+		}
+	}
+	// Keep tx with snapshot open to establish a consistent snapshot.
+	tx, err := conn.BeginTx(ctx, pgx.TxOptions{
+		IsoLevel:   pgx.RepeatableRead,
+		AccessMode: pgx.ReadOnly,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var snapshotID string
+	if err := func() error {
+		if err := tx.QueryRow(ctx, "SELECT pg_export_snapshot()").Scan(&snapshotID); err != nil {
+			return errors.Wrap(err, "failed to export snapshot")
+		}
+		return nil
+	}(); err != nil {
+		return nil, errors.CombineErrors(err, tx.Rollback(ctx))
+	}
+	return &pgSource{
+		snapshotID: snapshotID,
+		cdcCursor:  cdcCursor,
+		settings:   settings,
+		tx:         tx,
+		conn:       conn,
+	}, nil
 }
 
 func (p *pgSource) Close(ctx context.Context) error {
@@ -45,12 +102,14 @@ func (p *pgSource) Conn(ctx context.Context) (SourceConn, error) {
 	return &pgSourceConn{
 		conn: conn,
 		tx:   tx,
+		src:  p,
 	}, nil
 }
 
 type pgSourceConn struct {
 	conn dbconn.Conn
 	tx   pgx.Tx
+	src  *pgSource
 }
 
 func (p *pgSourceConn) Export(

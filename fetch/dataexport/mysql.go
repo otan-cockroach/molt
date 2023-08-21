@@ -3,6 +3,7 @@ package dataexport
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"io"
 
 	"github.com/cockroachdb/errors"
@@ -12,8 +13,31 @@ import (
 )
 
 type mysqlSource struct {
-	gtid string
-	conn dbconn.Conn
+	gtid     string
+	settings Settings
+	conn     dbconn.Conn
+}
+
+func NewMySQLSource(
+	ctx context.Context, settings Settings, conn *dbconn.MySQLConn,
+) (*mysqlSource, error) {
+	var source string
+	var start, end int
+	if err := func() error {
+		if err := conn.QueryRowContext(ctx, "select source_uuid, min(interval_start), max(interval_end) from mysql.gtid_executed group by source_uuid").Scan(
+			&source, &start, &end,
+		); err != nil {
+			return errors.Wrap(err, "failed to export snapshot")
+		}
+		return nil
+	}(); err != nil {
+		return nil, err
+	}
+	return &mysqlSource{
+		gtid:     fmt.Sprintf("%s:%d-%d", source, start, end),
+		conn:     conn,
+		settings: settings,
+	}, nil
 }
 
 func (m *mysqlSource) CDCCursor() string {
@@ -39,18 +63,20 @@ func (m *mysqlSource) Conn(ctx context.Context) (SourceConn, error) {
 	return &mysqlConn{
 		conn: conn,
 		tx:   tx,
+		src:  m,
 	}, nil
 }
 
 type mysqlConn struct {
 	conn dbconn.Conn
 	tx   *sql.Tx
+	src  *mysqlSource
 }
 
 func (m *mysqlConn) Export(
 	ctx context.Context, writer io.Writer, table dbtable.VerifiedTable,
 ) error {
-	return scanWithRowIterator(ctx, m.conn, writer, rowiterator.ScanTable{
+	return scanWithRowIterator(ctx, m.src.settings, m.conn, writer, rowiterator.ScanTable{
 		Table: rowiterator.Table{
 			Name:              table.Name,
 			ColumnNames:       table.Columns,

@@ -9,31 +9,13 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-        ports:
-          - 5432:5432
-
-      # doesn't like cockroach-data not existing.
-     #cockroachdb:
-     #  image: cockroachdb/cockroach:latest-v22.2
-     #  ports:
-     #     - 26257:26257
-     #  options: >-
-     #     cockroachdb/cockroach:latest-v22.2 start-single-node --insecure --store type=mem,size=2G
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Start Databases
         working-directory: .github
-        run: docker-compose up -d cockroachdb mysql
+        run: docker-compose up -d cockroachdb mysql postgresql
 
       # Just cache based on job and go.sum contents.
       - name: Write cache key
@@ -46,12 +28,9 @@ jobs:
           cache: true
           cache-dependency-path: CACHE_KEY
 
-      - name: Setup test database
-        run: PGPASSWORD=postgres psql -U postgres -h localhost -c "CREATE DATABASE testdb"
-
       - name: Test
         run: |
-          POSTGRES_URL="postgres://postgres:postgres@localhost:5432/testdb" go test -race -v 2>&1 ./... | tee test_output.txt
+          go test -race -v 2>&1 ./... | tee test_output.txt
           go run github.com/jstemmer/go-junit-report -set-exit-code < test_output.txt > report.xml
 
       - name: Test Summary
