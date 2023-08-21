@@ -23,6 +23,9 @@ type SourceConn interface {
 	Close(ctx context.Context) error
 }
 
+type Settings struct {
+}
+
 func InferExportSource(ctx context.Context, conn dbconn.Conn) (Source, error) {
 	switch conn := conn.(type) {
 	case *dbconn.PGConn:

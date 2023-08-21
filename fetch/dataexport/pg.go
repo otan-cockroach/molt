@@ -19,6 +19,10 @@ type pgSource struct {
 	cdcCursor  string
 }
 
+type PGReplicationSlotSettings struct {
+	SlotName string
+}
+
 func NewPGSource(ctx context.Context, conn *dbconn.PGConn) (*pgSource, error) {
 	// TODO: we should create a replication slot here.
 	var cdcCursor string
