@@ -35,6 +35,7 @@ func Command() *cobra.Command {
 			RunsPerSecond: 0,
 		}
 		verifyLimitRowsPerSecond int
+		verifyRows               bool
 	)
 
 	cmd := &cobra.Command{
@@ -81,6 +82,7 @@ func Command() *cobra.Command {
 				verify.WithLive(verifyLive, verifyLiveVerificationSettings),
 				verify.WithDBFilter(cmdutil.TableFilter()),
 				verify.WithRowsPerSecond(verifyLimitRowsPerSecond),
+				verify.WithRows(verifyRows),
 			); err != nil {
 				return errors.Wrapf(err, "error verifying")
 			}
@@ -136,6 +138,12 @@ func Command() *cobra.Command {
 		"live",
 		false,
 		"enables live mode, which attempts to account for rows that can change in value by retrying them before marking them as an inconsistency",
+	)
+	cmd.PersistentFlags().BoolVar(
+		&verifyRows,
+		"rows",
+		true,
+		"whether rows should be verified (otherwise, performs a more basic schema check)",
 	)
 	cmd.PersistentFlags().IntVar(
 		&verifyLiveVerificationSettings.RunsPerSecond,

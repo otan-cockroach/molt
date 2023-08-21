@@ -33,6 +33,7 @@ type verifyOpts struct {
 	rowsPerSecond            int
 	continuous               bool
 	continuousPause          time.Duration
+	rows                     bool
 	dbFilter                 dbverify.FilterConfig
 	liveVerificationSettings *rowverify.LiveReverificationSettings
 }
@@ -90,6 +91,12 @@ func WithDBFilter(filter dbverify.FilterConfig) VerifyOpt {
 	}
 }
 
+func WithRows(b bool) VerifyOpt {
+	return func(o *verifyOpts) {
+		o.rows = b
+	}
+}
+
 var (
 	verificationShards = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "molt",
@@ -111,6 +118,7 @@ func Verify(
 		concurrency:  DefaultConcurrency,
 		rowBatchSize: DefaultRowBatchSize,
 		tableSplits:  DefaultTableSplits,
+		rows:         true,
 		dbFilter:     dbverify.DefaultFilterConfig(),
 	}
 	for _, applyOpt := range inOpts {
@@ -148,6 +156,11 @@ func Verify(
 		for _, d := range tbl.MismatchingTableDefinitions {
 			reporter.Report(d)
 		}
+	}
+
+	if !opts.rows {
+		logger.Info().Msgf("skipping row based verification")
+		return nil
 	}
 
 	shards := make([]rowverify.TableShard, 0, len(tbls))
