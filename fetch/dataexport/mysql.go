@@ -13,11 +13,14 @@ import (
 )
 
 type mysqlSource struct {
-	gtid string
-	conn dbconn.Conn
+	gtid     string
+	settings Settings
+	conn     dbconn.Conn
 }
 
-func NewMySQLSource(ctx context.Context, conn *dbconn.MySQLConn) (*mysqlSource, error) {
+func NewMySQLSource(
+	ctx context.Context, settings Settings, conn *dbconn.MySQLConn,
+) (*mysqlSource, error) {
 	var source string
 	var start, end int
 	if err := func() error {
@@ -31,8 +34,9 @@ func NewMySQLSource(ctx context.Context, conn *dbconn.MySQLConn) (*mysqlSource, 
 		return nil, err
 	}
 	return &mysqlSource{
-		gtid: fmt.Sprintf("%s:%d-%d", source, start, end),
-		conn: conn,
+		gtid:     fmt.Sprintf("%s:%d-%d", source, start, end),
+		conn:     conn,
+		settings: settings,
 	}, nil
 }
 
@@ -59,18 +63,20 @@ func (m *mysqlSource) Conn(ctx context.Context) (SourceConn, error) {
 	return &mysqlConn{
 		conn: conn,
 		tx:   tx,
+		src:  m,
 	}, nil
 }
 
 type mysqlConn struct {
 	conn dbconn.Conn
 	tx   *sql.Tx
+	src  *mysqlSource
 }
 
 func (m *mysqlConn) Export(
 	ctx context.Context, writer io.Writer, table dbtable.VerifiedTable,
 ) error {
-	return scanWithRowIterator(ctx, m.conn, writer, rowiterator.ScanTable{
+	return scanWithRowIterator(ctx, m.src.settings, m.conn, writer, rowiterator.ScanTable{
 		Table: rowiterator.Table{
 			Name:              table.Name,
 			ColumnNames:       table.Columns,

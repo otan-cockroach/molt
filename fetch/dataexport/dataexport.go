@@ -23,28 +23,36 @@ type SourceConn interface {
 	Close(ctx context.Context) error
 }
 
-func InferExportSource(ctx context.Context, conn dbconn.Conn) (Source, error) {
+type Settings struct {
+	RowBatchSize int
+}
+
+func InferExportSource(ctx context.Context, settings Settings, conn dbconn.Conn) (Source, error) {
 	switch conn := conn.(type) {
 	case *dbconn.PGConn:
 		if conn.IsCockroach() {
-			return NewCRDBSource(ctx, conn)
+			return NewCRDBSource(ctx, settings, conn)
 		}
-		return NewPGSource(ctx, conn)
+		return NewPGSource(ctx, settings, conn)
 	case *dbconn.MySQLConn:
-		return NewMySQLSource(ctx, conn)
+		return NewMySQLSource(ctx, settings, conn)
 	}
 	return nil, errors.AssertionFailedf("unknown conn type: %T", conn)
 }
 
 func scanWithRowIterator(
-	ctx context.Context, c dbconn.Conn, writer io.Writer, table rowiterator.ScanTable,
+	ctx context.Context,
+	settings Settings,
+	c dbconn.Conn,
+	writer io.Writer,
+	table rowiterator.ScanTable,
 ) error {
 	cw := csv.NewWriter(writer)
 	it, err := rowiterator.NewScanIterator(
 		ctx,
 		c,
 		table,
-		100_000,
+		settings.RowBatchSize,
 		nil,
 	)
 	if err != nil {

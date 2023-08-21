@@ -15,11 +15,12 @@ import (
 type pgSource struct {
 	tx         pgx.Tx
 	conn       dbconn.Conn
+	settings   Settings
 	snapshotID string
 	cdcCursor  string
 }
 
-func NewPGSource(ctx context.Context, conn *dbconn.PGConn) (*pgSource, error) {
+func NewPGSource(ctx context.Context, settings Settings, conn *dbconn.PGConn) (*pgSource, error) {
 	// TODO: we should create a replication slot here.
 	var cdcCursor string
 	if err := conn.QueryRow(ctx, "SELECT pg_current_wal_insert_lsn()").Scan(&cdcCursor); err != nil {
@@ -45,6 +46,7 @@ func NewPGSource(ctx context.Context, conn *dbconn.PGConn) (*pgSource, error) {
 	return &pgSource{
 		snapshotID: snapshotID,
 		cdcCursor:  cdcCursor,
+		settings:   settings,
 		tx:         tx,
 		conn:       conn,
 	}, nil
@@ -76,12 +78,14 @@ func (p *pgSource) Conn(ctx context.Context) (SourceConn, error) {
 	return &pgSourceConn{
 		conn: conn,
 		tx:   tx,
+		src:  p,
 	}, nil
 }
 
 type pgSourceConn struct {
 	conn dbconn.Conn
 	tx   pgx.Tx
+	src  *pgSource
 }
 
 func (p *pgSourceConn) Export(
