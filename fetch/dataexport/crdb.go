@@ -11,14 +11,18 @@ import (
 )
 
 type crdbSource struct {
-	aost time.Time
-	conn dbconn.Conn
+	aost     time.Time
+	settings Settings
+	conn     dbconn.Conn
 }
 
-func NewCRDBSource(ctx context.Context, conn *dbconn.PGConn) (*crdbSource, error) {
+func NewCRDBSource(
+	ctx context.Context, settings Settings, conn *dbconn.PGConn,
+) (*crdbSource, error) {
 	return &crdbSource{
-		conn: conn,
-		aost: time.Now().UTC().Truncate(time.Second),
+		conn:     conn,
+		settings: settings,
+		aost:     time.Now().UTC().Truncate(time.Second),
 	}, nil
 }
 
@@ -46,7 +50,7 @@ type crdbSourceConn struct {
 func (c *crdbSourceConn) Export(
 	ctx context.Context, writer io.Writer, table dbtable.VerifiedTable,
 ) error {
-	return scanWithRowIterator(ctx, c.conn, writer, rowiterator.ScanTable{
+	return scanWithRowIterator(ctx, c.src.settings, c.conn, writer, rowiterator.ScanTable{
 		Table: rowiterator.Table{
 			Name:              table.Name,
 			ColumnNames:       table.Columns,

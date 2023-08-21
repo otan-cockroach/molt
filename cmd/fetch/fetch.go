@@ -154,6 +154,12 @@ func Command() *cobra.Command {
 		false,
 		"whether to truncate the table being imported to",
 	)
+	cmd.PersistentFlags().IntVar(
+		&cfg.ExportSettings.RowBatchSize,
+		"row-batch-size",
+		100_000,
+		"how many rows to select at a time for the database",
+	)
 	cmdutil.RegisterDBConnFlags(cmd)
 	cmdutil.RegisterLoggerFlags(cmd)
 	cmdutil.RegisterNameFilterFlags(cmd)

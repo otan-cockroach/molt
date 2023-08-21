@@ -10,6 +10,7 @@ import (
 	"github.com/cockroachdb/datadriven"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/fetch/datablobstorage"
+	"github.com/cockroachdb/molt/fetch/dataexport"
 	"github.com/cockroachdb/molt/testutils"
 	"github.com/cockroachdb/molt/verify/dbverify"
 	"github.com/rs/zerolog"
@@ -86,7 +87,20 @@ func TestDataDriven(t *testing.T) {
 							require.NoError(t, err)
 						}
 
-						err = Fetch(ctx, Config{Live: live, Truncate: truncate}, logger, conns, src, filter)
+						err = Fetch(
+							ctx,
+							Config{
+								Live:     live,
+								Truncate: truncate,
+								ExportSettings: dataexport.Settings{
+									RowBatchSize: 2,
+								},
+							},
+							logger,
+							conns,
+							src,
+							filter,
+						)
 						if expectError {
 							require.Error(t, err)
 							return err.Error()

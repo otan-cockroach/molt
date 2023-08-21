@@ -23,6 +23,8 @@ type Config struct {
 	Live        bool
 	Truncate    bool
 	Concurrency int
+
+	ExportSettings dataexport.Settings
 }
 
 func Fetch(
@@ -89,7 +91,7 @@ func Fetch(
 		return err
 	}
 	logger.Info().Msgf("establishing snapshot")
-	sqlSrc, err := dataexport.InferExportSource(ctx, conns[0])
+	sqlSrc, err := dataexport.InferExportSource(ctx, cfg.ExportSettings, conns[0])
 	if err != nil {
 		return err
 	}
