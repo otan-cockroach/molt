@@ -13,3 +13,13 @@ services:
     ports:
       - 3306:3306
     command: --gtid-mode=on --enforce-gtid-consistency=on --binlog-row-metadata=full
+  postgresql:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
