@@ -15,6 +15,13 @@ type crdbSource struct {
 	conn dbconn.Conn
 }
 
+func NewCRDBSource(ctx context.Context, conn *dbconn.PGConn) (*crdbSource, error) {
+	return &crdbSource{
+		conn: conn,
+		aost: time.Now().UTC().Truncate(time.Second),
+	}, nil
+}
+
 func (c *crdbSource) CDCCursor() string {
 	return c.aost.Format(time.RFC3339Nano)
 }

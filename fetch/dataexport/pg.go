@@ -19,6 +19,37 @@ type pgSource struct {
 	cdcCursor  string
 }
 
+func NewPGSource(ctx context.Context, conn *dbconn.PGConn) (*pgSource, error) {
+	// TODO: we should create a replication slot here.
+	var cdcCursor string
+	if err := conn.QueryRow(ctx, "SELECT pg_current_wal_insert_lsn()").Scan(&cdcCursor); err != nil {
+		return nil, errors.Wrap(err, "failed to export wal LSN")
+	}
+	// Keep tx with snapshot open to establish a consistent snapshot.
+	tx, err := conn.BeginTx(ctx, pgx.TxOptions{
+		IsoLevel:   pgx.RepeatableRead,
+		AccessMode: pgx.ReadOnly,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var snapshotID string
+	if err := func() error {
+		if err := tx.QueryRow(ctx, "SELECT pg_export_snapshot()").Scan(&snapshotID); err != nil {
+			return errors.Wrap(err, "failed to export snapshot")
+		}
+		return nil
+	}(); err != nil {
+		return nil, errors.CombineErrors(err, tx.Rollback(ctx))
+	}
+	return &pgSource{
+		snapshotID: snapshotID,
+		cdcCursor:  cdcCursor,
+		tx:         tx,
+		conn:       conn,
+	}, nil
+}
+
 func (p *pgSource) Close(ctx context.Context) error {
 	return p.tx.Rollback(ctx)
 }

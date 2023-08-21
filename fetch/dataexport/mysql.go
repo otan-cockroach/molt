@@ -3,6 +3,7 @@ package dataexport
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"io"
 
 	"github.com/cockroachdb/errors"
@@ -14,6 +15,25 @@ import (
 type mysqlSource struct {
 	gtid string
 	conn dbconn.Conn
+}
+
+func NewMySQLSource(ctx context.Context, conn *dbconn.MySQLConn) (*mysqlSource, error) {
+	var source string
+	var start, end int
+	if err := func() error {
+		if err := conn.QueryRowContext(ctx, "select source_uuid, min(interval_start), max(interval_end) from mysql.gtid_executed group by source_uuid").Scan(
+			&source, &start, &end,
+		); err != nil {
+			return errors.Wrap(err, "failed to export snapshot")
+		}
+		return nil
+	}(); err != nil {
+		return nil, err
+	}
+	return &mysqlSource{
+		gtid: fmt.Sprintf("%s:%d-%d", source, start, end),
+		conn: conn,
+	}, nil
 }
 
 func (m *mysqlSource) CDCCursor() string {
