@@ -10,6 +10,7 @@ import (
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/cockroachdb/molt/fetch/internal/dataquery"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type pgSource struct {
@@ -20,11 +21,34 @@ type pgSource struct {
 	cdcCursor  string
 }
 
+type PGReplicationSlotSettings struct {
+	SlotName     string
+	Plugin       string
+	DropIfExists bool
+}
+
 func NewPGSource(ctx context.Context, settings Settings, conn *dbconn.PGConn) (*pgSource, error) {
-	// TODO: we should create a replication slot here.
 	var cdcCursor string
-	if err := conn.QueryRow(ctx, "SELECT pg_current_wal_insert_lsn()").Scan(&cdcCursor); err != nil {
-		return nil, errors.Wrap(err, "failed to export wal LSN")
+	if settings.PG.SlotName != "" {
+		if settings.PG.DropIfExists {
+			if _, err := conn.Exec(ctx, "SELECT pg_drop_replication_slot($1)", settings.PG.SlotName); err != nil {
+				if pgErr := (*pgconn.PgError)(nil); errors.As(err, &pgErr) && pgErr.Code != "42704" {
+					return nil, errors.Wrap(err, "error attempting to drop replication slot")
+				}
+			}
+		}
+		if err := conn.QueryRow(
+			ctx,
+			"SELECT lsn FROM pg_create_logical_replication_slot($1, $2)",
+			settings.PG.SlotName,
+			settings.PG.Plugin,
+		).Scan(&cdcCursor); err != nil {
+			return nil, errors.Wrap(err, "error creating replication slot")
+		}
+	} else {
+		if err := conn.QueryRow(ctx, "SELECT pg_current_wal_insert_lsn()").Scan(&cdcCursor); err != nil {
+			return nil, errors.Wrap(err, "failed to export wal LSN")
+		}
 	}
 	// Keep tx with snapshot open to establish a consistent snapshot.
 	tx, err := conn.BeginTx(ctx, pgx.TxOptions{

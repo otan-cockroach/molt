@@ -25,6 +25,8 @@ type SourceConn interface {
 
 type Settings struct {
 	RowBatchSize int
+
+	PG PGReplicationSlotSettings
 }
 
 func InferExportSource(ctx context.Context, settings Settings, conn dbconn.Conn) (Source, error) {

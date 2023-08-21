@@ -13,7 +13,7 @@ import (
 )
 
 func PGConnStr() string {
-	pgInstanceURL := "postgres://postgres:postgres@localhost:5432/testdb"
+	pgInstanceURL := "postgres://postgres:postgres@127.0.0.1:5432/defaultdb"
 	if override, ok := os.LookupEnv("POSTGRES_URL"); ok {
 		pgInstanceURL = override
 	}

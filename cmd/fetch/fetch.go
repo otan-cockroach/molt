@@ -160,6 +160,24 @@ func Command() *cobra.Command {
 		100_000,
 		"how many rows to select at a time for the database",
 	)
+	cmd.PersistentFlags().StringVar(
+		&cfg.ExportSettings.PG.SlotName,
+		"pg-logical-replication-slot-name",
+		"",
+		"if set, the name of a replication slot that should be created before taking a snapshot of data",
+	)
+	cmd.PersistentFlags().StringVar(
+		&cfg.ExportSettings.PG.Plugin,
+		"pg-logical-replication-slot-plugin",
+		"pgoutput",
+		"if set, the output plugin used for logical replication under pg-logical-replication-slot-name",
+	)
+	cmd.PersistentFlags().BoolVar(
+		&cfg.ExportSettings.PG.DropIfExists,
+		"pg-logical-replication-slot-drop-if-exists",
+		false,
+		"if set, drops the replication slot if it exists",
+	)
 	cmdutil.RegisterDBConnFlags(cmd)
 	cmdutil.RegisterLoggerFlags(cmd)
 	cmdutil.RegisterNameFilterFlags(cmd)
