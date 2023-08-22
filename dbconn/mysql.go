@@ -4,15 +4,17 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/molt/mysqlurl"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type MySQLConn struct {
-	id  ID
-	url string
+	id      ID
+	connStr string
 	*sql.DB
-	typeMap *pgtype.Map
+	database tree.Name
+	typeMap  *pgtype.Map
 }
 
 func ConnectMySQL(ctx context.Context, id ID, connStr string) (*MySQLConn, error) {
@@ -26,7 +28,7 @@ func ConnectMySQL(ctx context.Context, id ID, connStr string) (*MySQLConn, error
 		return nil, err
 	}
 	m := pgtype.NewMap()
-	return &MySQLConn{id: id, url: u, DB: db, typeMap: m}, nil
+	return &MySQLConn{id: id, connStr: connStr, DB: db, typeMap: m, database: tree.Name(cfg.DBName)}, nil
 }
 
 func (c *MySQLConn) ID() ID {
@@ -38,7 +40,7 @@ func (c *MySQLConn) Close(ctx context.Context) error {
 }
 
 func (c *MySQLConn) Clone(ctx context.Context) (Conn, error) {
-	ret, err := ConnectMySQL(ctx, c.id, c.url)
+	ret, err := ConnectMySQL(ctx, c.id, c.connStr)
 	if err != nil {
 		return nil, err
 	}
@@ -50,12 +52,16 @@ func (c *MySQLConn) TypeMap() *pgtype.Map {
 	return c.typeMap
 }
 
+func (c *MySQLConn) Database() tree.Name {
+	return c.database
+}
+
 func (c *MySQLConn) IsCockroach() bool {
 	return false
 }
 
 func (c *MySQLConn) ConnStr() string {
-	return c.url
+	return c.connStr
 }
 
 var _ Conn = (*MySQLConn)(nil)

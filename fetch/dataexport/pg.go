@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os/exec"
 
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
@@ -74,6 +76,23 @@ func NewPGSource(ctx context.Context, settings Settings, conn *dbconn.PGConn) (*
 		tx:         tx,
 		conn:       conn,
 	}, nil
+}
+
+func (p *pgSource) CDCSinkCommand(
+	bin string, target dbconn.Conn, db tree.Name, sc tree.Name,
+) (*exec.Cmd, error) {
+	if p.settings.PG.SlotName == "" {
+		return nil, errors.AssertionFailedf("slot_name must be set")
+	}
+	return exec.Command(
+		bin,
+		"pglogical",
+		"--sourceConn", p.conn.ConnStr(),
+		"--targetConn", target.ConnStr(),
+		"--publicationName", "molt_fetch",
+		"--targetSchema", fmt.Sprintf("%s.%s", db, sc),
+		"-vv",
+	), nil
 }
 
 func (p *pgSource) Close(ctx context.Context) error {

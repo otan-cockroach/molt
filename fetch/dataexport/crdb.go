@@ -3,8 +3,11 @@ package dataexport
 import (
 	"context"
 	"io"
+	"os/exec"
 	"time"
 
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
 	"github.com/cockroachdb/molt/rowiterator"
@@ -36,6 +39,12 @@ func (c *crdbSource) Conn(ctx context.Context) (SourceConn, error) {
 		return nil, err
 	}
 	return &crdbSourceConn{conn: conn, src: c}, nil
+}
+
+func (c *crdbSource) CDCSinkCommand(
+	bin string, target dbconn.Conn, db tree.Name, sc tree.Name,
+) (*exec.Cmd, error) {
+	return nil, errors.AssertionFailedf("cdc-sink not supported")
 }
 
 func (c *crdbSource) Close(ctx context.Context) error {

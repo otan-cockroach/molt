@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
 	"github.com/cockroachdb/errors"
 	"github.com/jackc/pgx/v5"
@@ -16,6 +17,7 @@ type PGConn struct {
 	version     string
 	connStr     string
 	isCockroach bool
+	database    tree.Name
 }
 
 var _ Conn = (*PGConn)(nil)
@@ -41,6 +43,7 @@ func ConnectPGConfig(ctx context.Context, id ID, cfg *pgx.ConnConfig) (*PGConn, 
 		id:          id,
 		Conn:        conn,
 		version:     version,
+		database:    tree.Name(cfg.Database),
 		connStr:     cfg.ConnString(),
 		isCockroach: strings.Contains(version, "CockroachDB"),
 	}, nil
@@ -48,6 +51,10 @@ func ConnectPGConfig(ctx context.Context, id ID, cfg *pgx.ConnConfig) (*PGConn, 
 
 func (c *PGConn) ID() ID {
 	return c.id
+}
+
+func (c *PGConn) Database() tree.Name {
+	return c.database
 }
 
 func (c *PGConn) IsCockroach() bool {

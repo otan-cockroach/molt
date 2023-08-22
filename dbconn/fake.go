@@ -3,6 +3,7 @@ package dbconn
 import (
 	"context"
 
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -29,6 +30,10 @@ func (f FakeConn) Clone(ctx context.Context) (Conn, error) {
 
 func (f FakeConn) TypeMap() *pgtype.Map {
 	return f.typMap
+}
+
+func (f FakeConn) Database() tree.Name {
+	return tree.Name(f.id)
 }
 
 func (f FakeConn) IsCockroach() bool {

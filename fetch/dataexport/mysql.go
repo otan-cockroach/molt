@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"os/exec"
 
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
 	"github.com/cockroachdb/molt/dbtable"
@@ -46,6 +48,19 @@ func (m *mysqlSource) CDCCursor() string {
 
 func (m *mysqlSource) Close(ctx context.Context) error {
 	return nil
+}
+
+func (c *mysqlSource) CDCSinkCommand(
+	bin string, target dbconn.Conn, db tree.Name, sc tree.Name,
+) (*exec.Cmd, error) {
+	return exec.Command(
+		bin,
+		"mylogical",
+		"--sourceConn", c.conn.ConnStr()+"?sslmode=disable",
+		"--targetConn", target.ConnStr(),
+		"--defaultGTIDSet", c.gtid,
+		"--targetSchema", fmt.Sprintf("%s.%s", db, sc),
+	), nil
 }
 
 func (m *mysqlSource) Conn(ctx context.Context) (SourceConn, error) {

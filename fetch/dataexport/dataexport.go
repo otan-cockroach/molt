@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"io"
+	"os/exec"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
@@ -16,6 +17,7 @@ type Source interface {
 	CDCCursor() string
 	Conn(ctx context.Context) (SourceConn, error)
 	Close(ctx context.Context) error
+	CDCSinkCommand(bin string, target dbconn.Conn, db tree.Name, sc tree.Name) (*exec.Cmd, error)
 }
 
 type SourceConn interface {

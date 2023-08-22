@@ -3,11 +3,13 @@ package fetch
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/dbconn"
+	"github.com/cockroachdb/molt/fetch/cdcsink"
 	"github.com/cockroachdb/molt/fetch/datablobstorage"
 	"github.com/cockroachdb/molt/fetch/dataexport"
 	"github.com/cockroachdb/molt/molttelemetry"
@@ -23,6 +25,8 @@ type Config struct {
 	Live        bool
 	Truncate    bool
 	Concurrency int
+
+	CDCSink bool
 
 	ExportSettings dataexport.Settings
 }
@@ -149,6 +153,53 @@ func Fetch(
 		Strs("tables", stats.importedTables).
 		Str("cdc_cursor", sqlSrc.CDCCursor()).
 		Msgf("fetch complete")
+
+	if cfg.CDCSink && len(dbTables.Verified) > 0 {
+		logger.Info().Msgf("starting cdc-sink")
+		wd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		binName, err := cdcsink.FindBinary(wd)
+		if err != nil {
+			return err
+		}
+		logger.Debug().Str("binary", binName).Msgf("binary found")
+
+		if _, ok := conns[0].(*dbconn.PGConn); ok {
+			cloneConn, err := conns[0].Clone(ctx)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = cloneConn.Close(ctx) }()
+			conn := cloneConn.(*dbconn.PGConn).Conn
+			if _, err := conn.Exec(ctx, "DROP PUBLICATION IF EXISTS molt_fetch"); err != nil {
+				return err
+			}
+
+			tblQ := ""
+			for _, tbl := range tables {
+				if tbl.RowVerifiable {
+					if len(tblQ) > 0 {
+						tblQ += ","
+					}
+					tblQ += fmt.Sprintf("%s.%s", tbl.Schema, tbl.Table)
+				}
+			}
+			if _, err := conn.Exec(ctx, fmt.Sprintf("CREATE PUBLICATION molt_fetch FOR TABLE %s", tblQ)); err != nil {
+				return err
+			}
+		}
+
+		cmd, err := sqlSrc.CDCSinkCommand(binName, conns[1], conns[1].Database(), dbTables.Verified[0][1].Schema)
+		if err != nil {
+			return err
+		}
+		logger.Debug().Str("command", cmd.String()).Msgf("executing command")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	}
 	return nil
 }
 

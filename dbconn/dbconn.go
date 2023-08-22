@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/lexbase"
+	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/types"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/molt/molttelemetry"
@@ -42,6 +43,7 @@ type Conn interface {
 	Clone(ctx context.Context) (Conn, error)
 	// TypeMap returns a pgx typemap.
 	TypeMap() *pgtype.Map
+	Database() tree.Name
 
 	IsCockroach() bool
 	ConnStr() string
@@ -68,7 +70,7 @@ func Connect(ctx context.Context, preferredID ID, connStr string) (Conn, error) 
 		}
 		return ConnectPG(ctx, id, connStr)
 	case strings.Contains(before[0], "mysql"):
-		return ConnectMySQL(ctx, id, before[len(before)-1])
+		return ConnectMySQL(ctx, id, connStr)
 	}
 	return nil, errors.Newf("unrecognised scheme %s from %s", before[0], connStr)
 }
@@ -104,7 +106,7 @@ func TestOnlyCleanDatabase(ctx context.Context, id ID, url string, dbName string
 		if _, err := c.ExecContext(ctx, "CREATE DATABASE "+dbName); err != nil {
 			return nil, err
 		}
-		cfgCopy, err := mysql.ParseDSN(c.url)
+		cfgCopy, err := mysql.ParseDSN(c.connStr)
 		if err != nil {
 			return nil, errors.Wrapf(err, "error parsing dsn", url)
 		}

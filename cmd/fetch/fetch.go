@@ -178,6 +178,16 @@ func Command() *cobra.Command {
 		false,
 		"if set, drops the replication slot if it exists",
 	)
+
+	// TODO: apply filters and what not hide for now.
+	cmd.PersistentFlags().BoolVar(
+		&cfg.CDCSink,
+		"cdc-sink",
+		false,
+		"if set, starts cdc-sink after data export is complete",
+	)
+	_ = cmd.PersistentFlags().MarkHidden("cdc-sink")
+
 	cmdutil.RegisterDBConnFlags(cmd)
 	cmdutil.RegisterLoggerFlags(cmd)
 	cmdutil.RegisterNameFilterFlags(cmd)

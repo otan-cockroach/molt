@@ -36,16 +36,18 @@ func ParseMySQLDSN(connStr string) (*mysqldriver.Config, error) {
 
 func ParseMySQLConnStr(connStr string) (*mysqldriver.Config, error) {
 	cfg := mysqldriver.NewConfig()
-	url, err := url.Parse(connStr)
+	u, err := url.Parse(connStr)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error parsing conn str for %q", connStr)
 	}
 	cfg.Net = "tcp" // By default the go-sql-driver uses tcp
-	cfg.Addr = url.Host
-	cfg.User = url.User.Username()
-	cfg.Passwd, _ = url.User.Password()
-	cfg.DBName = url.EscapedPath()[1:] // Slice from after the '/'
-	if err = parseDSNParams(cfg, url.Query()); err != nil {
+	cfg.Addr = u.Host
+	cfg.User = u.User.Username()
+	cfg.Passwd, _ = u.User.Password()
+	if len(u.EscapedPath()) > 0 {
+		cfg.DBName = u.EscapedPath()[1:] // Slice from after the '/'
+	}
+	if err = parseDSNParams(cfg, u.Query()); err != nil {
 		return nil, errors.Wrapf(err, "error parsing conn str for %q", connStr)
 	}
 	cfgNew := cfg.FormatDSN()
