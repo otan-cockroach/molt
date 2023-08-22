@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/cockroachdb/molt/mysqlurl"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -14,13 +15,18 @@ type MySQLConn struct {
 	typeMap *pgtype.Map
 }
 
-func ConnectMySQL(ctx context.Context, id ID, url string) (*MySQLConn, error) {
-	db, err := sql.Open("mysql", url)
+func ConnectMySQL(ctx context.Context, id ID, connStr string) (*MySQLConn, error) {
+	cfg, err := mysqlurl.Parse(connStr)
+	if err != nil {
+		return nil, err
+	}
+	u := cfg.FormatDSN()
+	db, err := sql.Open("mysql", u)
 	if err != nil {
 		return nil, err
 	}
 	m := pgtype.NewMap()
-	return &MySQLConn{id: id, url: url, DB: db, typeMap: m}, nil
+	return &MySQLConn{id: id, url: u, DB: db, typeMap: m}, nil
 }
 
 func (c *MySQLConn) ID() ID {
